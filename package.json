@@ -1,20 +1,30 @@
-<<<<<<< HEAD
-  "scripts": {
-    "start": "node index.js" 
-  },
-  "dependencies": {
-    "express": "^4.18.2",
-    "cors": "^2.8.5"
-  }
-=======
+{
+  "name": "vite-react",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "main": "index.js", <--- আপনার সার্ভারের মেইন ফাইল
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "start": "node index.js", <--- Render এর জন্য প্রয়োজনীয়
     "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview"
   },
   "dependencies": {
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "cors": "^2.8.5", <--- সার্ভার নির্ভরতা
+    "express": "^4.18.2", <--- সার্ভার নির্ভরতা
+    "react": "^18.2.0", <--- ফ্রন্টএন্ড নির্ভরতা
+    "react-dom": "^18.2.0" <--- ফ্রন্টএন্ড নির্ভরতা
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.66",
+    "@types/react-dom": "^18.2.22",
+    "@vitejs/plugin-react": "^4.2.1",
+    "eslint": "^8.57.0",
+    "eslint-plugin-react": "^7.34.1",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "eslint-plugin-react-refresh": "^0.4.6",
+    "vite": "^5.2.0"
   }
->>>>>>> [commit hash]
+}
