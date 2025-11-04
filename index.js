@@ -21,5 +21,8 @@ app.post("/api/login", (req, res) => {
   }
 });
 
+// Render-এর পরিবেশ থেকে PORT ব্যবহার করুন, না পেলে 5000 ব্যবহার করুন।
+const PORT = process.env.PORT || 5000; 
+
 // Server listen
-app.listen(5000, () => console.log("Server running on port 5000"));
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
