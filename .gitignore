@@ -1,65 +1,53 @@
+# ----------------------------------------------------
+# ১. নির্ভরতা ফোল্ডার (Dependencies)
+# ----------------------------------------------------
 
-
-# Core files to always ignore in a Node/Web Project
-
-
-# Dependency folders
-
-# Node dependencies
- 671679b8600b7e191bddbd0b3fd46be8788b52d8
+# প্রধান node_modules ফোল্ডার
 /node_modules
-client/node_modules  
-/.pnp
 
+# যদি ক্লায়েন্ট ফোল্ডারের নিজস্ব node_modules থাকে
+client/node_modules
 
-# Build folders and distribution files
+# ----------------------------------------------------
+# ২. বিল্ড এবং আউটপুট ফোল্ডার (Build & Output)
+# ----------------------------------------------------
 
-# Build output
->>>>>>> 671679b8600b7e191bddbd0b3fd46be8788b52d8
+# Vite, CRA বা অন্যান্য বিল্ড টুলের আউটপুট
 /build
 /dist
 /dist-ssr
-/coverage
-# Local environment variables and local configuration
+/out
+
+# Netlify Build Output
+.netlify/
+
+# ----------------------------------------------------
+# ৩. লোকাল কনফিগারেশন এবং এনভায়রনমেন্ট ভেরিয়েবল
+# ----------------------------------------------------
+
+# সমস্ত .env ফাইল, যাতে সিক্রেট কী কমিট না হয়
 .env
 .env.local
+.env.*.local
 *.local
 
-# Logs and debug files
-
-# Logs and debug files
-logs
- 671679b8600b7e191bddbd0b3fd46be8788b52d8
+# ----------------------------------------------------
+# ৪. লগ এবং DEBUG ফাইল
+# ----------------------------------------------------
 *.log
 npm-debug.log*
 yarn-debug.log*
 
-
-# IDE and System Files
+# ----------------------------------------------------
+# ৫. IDE এবং সিস্টেম ফাইল
+# ----------------------------------------------------
 
 # VS Code specific files
 .vscode/
 
-# OS and Editor files
+# JetBrains/WebStorm/IntelliJ IDE specific files
+.idea/
+
+# macOS/Windows system files
 .DS_Store
 Thumbs.db
-
-# Environment and misc files
-.DS_Store
-*.local
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-
-# Editor and IDE directories/files
-.vscode/*
-!.vscode/extensions.json
-.idea
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
-server/
- 671679b8600b7e191bddbd0b3fd46be8788b52d8
