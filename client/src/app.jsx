@@ -10,20 +10,21 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Chat from "./components/Chat/Chat";
-import Call from "./components/Call/Call.jsx";
-import CallBar from "./components/CallBar";
+import call from "./components/CallBar"
+import Chat from "./components/Chat/Chat";
 import Profile from "./components/Profile";
 import { AuthProvider } from "./context/AuthContext";
 import axios from "axios";
 
 function App() {
   // Auth & Demo state
-  const [userId, setUserId] = useState(null); // Login system
+  // 💡 পরিবর্তন: Login বাইপাস করার জন্য userId-এ একটি ডিফল্ট মান সেট করা হলো
+  const [userId, setUserId] = useState("temp_user_id"); 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
   const [receiverId] = useState("user2"); // demo chat
-  const [callRoomId] = useState("room123"); // demo call
+  // const [callRoomId] = useState("room123"); // DELETED: demo call
 
   // Login function
   const handleLogin = async (e) => {
@@ -40,7 +41,7 @@ function App() {
   };
 
   if (!userId) {
-    // Login Page
+    // এই ব্লকটি এখন আর দেখা যাবে না, কারণ userId সেট করা হয়েছে।
     return (
       <div className="flex flex-col items-center mt-10">
         <h1 className="text-2xl font-bold mb-4">Login</h1>
@@ -125,21 +126,14 @@ function App() {
             path="/chat"
             element={<Chat userId={userId} receiverId={receiverId} />}
           />
-          <Route path="/call" element={<Call roomId={callRoomId} />} />
           <Route
             path="/profile"
             element={<Profile userId={userId} />}
           />
         </Routes>
-
-        {/* Call bar always visible */}
-        <div className="App min-h-screen bg-gray-100 flex flex-col items-center justify-center">
-          <h1 className="text-3xl font-bold mb-10">Messenger App</h1>
-          <p className="text-gray-700 mb-20">
-            Your chat content goes here...
-          </p>
-          <CallBar />
-        </div>
+        
+        {/* আপনি যে div ব্লকটি রেন্ডার করতে চান না, সেটি অ্যাপের মূল রিটার্ন থেকে সরানো হলো */}
+        
       </Router>
     </AuthProvider>
   );
