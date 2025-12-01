@@ -1,9 +1,12 @@
 // 
 // 1. IMPORTS & SETUP
 // 
-const express = require("express");
-const cors = require("cors");
-const mongoose = require("mongoose");   // (if using MongoDB)
+
+// require() এর বদলে import ব্যবহার করা হলো
+import express from "express";
+import cors from "cors";
+// যদি mongoose ব্যবহার করেন, তাহলে এটিও import করতে হবে
+// import mongoose from "mongoose"; 
 
 const app = express();
 
@@ -15,12 +18,17 @@ app.use(express.json()); // JSON body পার্স করা
 // 2. DATABASE CONNECTION (Optional for now)
 
 /*
-mongoose.connect(process.env.MONGO_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-})
-.then(() => console.log("✅ MongoDB Connected"))
-.catch((err) => console.error("❌ MongoDB Error:", err));
+// যদি mongoose ব্যবহার করেন, তাহলে .env থেকে process.env.MONGO_URI ব্যবহার করতে হলে
+// আপনাকে dotenv সেট আপ করতে হবে।
+// import dotenv from 'dotenv';
+// dotenv.config();
+
+// mongoose.connect(process.env.MONGO_URI, {
+//   useNewUrlParser: true,
+//   useUnifiedTopology: true,
+// })
+// .then(() => console.log("✅ MongoDB Connected"))
+// .catch((err) => console.error("❌ MongoDB Error:", err));
 */
 
 
@@ -38,7 +46,7 @@ app.get("/", (req, res) => {
 app.post("/api/login", (req, res) => {
   const { email, password } = req.body;
 
-  // Dummy user (later database দিয়ে হবে)
+  // Dummy user (later database দিয়ে হবে)
   const validEmail = "test@example.com";
   const validPassword = "123456";
 
