@@ -13,9 +13,10 @@
     "node",
     "social-media",
     "api"
-"engines": {
+  ], 
+  "engines": {
     "node": "18"
-  ],
+  },
   "author": "",
   "license": "ISC",
   "dependencies": {
