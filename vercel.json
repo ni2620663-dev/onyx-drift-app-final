@@ -1,10 +1,29 @@
 {
+  "version": 2,
   "builds": [
     {
       "src": "client/package.json",
-      "use": "@vercel/static-build"
+      "use": "@vercel/static-build",
+      "config": {
+        "nodeVersion": "18.x"  // <-- ক্লায়েন্টের জন্য 18.x সেট করা হলো
+      }
+    },
+    {
+      "src": "api/index.js",
+      "use": "@vercel/node",
+      "config": {
+        "nodeVersion": "18.x"  // <-- ব্যাকএন্ডের জন্য 18.x সেট করা হলো
+      }
     }
   ],
-  "installCommand": "npm install --prefix client",
-  "buildCommand": "npm run build --prefix client"
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "api/index.js"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "client/dist/$1"
+    }
+  ]
 }
