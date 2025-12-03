@@ -1,5 +1,6 @@
 {
   "name": "my-social-app-client",
+  "main": "index.html",
   "private": true,
   "version": "1.0.0",
   "type": "module",
