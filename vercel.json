@@ -2,34 +2,22 @@
   "version": 2,
   "builds": [
     {
+      // Vercel-কে বলুন client/package.json ব্যবহার করে বিল্ড চালাতে
       "src": "client/package.json",
       "use": "@vercel/static-build",
       "config": {
-        "distDir": "client/dist", 
-        "installCommand": "npm install", // <-- শুধুমাত্র 'npm install'
-        "buildCommand": "npm run build"  // <-- শুধুমাত্র 'npm run build'
-      }
-    },
-    {
-      "src": "api/index.js",
-      "use": "@vercel/node",
-      "config": {
-        "includeFiles": [
-          "api/package.json",
-          "api/node_modules/**"
-        ]
+        // যেহেতু Root Directory client/, আউটপুট ডিরেক্টরি শুধু dist
+        "distDir": "dist" 
       }
     }
   ],
   "routes": [
+    // যেকোনো রিকোয়েস্ট (/) বা (/[anything]) কে 
+    // বিল্ড আউটপুট ডিরেক্টরির index.html ফাইলের দিকে রিডাইরেক্ট করে দাও। 
+    // এটি React Router ব্যবহারকারী Single Page Applications (SPA)-এর জন্য আবশ্যক।
     {
-      "src": "/api/(.*)",
-      "dest": "api/index.js"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "client/dist/$1"
+      "src": "/.*",
+      "dest": "dist/index.html"
     }
-  ],
-  "installCommand": "npm install" 
+  ]
 }
