@@ -51,3 +51,5 @@ yarn-debug.log*
 # macOS/Windows system files
 .DS_Store
 Thumbs.db
+.vercel
+.env*.local
