@@ -1,11 +1,15 @@
 import React, { useState, useEffect } from "react";
 
+// ⚠️ গুরুত্বপূর্ণ: আপনার Render Web Service এর লাইভ URL এখানে ব্যবহার করুন
+// নিশ্চিত করুন যে আপনি HTTP এবং WebSocket (WS) প্রোটোকল অনুযায়ী URL পরিবর্তন করেছেন।
+const RENDER_HTTP_URL = "https://onyx-drift-app-final.onrender.com";
+// WebSocket এর জন্য https:// এর বদলে wss:// ব্যবহার করতে হবে
+const RENDER_WS_URL = "wss://onyx-drift-app-final.onrender.com"; 
+
 export default function PostFeed() {
-  // State to hold the list of posts
+  // ... (বিদ্যমান stateগুলি অপরিবর্তিত)
   const [posts, setPosts] = useState([]);
-  // State to hold the text of the new post being typed
   const [newPost, setNewPost] = useState("");
-  // State to hold the WebSocket connection instance
   const [ws, setWs] = useState(null);
 
   useEffect(() => {
@@ -13,7 +17,8 @@ export default function PostFeed() {
     fetchPosts();
 
     // 2. Connect WebSocket for real-time updates
-    const socket = new WebSocket("ws://127.0.0.1:8000/ws/posts");
+    // 🛑 পরিবর্তন: ws://127.0.0.1:8000/ws/posts এর বদলে লাইভ Render WS URL ব্যবহার করা হয়েছে
+    const socket = new WebSocket(`${RENDER_WS_URL}/ws/posts`); 
     
     // When a message is received (a new post from another user)
     socket.onmessage = (event) => {
@@ -31,7 +36,8 @@ export default function PostFeed() {
   // Function to fetch posts from the REST API
   const fetchPosts = async () => {
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/posts");
+      // 🛑 পরিবর্তন: http://127.0.0.1:8000/api/posts এর বদলে লাইভ Render HTTP URL ব্যবহার করা হয়েছে
+      const res = await fetch(`${RENDER_HTTP_URL}/api/posts`); 
       const data = await res.json();
       // Assuming data.posts is an array, we reverse it to show the newest posts first
       setPosts(data.posts.reverse()); 
@@ -46,7 +52,8 @@ export default function PostFeed() {
 
     try {
       // 1. Send the new post to the REST API
-      const res = await fetch("http://127.0.0.1:8000/api/posts", {
+      // 🛑 পরিবর্তন: http://127.0.0.1:8000/api/posts এর বদলে লাইভ Render HTTP URL ব্যবহার করা হয়েছে
+      const res = await fetch(`${RENDER_HTTP_URL}/api/posts`, { 
         method: "POST",
         headers: { "Content-Type": "application/json" },
         // Placeholder user for demonstration
@@ -75,6 +82,7 @@ export default function PostFeed() {
   return (
     <section className="postfeed" style={{ maxWidth: '600px', margin: '0 auto', padding: '20px' }}>
       {/* Post Input Section */}
+      {/* ... (বাকি JSX কোড অপরিবর্তিত) */}
       <div style={{ marginBottom: '20px', padding: '15px', border: '1px solid #ccc', borderRadius: '8px', display: 'flex' }}>
         <input
           placeholder="What's on your mind?"
