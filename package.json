@@ -5,7 +5,7 @@
   "main": "server.js",
   "type": "module",
   "scripts": {
-    "start": "node src/server.js", 
+    "start": "node src/server.js",
     "dev": "nodemon src/server.js",
     "build": "echo 'No build step required for backend, running install.'"
   },
@@ -23,6 +23,7 @@
   "dependencies": {
     "cors": "^2.8.5",
     "express": "^4.18.2",
+    "mongoose": "^9.0.1",
     "socket.io": "^4.8.1"
   },
   "devDependencies": {
