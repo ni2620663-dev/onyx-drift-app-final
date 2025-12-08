@@ -4,7 +4,7 @@ import 'dotenv/config';
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import cors from 'cors'; // CORS এর জন্য
+import cors from 'cors'; // CORS হ্যান্ডলিং এর জন্য
 import mongoose from 'mongoose'; // MongoDB সংযোগের জন্য
 
 // ESM (ECMAScript Module) এ __dirname সেটআপ
@@ -13,8 +13,7 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 
-// .env ফাইল থেকে PORT এবং MONGO_URI লোড করা
-// Render-এর জন্য ডিফল্ট 10000 ব্যবহার করা ভালো
+// .env ফাইল থেকে PORT এবং MONGO_URI লোড করা (Render-এ Environment Variables থেকে লোড হবে)
 const PORT = process.env.PORT || 10000;
 const MONGO_URI = process.env.MONGO_URI; 
 
@@ -22,7 +21,7 @@ const MONGO_URI = process.env.MONGO_URI;
 // 🌐 ডাটাবেস সংযোগ (Mongoose)
 // =======================================================
 if (!MONGO_URI) {
-    console.error("🔴 Error: MONGO_URI is not defined in environment variables!");
+    console.error("🔴 Error: MONGO_URI is not defined in environment variables! App will run without DB access.");
 } else {
     mongoose.connect(MONGO_URI)
         .then(() => {
@@ -30,7 +29,7 @@ if (!MONGO_URI) {
         })
         .catch(err => {
             console.error("❌ MongoDB connection error:", err.message);
-            // যদি সংযোগ ব্যর্থ হয়, সার্ভার বন্ধ না করে লগ করে দেখাবে।
+            // সংযোগ ব্যর্থ হলেও সার্ভার যেন চালু থাকে
         });
 }
 
@@ -38,9 +37,26 @@ if (!MONGO_URI) {
 // ⚙️ মিডলওয়্যার কনফিগারেশন
 // =======================================================
 
-// 💡 CORS যুক্ত করা: এটি login(pending) সমস্যা সমাধান করবে।
-// সব অরিজিনকে অনুমতি দেওয়ার জন্য:
-app.use(cors()); 
+// 💡 CORS Whitelisting: আপনার ফ্রন্টএন্ড ডোমেনকে বিশেষভাবে অনুমতি দেওয়া হচ্ছে
+const allowedOrigins = [
+    'https://onyx-drift.com', // 🚨 আপনার ফ্রন্টএন্ড ডোমেন
+    'http://localhost:3000',  // লোকাল ডেভেলপমেন্টের জন্য
+    'http://localhost:5173'   // Vite/React Dev Server এর জন্য
+];
+
+app.use(cors({
+    origin: function (origin, callback) {
+        // যদি অনুরোধটি অনুমোদিত অরিজিন থেকে আসে অথবা যদি অরিজিন না থাকে (যেমন Postman থেকে)
+        if (!origin || allowedOrigins.includes(origin)) {
+            callback(null, true);
+        } else {
+            // যদি অন্য কোনো ডোমেন থেকে অ্যাক্সেস করার চেষ্টা করা হয়
+            callback(new Error(`Not allowed by CORS for origin: ${origin}`)); 
+        }
+    },
+    methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
+    credentials: true // কুকি বা Auth হেডার পাঠানোর অনুমতি
+}));
 
 // ইনকামিং JSON ডেটা পার্স করার জন্য
 app.use(express.json()); 
@@ -52,21 +68,27 @@ app.use(express.urlencoded({ extended: true }));
 // 🔐 এপিআই রুটিং (API Routing)
 // =======================================================
 
-// ডামি লগইন রুট (এখন MongoDB সংযোগের ভিত্তিতে কাজ করবে)
+// লগইন রুট
 app.post('/api/login', (req, res) => {
-    // এখানে প্রকৃত ইউজার মডেল ব্যবহার করে ডাটাবেস যাচাইকরণ লজিক যাবে
     const { email, password } = req.body; 
 
-    // যেহেতু Mongoose সংযোগ উপরে আছে, আপনি এখানে Mongoose মডেল ব্যবহার করতে পারবেন
-    // এখন ডামি রেসপন্স দিচ্ছি:
-    if (email && password) {
+    console.log(`Login attempt from ${req.headers.origin}: ${email}`);
+
+    // ডামি লগইন লজিক
+    if (email === "test@example.com" && password === "123456") {
         return res.status(200).json({ 
             success: true, 
-            message: "Login request received and processed.",
-            user: { email: email, name: "Test User" }
+            message: "Login successful (Dummy Test)",
+            token: "fake_jwt_token_for_shakib"
+        });
+    } else if (email && password) {
+        // যদি ডাটাবেস চেক না থাকে, এটি ডামি ফেল রেসপন্স
+         return res.status(401).json({ 
+            success: false, 
+            message: "Invalid credentials or User not found." 
         });
     } else {
-        return res.status(400).json({ 
+         return res.status(400).json({ 
             success: false, 
             message: "Email and password are required." 
         });
@@ -74,36 +96,9 @@ app.post('/api/login', (req, res) => {
 });
 
 
-// ডামি পোস্ট রুট
+// পোস্ট রুট
 app.get('/api/posts', (req, res) => {
-    // এখানে MongoDB থেকে ডেটা ফেচ করার কোড থাকবে
     return res.status(200).json({ 
         posts: [
-            { id: 1, user: 'shakib001', text: 'Render deployment successful!' },
-            { id: 2, user: 'test_user', text: 'CORS and DB issue fixed.' }
-        ]
-    });
-});
-
-
-// =======================================================
-// 🌐 স্ট্যাটিক এবং রুট হ্যান্ডলিং
-// =======================================================
-
-// যদি আপনার ফ্রন্টএন্ড 'public' ফোল্ডারে থাকে
-app.use(express.static(path.join(__dirname, "public")));
-
-// রুট পেজ
-app.get("/", (req, res) => {
-    // এটি আপনার ফ্রন্টএন্ড অ্যাপ্লিকেশন লোড করবে (যদি থাকে)
-    res.sendFile(path.join(__dirname, "public", "index.html"));
-});
-
-
-// =======================================================
-// 🚀 সার্ভার লিসেনিং
-// =======================================================
-
-app.listen(PORT, '0.0.0.0', () => { // Render-এ 0.0.0.0 বাইন্ড করা আবশ্যক
-    console.log(`✅ Server running on port ${PORT}`);
-});
+            { id: 1, user: 'shakib001', text: 'CORS Fixed! App is Live.' },
+            { id: 2, user: 'test
