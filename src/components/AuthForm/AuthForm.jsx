@@ -1,7 +1,9 @@
 ﻿import React, { useState } from 'react';
 
-// ⚠️ আপনার ব্যাকএন্ড API এর সঠিক HTTP URL ব্যবহার করুন
-const RENDER_HTTP_URL = "https://onyx-drift-app-final.onrender.com"; 
+// ⚠️ প্রক্সি সার্ভারের URL ব্যবহার করা হচ্ছে, যাতে ফ্রন্টএন্ড থেকে আসা অনুরোধ 
+// প্রথমে প্রক্সি সার্ভারে যায় এবং সেখান থেকে আসল ব্যাকএন্ডে ফরোয়ার্ড হয়।
+// আপনার প্রক্সি সার্ভিসের URL টি এখানে দিন:
+const RENDER_PROXY_URL = "https://onyx-drift-api-server.onrender.com"; 
 
 export default function Login() {
     const [email, setEmail] = useState('');
@@ -11,7 +13,6 @@ export default function Login() {
 
     // 💡 মূল ফাংশন: ফর্ম সাবমিট হলে এই ফাংশনটি কল হবে
     const handleLogin = async (e) => {
-        // 🛑 সবথেকে গুরুত্বপূর্ণ: এটি ব্রাউজারের ডিফল্ট রিফ্রেশ হওয়া বন্ধ করে
         e.preventDefault(); 
 
         setError(''); // পূর্বের ত্রুটি মুছে ফেলুন
@@ -22,17 +23,17 @@ export default function Login() {
         }
 
         try {
-            // API কল: লগইন তথ্য ব্যাকএন্ডে পাঠানো
-            const response = await fetch(`${RENDER_HTTP_URL}/api/login`, {
+            // API কল: প্রক্সি সার্ভারের মাধ্যমে লগইন তথ্য পাঠানো
+            const response = await fetch(`${RENDER_PROXY_URL}/api/login`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email, password }),
             });
 
             if (!response.ok) {
-                // যদি সার্ভার 400 বা 500 রেসপন্স দেয়
                 const errorData = await response.json();
-                setError(errorData.message || 'লগইন ব্যর্থ হয়েছে। ইমেইল বা পাসওয়ার্ড ভুল।');
+                // "Invalid credentials or User not found." ত্রুটি এখান থেকে আসবে
+                setError(errorData.message || 'লগইন ব্যর্থ হয়েছে। ইমেইল বা পাসওয়ার্ড ভুল।'); 
                 return;
             }
 
@@ -57,7 +58,7 @@ export default function Login() {
     return (
         <div style={{ maxWidth: '400px', margin: '50px auto', padding: '20px', border: '1px solid #ccc', borderRadius: '8px' }}>
             <h2 style={{ textAlign: 'center' }}>লগইন</h2>
-            {/* 💡 ফর্ম ট্যাগ ব্যবহার করা হয়েছে এবং onSubmit সেট করা হয়েছে */}
+            
             <form onSubmit={handleLogin}> 
                 
                 <div style={{ marginBottom: '15px' }}>
@@ -86,7 +87,6 @@ export default function Login() {
                 
                 {error && <p style={{ color: 'red', marginBottom: '15px' }}>{error}</p>}
 
-                {/* 💡 type="submit" নিশ্চিত করে এন্টার বাটন কাজ করবে */}
                 <button 
                     type="submit" 
                     style={{ width: '100%', padding: '10px', backgroundColor: '#28a745', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
@@ -94,6 +94,18 @@ export default function Login() {
                     লগইন করুন
                 </button>
             </form>
+            
+            {/* 💡 নতুন রেজিস্ট্রেশন লিঙ্ক যোগ করা হয়েছে */}
+            <p style={{ textAlign: 'center', marginTop: '15px', fontSize: '14px' }}>
+                অ্যাকাউন্ট নেই? {" "}
+                <a 
+                    href="/register" 
+                    style={{ color: '#007bff', textDecoration: 'none', fontWeight: 'bold' }}
+                >
+                    একটি অ্যাকাউন্ট তৈরি করুন
+                </a>
+            </p>
+
         </div>
     );
 }
