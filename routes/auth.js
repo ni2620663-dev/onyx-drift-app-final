@@ -12,17 +12,17 @@ router.post('/register', async (req, res) => {
     return res.status(400).json({ msg: 'Please provide name, email, and password' });
   }
   
-  // 💡 রেজিস্ট্রেশন করার সময়ও ইমেইল ছোট হাতে রূপান্তর করা ভালো অভ্যাস
-  const lowerCaseEmail = email.toLowerCase(); 
+  // 💡 রেজিস্ট্রেশন করার সময়ও ইমেইল ছোট হাতে রূপান্তর করা হচ্ছে
+  const lowerCaseEmail = email.toLowerCase(); 
 
   try {
     // এখন ইউজারকে ছোট হাতের ইমেইল দিয়ে খোঁজা হচ্ছে
-    const existingUser = await User.findOne({ email: lowerCaseEmail }); 
+    const existingUser = await User.findOne({ email: lowerCaseEmail }); 
     if (existingUser) return res.status(400).json({ msg: 'User already exists' });
 
     const hashedPassword = await bcrypt.hash(password, 10);
     // ডেটাবেসেও ছোট হাতের ইমেইল সেভ করা হচ্ছে
-    const user = new User({ name, email: lowerCaseEmail, password: hashedPassword }); 
+    const user = new User({ name, email: lowerCaseEmail, password: hashedPassword }); 
     await user.save();
 
     const payload = { user: { id: user._id } };
@@ -50,12 +50,12 @@ router.post('/login', async (req, res) => {
     return res.status(400).json({ msg: 'Please provide email and password' });
   }
   
-  // 💡 লগইন করার জন্য ইনপুট করা ইমেইলটিকে ছোট হাতের অক্ষরে রূপান্তর করা হচ্ছে (সংশোধিত অংশ)
-  const lowerCaseEmail = email.toLowerCase();
+  // 💡 লগইন করার জন্য ইনপুট করা ইমেইলটিকে ছোট হাতের অক্ষরে রূপান্তর করা হচ্ছে 
+  const lowerCaseEmail = email.toLowerCase();
 
   try {
     // ডেটাবেসে ছোট হাতের ইমেইল দিয়ে ইউজারকে খোঁজা হচ্ছে
-    const user = await User.findOne({ email: lowerCaseEmail }); 
+    const user = await User.findOne({ email: lowerCaseEmail }); 
     
     if (!user) return res.status(400).json({ msg: 'Invalid credentials' }); // ইউজার খুঁজে না পেলে ত্রুটি
 
