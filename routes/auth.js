@@ -5,79 +5,95 @@ import User from '../models/User.js'; // .js extension must for ES modules
 
 const router = express.Router();
 
-// Register user
+// =======================================================
+// 🟢 রেজিস্ট্রেশন রুট (Register user)
+// =======================================================
 router.post('/register', async (req, res) => {
-  const { name, email, password } = req.body || {};
-  if (!name || !email || !password) {
-    return res.status(400).json({ msg: 'Please provide name, email, and password' });
-  }
+  const { name, email, password } = req.body || {};
   
-  // 💡 রেজিস্ট্রেশন করার সময়ও ইমেইল ছোট হাতে রূপান্তর করা হচ্ছে
-  const lowerCaseEmail = email.toLowerCase(); 
+  if (!name || !email || !password) {
+    return res.status(400).json({ msg: 'Please provide name, email, and password' });
+  }
+  
+  // 💡 ইমেলটিকে ছোট হাতের অক্ষরে রূপান্তর করা হচ্ছে, যাতে কেস-সংক্রান্ত সমস্যা এড়ানো যায়।
+  const lowerCaseEmail = email.toLowerCase(); 
 
-  try {
-    // এখন ইউজারকে ছোট হাতের ইমেইল দিয়ে খোঁজা হচ্ছে
-    const existingUser = await User.findOne({ email: lowerCaseEmail }); 
-    if (existingUser) return res.status(400).json({ msg: 'User already exists' });
+  try {
+    // ১. ইউজার বিদ্যমান কিনা তা পরীক্ষা করা
+    const existingUser = await User.findOne({ email: lowerCaseEmail }); 
+    if (existingUser) return res.status(400).json({ msg: 'User already exists' });
 
-    const hashedPassword = await bcrypt.hash(password, 10);
-    // ডেটাবেসেও ছোট হাতের ইমেইল সেভ করা হচ্ছে
-    const user = new User({ name, email: lowerCaseEmail, password: hashedPassword }); 
-    await user.save();
+    // ২. পাসওয়ার্ড হ্যাশ করা
+    const hashedPassword = await bcrypt.hash(password, 10);
+    
+    // ৩. নতুন ইউজার তৈরি এবং সেভ করা
+    const user = new User({ name, email: lowerCaseEmail, password: hashedPassword }); 
+    await user.save();
 
-    const payload = { user: { id: user._id } };
-    const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '7d' });
+    // ৪. টোকেন তৈরি
+    const payload = { user: { id: user._id } };
+    const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '7d' });
 
-    res.json({
-      token,
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        avatar: user.avatar || null,
-      },
-    });
-  } catch (err) {
-    console.error('auth.register error:', err);
-    res.status(500).send('Server error');
-  }
+    // ৫. সফল প্রতিক্রিয়া
+    res.json({
+      token,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        avatar: user.avatar || null,
+      },
+    });
+  } catch (err) {
+    console.error('auth.register error:', err);
+    res.status(500).send('Server error');
+  }
 });
 
-// Login user
+// =======================================================
+// 🔑 লগইন রুট (Login user)
+// =======================================================
 router.post('/login', async (req, res) => {
-  const { email, password } = req.body || {};
-  if (!email || !password) {
-    return res.status(400).json({ msg: 'Please provide email and password' });
-  }
+  const { email, password } = req.body || {};
   
-  // 💡 লগইন করার জন্য ইনপুট করা ইমেইলটিকে ছোট হাতের অক্ষরে রূপান্তর করা হচ্ছে 
-  const lowerCaseEmail = email.toLowerCase();
+  if (!email || !password) {
+    return res.status(400).json({ msg: 'Please provide email and password' });
+  }
+  
+  // 💡 ইনপুট করা ইমেইলটিকে ছোট হাতের অক্ষরে রূপান্তর করা হচ্ছে
+  const lowerCaseEmail = email.toLowerCase();
 
-  try {
-    // ডেটাবেসে ছোট হাতের ইমেইল দিয়ে ইউজারকে খোঁজা হচ্ছে
-    const user = await User.findOne({ email: lowerCaseEmail }); 
+  try {
+    // ১. ডেটাবেসে ইউজারকে খোঁজা
+    const user = await User.findOne({ email: lowerCaseEmail }); 
     
-    if (!user) return res.status(400).json({ msg: 'Invalid credentials' }); // ইউজার খুঁজে না পেলে ত্রুটি
+    // যদি ইউজার খুঁজে না পাওয়া যায়
+    if (!user) return res.status(400).json({ msg: 'Invalid credentials' }); 
 
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) return res.status(400).json({ msg: 'Invalid credentials' }); // পাসওয়ার্ড না মিললে ত্রুটি
+    // ২. পাসওয়ার্ড তুলনা করা (মূল লজিক)
+    const isMatch = await bcrypt.compare(password, user.password);
+    
+    // পাসওয়ার্ড না মিললে
+    if (!isMatch) return res.status(400).json({ msg: 'Invalid credentials' }); 
 
-    const payload = { user: { id: user._id } };
-    const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '7d' });
+    // ৩. টোকেন তৈরি (যদি পাসওয়ার্ড মেলে)
+    const payload = { user: { id: user._id } };
+    const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '7d' });
 
-    res.json({
-      token,
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        avatar: user.avatar || null,
-      },
-    });
-  } catch (err) {
-    console.error('auth.login error:', err);
-    res.status(500).send('Server error');
-  }
+    // ৪. সফল প্রতিক্রিয়া
+    res.json({
+      token,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        avatar: user.avatar || null,
+      },
+    });
+  } catch (err) {
+    console.error('auth.login error:', err);
+    res.status(500).send('Server error');
+  }
 });
 
 export default router;
