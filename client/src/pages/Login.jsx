@@ -1,80 +1,37 @@
-import React, { useState } from "react";
-import axios from "axios";
+// src/components/LoginComponent.jsx (নতুন Auth0 ভার্সন)
+import React from 'react';
+import { useAuth0 } from '@auth0/auth0-react';
 
-// প্রক্সি সার্ভিসের URL ব্যবহার করা হচ্ছে
-const API_URL = "https://onyx-drift-api-server.onrender.com"; 
+const LoginComponent = () => {
+    const { loginWithRedirect } = useAuth0();
 
-const Login = () => {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [message, setMessage] = useState("");
+    const handleLogin = () => {
+        // এই ফাংশনটি আপনাকে Auth0 Universal Login Page এ নিয়ে যাবে
+        loginWithRedirect();
+    };
 
-  const handleLogin = async (e) => {
-    e.preventDefault();
-    
-    setMessage(""); 
+    return (
+        <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100 p-4">
+            <div className="bg-white p-8 rounded-xl shadow-2xl w-full max-w-sm">
+                <h1 className="text-3xl font-extrabold text-blue-600 mb-6 text-center">
+                    Login to OnyxDrift
+                </h1>
+                
+                <button
+                    onClick={handleLogin}
+                    className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition duration-300 shadow-md hover:shadow-lg w-full"
+                >
+                    <i className="fab fa-facebook-f mr-2"></i> {/* ফেসবুক স্টাইল আইকন (ঐচ্ছিক) */}
+                    Login / Create Account
+                </button>
 
-    try {
-      const res = await axios.post(
-        `${API_URL}/api/login`, 
-        { email, password },
-        { withCredentials: true }
-      );
-      
-      setMessage(res.data.message || "লগইন সফল হয়েছে! রিডাইরেক্ট হচ্ছে...");
-      
-      // 💡 লগইন সফল হলে রিডাইরেক্ট করুন (যেমন: 1 সেকেন্ড পরে)
-      setTimeout(() => {
-        window.location.href = '/feed'; 
-      }, 1000);
-
-    } catch (err) {
-      // ব্যাকএন্ড থেকে আসা ত্রুটি মেসেজটি সঠিকভাবে ধরুন
-      setMessage(err.response?.data?.msg || err.response?.data?.message || "লগইন ব্যর্থ হয়েছে। সার্ভার ত্রুটি।");
-    }
-  };
-
-  return (
-    <div className="flex flex-col items-center mt-10">
-      <h1 className="text-2xl font-bold mb-4">OnyxDrift Login</h1> 
-      <form onSubmit={handleLogin} className="flex flex-col gap-4 w-64">
-        <input
-          type="email"
-          placeholder="Email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          className="p-2 border rounded"
-          required
-        />
-        <input
-          type="password"
-          placeholder="Password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          className="p-2 border rounded"
-          required
-        />
-        <button type="submit" className="bg-blue-500 text-white p-2 rounded">
-          Login
-        </button>
-      </form>
-      
-      {/* ⭐ এখানে Demo Credentials টেক্সট যোগ করা হলো ⭐ */}
-      <p className="text-center text-sm text-gray-500 mt-2">
-        Demo Credentials: test@example.com / 123456
-      </p>
-      
-      {message && <p className="mt-4 text-red-500">{message}</p>}
-      
-      {/* রেজিস্ট্রেশন লিঙ্কটি নিশ্চিত করা হয়েছে */}
-      <p className="mt-3 text-sm">
-        অ্যাকাউন্ট নেই? {" "}
-        <a href="/register" className="text-blue-600 hover:text-blue-800 font-medium">
-          একটি অ্যাকাউন্ট তৈরি করুন
-        </a>
-      </p>
-    </div>
-  );
+                <p className="text-center text-sm text-gray-500 mt-4">
+                    Uses Auth0 for Secure Authentication
+                </p>
+                
+            </div>
+        </div>
+    );
 };
 
-export default Login;
+export default LoginComponent;
