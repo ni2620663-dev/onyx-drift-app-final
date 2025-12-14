@@ -1,50 +1,97 @@
-// src/App.tsx (সংশোধিত)
+// client/src/App.tsx (FINAL VERSION - NO IONIC)
+
 import React, { useEffect } from 'react';
-// Ionic এবং Capacitor-এর সমস্ত ইম্পোর্ট সরানো হলো
-// import { IonApp, IonRouterOutlet, setupIonicReact } from '@ionic/react';
-// import { IonReactRouter } from '@ionic/react-router'; 
-import { BrowserRouter, Routes, Route } from 'react-router-dom'; // React Router v7 এর জন্য
-
+import { BrowserRouter, Routes, Route, Link } from 'react-router-dom';
 import { useAuth0 } from '@auth0/auth0-react';
-// import { App as CapApp } from '@capacitor/app'; // সরানো হলো
-// import { Browser } from '@capacitor/browser'; // সরানো হলো
 
-/* আপনার অন্যান্য imports... যেমন:
-import LoginPage from './pages/LoginPage';
-import DashboardPage from './pages/DashboardPage';
-*/
+// আপনার তৈরি করা পৃষ্ঠাগুলির আমদানি (import) করুন
+// এই ফাইলগুলি আপনার client/src/pages/ ফোল্ডারে থাকা দরকার।
+// import LoginPage from './pages/LoginPage';
+// import DashboardPage from './pages/DashboardPage';
+// import ProfilePage from './pages/ProfilePage';
+// import SetupProfilePage from './pages/SetupProfilePage'; // <--- নতুন প্রোফাইল সেটআপ পেজ আমদানি
 
-// setupIonicReact(); // সরানো হলো
+// --- সাধারণ টেম্পোরারি কম্পোনেন্ট ---
+
+// ১. নেভিগেশন বার
+const Navbar = () => {
+  const { isAuthenticated, logout, loginWithRedirect } = useAuth0();
+
+  return (
+    <nav className="bg-gray-800 text-white p-4 flex justify-between items-center shadow-md">
+      <Link to="/" className="text-xl font-bold hover:text-blue-400 transition-colors">OnyxDrift</Link>
+      <div className="space-x-4 flex items-center">
+        {isAuthenticated ? (
+          <>
+            <Link to="/dashboard" className="hover:text-gray-300">Dashboard</Link>
+            <Link to="/profile" className="hover:text-gray-300">Profile</Link>
+            <button
+              onClick={() => logout({ logoutParams: { returnTo: window.location.origin } })}
+              className="bg-red-500 hover:bg-red-600 transition-colors py-1 px-3 rounded text-sm font-medium"
+            >
+              Log Out
+            </button>
+          </>
+        ) : (
+          <button
+            onClick={() => loginWithRedirect()}
+            className="bg-blue-500 hover:bg-blue-600 transition-colors py-1 px-3 rounded text-sm font-medium"
+          >
+            Log In / Sign Up
+          </button>
+        )}
+      </div>
+    </nav>
+  );
+};
+
+// ২. হোম পেজ (কালো স্ক্রিন এড়ানোর জন্য)
+const HomePage = () => (
+  <div className="p-8 text-center bg-gray-100 text-gray-800 min-h-[90vh] flex flex-col items-center justify-center">
+    <h1 className="text-4xl font-extrabold mb-4">Welcome to OnyxDrift Social App</h1>
+    <p className="text-lg text-gray-600">
+        একটি অ্যাকাউন্ট তৈরি বা লগইন করার জন্য 'Log In / Sign Up' বাটন ব্যবহার করুন।
+    </p>
+  </div>
+);
+
+// --- মূল অ্যাপ্লিকেশন কম্পোনেন্ট ---
 
 const App: React.FC = () => {
-  // Auth0 হুক থেকে কলব্যাক হ্যান্ডলার নিন
   const { handleRedirectCallback } = useAuth0();
 
-  // useEffect Hook শুধুমাত্র নিশ্চিত করার জন্য যে Auth0 কলব্যাক সঠিকভাবে হ্যান্ডেল হচ্ছে
-  // Auth0 SDK সাধারণত এটি নিজেই করে, কিন্তু কনভেনশন হিসেবে রাখা যেতে পারে।
+  // Auth0/SPA-এর জন্য প্রাথমিক কলব্যাক হ্যান্ডলিং
   useEffect(() => {
-    // ওয়েব ব্রাউজার কলব্যাক হ্যান্ডলিং (Capacitor/Mobile এর প্রয়োজন নেই)
-    // যদি আপনি ওয়েব অ্যাপ চালান, Auth0 SDK নিজেই URL চেক করে থাকে।
-    // এই লজিকটি Capacitor এর পরিবর্তে রাখা হয়েছিল, এখন এটি অপ্রয়োজনীয়।
-    // তবুও, Auth0 SDK ব্যবহার করে URL চেক করার জন্য এটি রাখা যেতে পারে যদি প্রয়োজন হয়।
+    // এই লজিকটি নিশ্চিত করে যে লগইন বা ত্রুটির প্যারামিটার থাকলে Auth0 SDK তা হ্যান্ডেল করবে।
     if (window.location.search.includes('code') || window.location.search.includes('error')) {
       handleRedirectCallback(window.location.href);
     }
-  }, [handleRedirectCallback]); // dependency array তে handleRedirectCallback যোগ করুন
+  }, [handleRedirectCallback]);
 
   return (
-    // IonApp এর পরিবর্তে সাধারণ div
-    <div>
-      {/* IonReactRouter এর পরিবর্তে BrowserRouter */}
+    // মূল div
+    <div className="bg-white min-h-screen">
       <BrowserRouter>
-        {/* IonRouterOutlet এর পরিবর্তে Routes */}
+        <Navbar /> {/* নেভিগেশন বার সব পেজে থাকবে */}
         <Routes>
-          {/* উদাহরণ রুট - আপনার আসল রুটগুলি এখানে যোগ করুন */}
-          {/* <Route path="/login" element={<LoginPage />} /> */}
-          {/* <Route path="/dashboard" element={<DashboardPage />} /> */}
+          {/* ১. হোম রুট */}
+          <Route path="/" element={<HomePage />} />
           
-          {/* যদি আপনার কোনো ডিফল্ট কম্পোনেন্ট থাকে */}
-          {/* <Route path="/" element={<HomePage />} /> */}
+          {/* ২. প্রোফাইল সেটআপ রুট (নতুন ব্যবহারকারীদের জন্য) */}
+          {/* <Route path="/setup-profile" element={<SetupProfilePage />} /> */}
+          
+          {/* আপনার অন্যান্য আসল রুটগুলি এখানে যুক্ত করুন */}
+          {/* <Route path="/dashboard" element={<DashboardPage />} /> */}
+          {/* <Route path="/profile" element={<ProfilePage />} /> */}
+          
+          {/* ৩. 404 Not Found Page */}
+          <Route path="*" element={
+            <div className="p-10 text-center">
+                <h1 className="text-4xl mt-20 text-red-600 font-bold">404 - Page Not Found</h1>
+                <p className="text-gray-500 mt-2">আপনি যে পৃষ্ঠাটি খুঁজছেন, তা পাওয়া যায়নি।</p>
+                <Link to="/" className="text-blue-500 hover:underline mt-4 block">হোম পেজে ফিরে যান</Link>
+            </div>
+          } />
         </Routes>
       </BrowserRouter>
     </div>
