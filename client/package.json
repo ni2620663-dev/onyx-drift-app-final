@@ -37,8 +37,8 @@
     "passport": "^0.7.0",
     "passport-google-oauth20": "^2.0.0",
     "postcss": "^8.5.6",
-    "react": "^18.2.0",           <== React ভার্সন 18-এ নামিয়ে আনা হলো
-    "react-dom": "^18.2.0",       <== React-DOM ভার্সন 18-এ নামিয়ে আনা হলো
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
     "react-router-dom": "^7.10.1",
     "socket.io": "^4.8.1",
     "tailwindcss": "^4.1.17"
