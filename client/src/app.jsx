@@ -60,14 +60,74 @@ const ProtectedRoute = ({ component }) => {
     });
 };
 
-// --- Dummy Pages (আগের মতো) ---
-const Home = () => (<h1 className="text-3xl text-center mt-8 font-semibold text-gray-800">Welcome Home (Feed)</h1>);
-const Chat = () => {
-    const { user } = useAuth0();
+// --- আপডেটেড Home Component (Feed) ---
+// এটি আপনার সুরক্ষিত /feed রুটে ব্যবহার হবে
+const Home = () => {
+    // Auth0 হুক যা টোকেন পাওয়ার জন্য অপরিহার্য
+    const { getAccessTokenSilently } = useAuth0(); 
+    const [posts, setPosts] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+
+    // ডেটা আনার ফাংশন, যা টোকেন ব্যবহার করে
+    const fetchProtectedPosts = useCallback(async () => {
+        setLoading(true);
+        setError(null);
+        try {
+            // 1. Auth0 থেকে অ্যাক্সেস টোকেন সংগ্রহ করুন (নীরবে)
+            const accessToken = await getAccessTokenSilently({
+                authorizationParams: {
+                    // এটি নিশ্চিত করে যে টোকেনটি আপনার API-এর জন্য উপযুক্ত
+                    audience: 'https://onyx-drift-api.com', 
+                },
+            });
+
+            // 2. সুরক্ষিত ব্যাকএন্ড API-এ কল করুন
+            // এখানে নিশ্চিত করুন যে রুটটি /posts, /api/posts নয়
+            const apiUrl = `${API_BASE_URL}/posts`; 
+            
+            const response = await fetch(apiUrl, {
+                headers: {
+                    // টোকেনটি Authorization Header-এ যুক্ত করা হয়েছে
+                    Authorization: `Bearer ${accessToken}`, 
+                    'Content-Type': 'application/json',
+                },
+            });
+
+            if (!response.ok) {
+                // যদি ব্যাকএন্ড টোকেন প্রত্যাখ্যান করে (401), এই এররটি ক্যাচ হবে
+                throw new Error('API Token Verification Failed or Network Error');
+            }
+
+            const data = await response.json();
+            setPosts(data.data); // আপনার ব্যাকএন্ডের প্রতিক্রিয়া কাঠামো অনুযায়ী 
+            
+        } catch (err) {
+            console.error("Error accessing protected API:", err);
+            setError(err.message);
+            // ⭐ যদি আপনার পুরোনো 'Login failed. Check server connection.' মেসেজটি 
+            // এই এরর হ্যান্ডেলারে থাকে, তবে এটি এখানেই ট্রিগার হচ্ছে।
+            
+        } finally {
+            setLoading(false);
+        }
+    }, [getAccessTokenSilently]); // ডিপেন্ডেন্সিগুলি যোগ করা হয়েছে
+
+    // কম্পোনেন্ট মাউন্ট হওয়ার সময় ডেটা আনুন
+    React.useEffect(() => {
+        fetchProtectedPosts();
+    }, [fetchProtectedPosts]);
+
+    if (loading) return <div className="text-center mt-20">Loading Feed...</div>;
+    if (error) return <div className="text-red-600 text-center mt-20">Error loading data: {error}</div>;
+
+
     return (
-        <div className="text-center mt-8">
-            <h2 className="text-2xl font-medium">Chat Application</h2>
-            <p className="text-gray-600 mt-2">Logged in as: **{user?.email}**</p>
+        <div className="text-center mt-8 font-semibold text-gray-800">
+            <h1 className="text-3xl">Welcome Home (Feed)</h1>
+            <h2 className="text-xl mt-4 text-green-700">Protected Data Loaded Successfully!</h2>
+            <p className="mt-2 text-gray-500">Total Posts: {posts.length}</p>
+            {/* এখানে পোস্টগুলি রেন্ডার করুন */}
         </div>
     );
 };
