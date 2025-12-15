@@ -1,57 +1,46 @@
 {
-  "name": "onyxdrift-backend",
-  "version": "1.0.0",
-  "description": "Backend server for OnyxDrift social application.",
-  "main": "server.js",
-  "type": "module",
-  "scripts": {
-    "start": "node src/server.js",
-    "dev": "nodemon -r dotenv/config src/server.js", 
-    // ⭐⭐⭐ Build স্ক্রিপ্ট সংশোধন করা হয়েছে ⭐⭐⭐
-    // এটি Render-কে বলবে client ফোল্ডারে গিয়ে 'vite build' চালাতে
-    "build": "cd client && vite build" 
-    // যদি আপনার client/package.json এ 'build' স্ক্রিপ্ট থাকে, তবে এটি ব্যবহার করুন:
-    // "build": "cd client && npm run build"
-    // আমি ধরে নিচ্ছি আপনার client/package.json এর build স্ক্রিপ্ট হলো vite build
-    // তাই এটি সরল রাখা হয়েছে। 
-    // যদি উপরেরটি কাজ না করে, তবে Render-এ Build Command-টি 'cd client && npm run build' এ পরিবর্তন করতে হবে।
-    // আপাতত, আমরা এটি রুট-লেভেল থেকেই চালানোর চেষ্টা করব।
-  },
-  "keywords": [
-    "express",
-    "node",
-    "social-media",
-    "api"
-  ],
-  "engines": {
-    "node": "24.x"
-  },
-  "author": "",
-  "license": "ISC",
-  "dependencies": {
-    "debug": "4.3.4",
-    "@auth0/auth0-react": "^2.10.0",
-    "@capacitor/app": "^8.0.0",
-    "@capacitor/browser": "^8.0.0",
-    "cors": "^2.8.5",
-    "express": "^4.22.1",
-    "express-session": "^1.18.2",
-    "firebase-admin": "^13.6.0",
-    "mongoose": "^9.0.1",
-    "passport": "^0.7.0",
-    "passport-google-oauth20": "^2.0.0",
-    "socket.io": "^4.8.1",
-    
-    // ⭐⭐⭐ বিল্ড নির্ভরতা যুক্ত করা হয়েছে (vite: not found সমস্যার সমাধান) ⭐⭐⭐
+  "name": "onyxdrift-backend",
+  "version": "1.0.0",
+  "description": "Backend server for OnyxDrift social application.",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon -r dotenv/config src/server.js",
+    "build": "cd client && vite build" 
+  },
+  "keywords": [
+    "express",
+    "node",
+    "social-media",
+    "api"
+  ],
+  "engines": {
+    "node": "24.x"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "debug": "4.3.4",
+    "@auth0/auth0-react": "^2.10.0",
+    "@capacitor/app": "^8.0.0",
+    "@capacitor/browser": "^8.0.0",
+    "cors": "^2.8.5",
+    "express": "^4.22.1",
+    "express-session": "^1.18.2",
+    "firebase-admin": "^13.6.0",
+    "mongoose": "^9.0.1",
+    "passport": "^0.7.0",
+    "passport-google-oauth20": "^2.0.0",
+    "socket.io": "^4.8.1",
     "vite": "^7.2.7", 
     "@vitejs/plugin-react": "^5.1.2"
-    // ⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐
-  },
-  "devDependencies": {
-    "@types/express-session": "^1.18.2",
-    "@types/passport": "^1.0.17",
-    "@types/passport-google-oauth20": "^2.0.17",
-    "dotenv": "^16.4.5",
-    "nodemon": "^3.1.0"
-  }
+  },
+  "devDependencies": {
+    "@types/express-session": "^1.18.2",
+    "@types/passport": "^1.0.17",
+    "@types/passport-google-oauth20": "^2.0.17",
+    "dotenv": "^16.4.5",
+    "nodemon": "^3.1.0"
+  }
 }
