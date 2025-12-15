@@ -1,58 +1,54 @@
 {
-  "name": "onyxdrift-client",
-  "version": "1.0.0",
-  "description": "Frontend client for OnyxDrift social application.",
-  "main": "server.js",
-  "type": "module",
-  "scripts": {
-    "start": "node src/server.js",
-    "dev": "nodemon src/server.js",
-    "build": "vite build"
-  },
-  "keywords": [
-    "express",
-    "node",
-    "social-media",
-    "api"
-  ],
-  "engines": {
-    "node": "24.x"
-  },
-  "author": "",
-  "license": "ISC",
-  "dependencies": {
-    "@auth0/auth0-react": "^2.10.0",
-    "autoprefixer": "^10.4.22",
-    "axios": "^1.13.2",
-    "cors": "^2.8.5",
-    "debug": "4.3.4",
-    "express": "^4.22.1",
-    "express-session": "^1.18.2",
-    "firebase-admin": "^13.6.0",
-    "mongoose": "^9.0.1",
-    "multer": "^2.0.2",
-    "passport": "^0.7.0",
-    "passport-google-oauth20": "^2.0.0",
-    "postcss": "^8.5.6",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "react-router-dom": "^7.10.1", 
-    "socket.io": "^4.8.1",
-    "tailwindcss": "^4.1.17",
-    
-    // ⭐⭐ Build টুলগুলি এখানে সরানো হয়েছে ⭐⭐
+  "name": "onyxdrift-client",
+  "version": "1.0.0",
+  "description": "Frontend client for OnyxDrift social application.",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "build": "vite build"
+  },
+  "keywords": [
+    "express",
+    "node",
+    "social-media",
+    "api"
+  ],
+  "engines": {
+    "node": "24.x"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@auth0/auth0-react": "^2.10.0",
+    "autoprefixer": "^10.4.22",
+    "axios": "^1.13.2",
+    "cors": "^2.8.5",
+    "debug": "4.3.4",
+    "express": "^4.22.1",
+    "express-session": "^1.18.2",
+    "firebase-admin": "^13.6.0",
+    "mongoose": "^9.0.1",
+    "multer": "^2.0.2",
+    "passport": "^0.7.0",
+    "passport-google-oauth20": "^2.0.0",
+    "postcss": "^8.5.6",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^7.10.1",
+    "socket.io": "^4.8.1",
+    "tailwindcss": "^4.1.17",
     "@vitejs/plugin-react": "^5.1.2",
-    "vite": "^7.2.7"
-    // ⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐
-  },
-  "devDependencies": {
-    "@tailwindcss/postcss": "^4.1.17",
-    "@types/express-session": "^1.18.2",
-    "@types/passport": "^1.0.17",
-    "@types/passport-google-oauth20": "^2.0.17",
-    "dotenv": "^16.4.5",
-    "nodemon": "^3.1.0",
-    "postcss-nesting": "^13.0.2"
-    // vite সম্পর্কিত নির্ভরতাগুলি এখান থেকে সরানো হয়েছে
-  }
+    "vite": "^7.2.7"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.1.17",
+    "@types/express-session": "^1.18.2",
+    "@types/passport": "^1.0.17",
+    "@types/passport-google-oauth20": "^2.0.17",
+    "dotenv": "^16.4.5",
+    "nodemon": "^3.1.0",
+    "postcss-nesting": "^13.0.2"
+  }
 }
