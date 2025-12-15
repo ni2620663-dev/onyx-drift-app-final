@@ -1,0 +1,14 @@
+# render.yaml
+services:
+  # আপনার স্ট্যাটিক সাইটের নাম (যেমন, frontend বা web-client)
+- type: static
+  name: https://dashboard.render.com/web/srv-d4rd5qali9vc73abj2p0 # এখানে আপনার Render স্ট্যাটিক সাইটের নাম দিন
+  buildCommand: npm run build
+  staticPublishPath: ./build # আপনার build ফোল্ডারের সঠিক পাথ দিন (যেমন: ./build)
+  
+  # === ক্লায়েন্ট-সাইড রাউটিং এর জন্য রিরাইট রুল ===
+  pullRequestAutodeploy: true
+  routes:
+    - type: rewrite
+      source: /(.+)
+      destination: /index.html
