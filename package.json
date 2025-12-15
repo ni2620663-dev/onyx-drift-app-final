@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "start": "node src/server.js",
-    "dev": "nodemon -r dotenv/config src/server.js"
+    "dev": "nodemon -r dotenv/config src/server.js",
       "build": "cd client && vite build"
   },
   "keywords": [
