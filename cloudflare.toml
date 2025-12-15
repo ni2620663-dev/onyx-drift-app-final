@@ -1,0 +1,11 @@
+```toml
+[site]
+# This is the directory Cloudflare Pages should deploy
+bucket = "dist" 
+
+[[redirects]]
+# This is the SPA Fallback Rule
+from = "/*"
+to = "/index.html"
+status = 200
+```
