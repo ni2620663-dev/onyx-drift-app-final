@@ -1,5 +1,13 @@
 {
   "version": 2,
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+      ]
+    }
+  ],
   "rewrites": [
     { "source": "/assets/(.*)", "destination": "/client/dist/assets/$1" },
     { "source": "/(.*)", "destination": "/client/dist/index.html" }
