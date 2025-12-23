@@ -3,11 +3,9 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { Auth0Provider } from '@auth0/auth0-react';
 import App from './App';
-
-const AUTH0_DOMAIN = "{onyx-drift}"; // আপনার Auth0 ডোমেইন
-const AUTH0_CLIENT_ID = "{XLOf0b4EYm4JhJ2KUQ4mfWgMG1WDeCu4}"; // আপনার Auth0 Client ID
-const PACKAGE_ID = com.onyxdrift.app://dev-1a2b3c4d.us.auth0.com/capacitor/com.onyxdrift.app/callback""; // আপনার capacitor.config.ts এর appId
-
+const AUTH0_DOMAIN = 'dev-6d0nxccsaycctfl1.us.auth0.com';
+const AUTH0_CLIENT_ID = 'tcfTAHv3K8KC1VwtZQrqIbqsZRN2PJFr';
+const API_AUDIENCE = 'https://onyx-drift-api.com';
 const root = createRoot(document.getElementById('root')!);
 
 root.render(
