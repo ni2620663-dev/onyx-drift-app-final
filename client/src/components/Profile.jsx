@@ -24,6 +24,7 @@ const Profile = ({ userId }) => {
   const handleSave = async () => {
     let avatarUrl = user.avatar;
     // Future: Upload avatarFile to server/cloud and get URL
+const API_URL = import.meta.env.VITE_API_URL;
 
     try {
       const res = await axios.put(`${API_URL}/api/profile/${userId}`, {
