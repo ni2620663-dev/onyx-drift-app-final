@@ -1,7 +1,6 @@
-// client/src/pages/SetupProfilePage.jsx
-
 import React, { useState } from 'react';
 import { useAuth0 } from '@auth0/auth0-react';
+import axios from 'axios'; // axios ইম্পোর্ট করুন
 
 // --- স্টেপ কম্পোনেন্ট ---
 
@@ -36,23 +35,31 @@ const Step1 = ({ formData, handleChange }) => (
   </div>
 );
 
-const Step2 = ({ formData, handleChange }) => (
-  <div className="space-y-4">
+const Step2 = ({ formData, handleChange, previewUrl }) => (
+  <div className="space-y-4 text-center">
     <h3 className="text-xl font-semibold text-gray-800">২. প্রোফাইল ছবি</h3>
-    {/* এখানে ছবি আপলোডের লজিক থাকবে, আপাতত এটি একটি ডামি ইনপুট */}
-    <p className="text-sm text-gray-500">পরবর্তী ধাপে আমরা ফাইল আপলোডের জটিলতা নিয়ে কাজ করব।</p>
+    
+    {/* ইমেজ প্রিভিউ সেকশন */}
+    <div className="flex justify-center mb-4">
+      <img 
+        src={previewUrl || "https://placehold.jp/150x150.png"} 
+        alt="Avatar" 
+        className="w-32 h-32 rounded-full object-cover border-2 border-blue-500"
+        onError={(e) => { e.target.src = "https://placehold.jp/150x150.png" }}
+      />
+    </div>
+
     <div>
-      <label htmlFor="profilePicture" className="block text-sm font-medium text-gray-700">ছবি আপলোড</label>
+      <label htmlFor="profilePicture" className="block text-sm font-medium text-gray-700 mb-2">ছবি নির্বাচন করুন</label>
       <input
         type="file"
         name="profilePicture"
         id="profilePicture"
         onChange={handleChange}
         accept="image/*"
-        className="mt-1 block w-full text-sm text-gray-500"
+        className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
       />
     </div>
-    {/* ছবি প্রিভিউ করার লজিক এখানে যোগ করা যেতে পারে */}
   </div>
 );
 
@@ -73,69 +80,70 @@ const SetupProfilePage = () => {
     bio: '', 
     profilePicture: null 
   });
+  const [previewUrl, setPreviewUrl] = useState(null); // প্রিভিউ URL এর জন্য
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // সব স্টেপগুলি একটি অ্যারেতে রাখা
   const steps = [Step1, Step2, Step3];
   const totalSteps = steps.length;
   const CurrentStepComponent = steps[currentStep - 1];
 
-  // ইনপুট পরিবর্তন হ্যান্ডেল
+  // ইনপুট পরিবর্তন এবং ইমেজ প্রিভিউ হ্যান্ডেল
   const handleChange = (e) => {
     const { name, value, type, files } = e.target;
-    setFormData(prevData => ({
-      ...prevData,
-      [name]: type === 'file' ? files[0] : value,
-    }));
+    if (type === 'file') {
+      const file = files[0];
+      setFormData(prev => ({ ...prev, [name]: file }));
+      setPreviewUrl(URL.createObjectURL(file)); // লোকাল প্রিভিউ তৈরি
+    } else {
+      setFormData(prev => ({ ...prev, [name]: value }));
+    }
   };
 
-  // ভ্যালিডেশন লজিক
   const validateStep = (step) => {
     setError(null);
     if (step === 1 && (!formData.username || formData.username.length < 3)) {
       setError('ইউজারনেম কমপক্ষে ৩ অক্ষরের হতে হবে।');
       return false;
     }
-    // ভবিষ্যতে অন্যান্য ধাপের ভ্যালিডেশন এখানে যোগ করুন
     return true;
   };
 
-  // পরবর্তী ধাপে যাওয়া
-  const handleNext = () => {
-    if (validateStep(currentStep)) {
-      if (currentStep < totalSteps) {
-        setCurrentStep(prev => prev + 1);
-      }
-    }
-  };
+  const handleNext = () => { if (validateStep(currentStep)) setCurrentStep(prev => prev + 1); };
+  const handleBack = () => { if (currentStep > 1) setCurrentStep(prev => prev - 1); };
 
-  // পূর্ববর্তী ধাপে যাওয়া
-  const handleBack = () => {
-    if (currentStep > 1) {
-      setCurrentStep(prev => prev - 1);
-    }
-  };
-
-  // চূড়ান্ত সাবমিট
+  // --- ডাটা সাবমিট (Backend এ পাঠানো) ---
   const handleSubmit = async () => {
-    if (!validateStep(currentStep)) return; // চূড়ান্ত ভ্যালিডেশন
-    
     setLoading(true);
-
     try {
-      const accessToken = await getAccessTokenSilently();
+      const token = await getAccessTokenSilently();
       
-      // এখানে আপনার Express ব্যাকএন্ড API এন্ডপয়েন্টে ডেটা পাঠানো হবে।
-      console.log('Final Data:', { ...formData, auth0Id: user.sub });
-      
-      // সফল হলে ইউজারকে ড্যাশবোর্ডে রিডাইরেক্ট করা
-      alert('প্রোফাইল সেটআপ সফল! আপনাকে ড্যাশবোর্ডে পাঠানো হচ্ছে।');
-      // window.location.href = '/dashboard'; // আপনার ড্যাশবোর্ড রুটে যান
+      // ফাইল পাঠানোর জন্য FormData ব্যবহার করা জরুরি
+      const dataToSend = new FormData();
+      dataToSend.append('username', formData.username);
+      dataToSend.append('bio', formData.bio);
+      dataToSend.append('auth0Id', user.sub);
+      if (formData.profilePicture) {
+        dataToSend.append('profilePicture', formData.profilePicture);
+      }
 
+      // আপনার Render ব্যাকএন্ডের সঠিক URL দিন
+      const API_URL = "https://onyx-drift-app-final.onrender.com/api/profile/update";
+      
+      const response = await axios.post(API_URL, dataToSend, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+
+      if (response.status === 200 || response.status === 201) {
+        alert('প্রোফাইল সেটআপ সফল!');
+        window.location.href = '/dashboard';
+      }
     } catch (err) {
       console.error('Submission Error:', err);
-      setError('প্রোফাইল সাবমিট করার সময় একটি ত্রুটি হয়েছে।');
+      setError(err.response?.data?.message || 'প্রোফাইল সাবমিট করার সময় একটি ত্রুটি হয়েছে।');
     } finally {
       setLoading(false);
     }
@@ -144,67 +152,31 @@ const SetupProfilePage = () => {
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
       <div className="w-full max-w-lg bg-white p-8 rounded-xl shadow-2xl">
-        
-        <h1 className="text-3xl font-extrabold mb-6 text-center text-blue-600">
-          প্রোফাইল সেটআপ
-        </h1>
+        <h1 className="text-3xl font-extrabold mb-6 text-center text-blue-600">প্রোফাইল সেটআপ</h1>
 
-        {/* ধাপ নির্দেশক (Progress Bar) */}
+        {/* ধাপ নির্দেশক */}
         <div className="mb-8">
           <div className="flex justify-between text-sm font-medium text-gray-600">
             <span>ধাপ {currentStep} of {totalSteps}</span>
             <span>{Math.round((currentStep / totalSteps) * 100)}% সম্পূর্ণ</span>
           </div>
           <div className="w-full bg-gray-200 rounded-full h-2.5 mt-1">
-            <div 
-              className="bg-blue-600 h-2.5 rounded-full transition-all duration-500" 
-              style={{ width: `${(currentStep / totalSteps) * 100}%` }}
-            ></div>
+            <div className="bg-blue-600 h-2.5 rounded-full transition-all duration-500" style={{ width: `${(currentStep / totalSteps) * 100}%` }}></div>
           </div>
         </div>
 
-        {/* ত্রুটির বার্তা */}
-        {error && (
-          <div className="p-3 mb-4 text-red-700 bg-red-100 rounded-lg text-sm" role="alert">
-            {error}
-          </div>
-        )}
+        {error && <div className="p-3 mb-4 text-red-700 bg-red-100 rounded-lg text-sm">{error}</div>}
 
-        {/* বর্তমান ধাপের কম্পোনেন্ট রেন্ডার */}
         <div className="min-h-[200px] border border-gray-200 p-6 rounded-lg">
-            <CurrentStepComponent formData={formData} handleChange={handleChange} />
+            <CurrentStepComponent formData={formData} handleChange={handleChange} previewUrl={previewUrl} />
         </div>
 
-        {/* নেভিগেশন বাটন */}
         <div className="flex justify-between mt-8">
-          {currentStep > 1 && (
-            <button
-              onClick={handleBack}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300"
-              disabled={loading}
-            >
-              পূর্ববর্তী
-            </button>
-          )}
-
+          {currentStep > 1 && <button onClick={handleBack} className="px-4 py-2 bg-gray-200 rounded-md">পূর্ববর্তী</button>}
           {currentStep < totalSteps ? (
-            <button
-              onClick={handleNext}
-              className={`px-4 py-2 text-sm font-medium text-white rounded-md transition duration-150 ${
-                loading ? 'bg-gray-400' : 'bg-blue-600 hover:bg-blue-700'
-              } ${currentStep === 1 ? 'ml-auto' : ''}`} // প্রথম ধাপে ডানে সরানোর জন্য
-              disabled={loading}
-            >
-              পরবর্তী ধাপ
-            </button>
+            <button onClick={handleNext} className="px-4 py-2 bg-blue-600 text-white rounded-md ml-auto">পরবর্তী ধাপ</button>
           ) : (
-            <button
-              onClick={handleSubmit}
-              className={`px-4 py-2 text-sm font-medium text-white rounded-md transition duration-150 ${
-                loading ? 'bg-green-400' : 'bg-green-600 hover:bg-green-700'
-              } ml-auto`}
-              disabled={loading}
-            >
+            <button onClick={handleSubmit} disabled={loading} className="px-4 py-2 bg-green-600 text-white rounded-md ml-auto">
               {loading ? 'জমা দেওয়া হচ্ছে...' : 'প্রোফাইল তৈরি করুন'}
             </button>
           )}
