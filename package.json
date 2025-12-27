@@ -1,4 +1,4 @@
-{
+{{
   "name": "onyx-drift-app-final",
   "version": "1.0.0",
   "description": "Fullstack application for OnyxDrift.",
@@ -11,7 +11,7 @@
     "dev": "concurrently \"npm run server\" \"cd client && npm run dev\""
   },
   "engines": {
-    "node": ">=18.x"
+    "node": "20.18.0"
   },
   "dependencies": {
     "cors": "^2.8.5",
@@ -21,14 +21,14 @@
     "express-oauth2-jwt-bearer": "^1.6.0",
     "express-rate-limit": "^8.2.1",
     "helmet": "^8.1.0",
-    "mongoose": "^8.20.4",
+    "mongoose": "^8.12.0",
     "path": "^0.12.7",
-    "socket.io": "^4.8.3",
-    "socket.io-client": "^4.8.3"
+    "socket.io": "^4.8.1",
+    "socket.io-client": "^4.8.1"
   },
   "devDependencies": {
     "concurrently": "^9.1.0",
-    "nodemon": "^3.1.11",
+    "nodemon": "^3.1.7",
     "vite": "^5.0.0"
   }
 }
