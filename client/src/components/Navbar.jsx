@@ -3,65 +3,87 @@ import logo from "../assets/images/logo.png";
 import { Link, useLocation } from "react-router-dom";
 import ProfileDropdown from "./ProfileDropdown";
 import { useAuth0 } from "@auth0/auth0-react"; 
-import { FaHome, FaUserFriends, FaUsers, FaCalendarAlt, FaStore } from "react-icons/fa";
+import { FaHome, FaUserFriends, FaUsers, FaCalendarAlt, FaStore, FaSearch } from "react-icons/fa";
 
 const Navbar = () => {
     const location = useLocation();
     const { isAuthenticated, user, logout, loginWithRedirect, isLoading } = useAuth0();
 
     const menuItems = [
-        { path: "/feed", icon: <FaHome size={24} /> },
-        { path: "/friends", icon: <FaUserFriends size={24} /> },
-        { path: "/groups", icon: <FaUsers size={24} /> },
-        { path: "/events", icon: <FaCalendarAlt size={24} /> },
-        { path: "/marketplace", icon: <FaStore size={24} /> },
+        { path: "/feed", icon: <FaHome size={22} />, label: "Home" },
+        { path: "/friends", icon: <FaUserFriends size={22} />, label: "Friends" },
+        { path: "/groups", icon: <FaUsers size={22} />, label: "Groups" },
+        { path: "/events", icon: <FaCalendarAlt size={22} />, label: "Events" },
+        { path: "/marketplace", icon: <FaStore size={22} />, label: "Store" },
+       <NavLink to="/messenger" className={({ isActive }) => isActive ? "font-bold border-b-2" : ""}>Chat</NavLink> 
     ];
 
     if (isLoading) {
         return (
-            <nav className="bg-gray-800 text-white p-4 flex justify-between items-center h-16">
-                <div className="text-xl font-bold">OnyxDrift</div>
-                <div className="animate-pulse">Loading...</div>
+            <nav className="bg-gray-800 text-white h-16 flex items-center justify-center">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
             </nav>
         );
     }
     
     return (
-        <nav className="bg-gray-800 text-white p-4 flex justify-between items-center shadow-md">
-            <div className="flex items-center space-x-4">
-                <img src={logo} alt="Logo" className="h-8" onError={(e) => e.target.style.display='none'} />
-                <h1 className="text-xl font-bold tracking-tight">OnyxDrift</h1>
+        <nav className="bg-white text-gray-800 h-16 px-4 flex justify-between items-center shadow-sm sticky top-0 z-50 border-b border-gray-200">
+            
+            {/* বাম পাশ: Logo and Search */}
+            <div className="flex items-center space-x-3">
+                <Link to="/">
+                    <img src={logo} alt="Logo" className="h-10 w-10" onError={(e) => e.target.style.display='none'} />
+                </Link>
+                <div className="hidden md:flex items-center bg-gray-100 px-3 py-2 rounded-full">
+                    <FaSearch className="text-gray-500 mr-2" />
+                    <input 
+                        type="text" 
+                        placeholder="Search OnyxDrift" 
+                        className="bg-transparent border-none focus:outline-none text-sm w-48"
+                    />
+                </div>
             </div>
 
+            {/* মাঝখান: Navigation Icons (শুধুমাত্র লগইন থাকলে) */}
             {isAuthenticated && (
-                <div className="flex items-center space-x-6">
+                <div className="flex items-center space-x-2 md:space-x-8">
                     {menuItems.map((item, index) => (
                         <Link
                             key={index}
                             to={item.path}
-                            className={`p-2 rounded hover:bg-gray-700 transition-colors ${
-                                location.pathname === item.path ? "bg-gray-700 text-blue-400" : ""
+                            title={item.label}
+                            className={`p-3 rounded-xl transition-all duration-200 group relative ${
+                                location.pathname === item.path 
+                                ? "text-blue-600 bg-blue-50" 
+                                : "text-gray-500 hover:bg-gray-100"
                             }`}
                         >
                             {item.icon}
+                            {location.pathname === item.path && (
+                                <div className="absolute bottom-0 left-0 w-full h-1 bg-blue-600 rounded-t-full"></div>
+                            )}
                         </Link>
                     ))}
                 </div>
             )}
 
-            <div className="flex items-center">
+            {/* ডান পাশ: Profile and Logout */}
+            <div className="flex items-center space-x-4">
                 {isAuthenticated ? (
-                    <ProfileDropdown 
-                        user={{
-                            ...user,
-                            picture: user?.picture || "https://placehold.jp/150x150.png"
-                        }} 
-                        onLogout={() => logout({ logoutParams: { returnTo: window.location.origin } })} 
-                    />
+                    <div className="flex items-center space-x-2">
+                        <span className="hidden lg:block font-medium text-sm text-gray-700">Hi, {user?.given_name || user?.nickname}</span>
+                        <ProfileDropdown 
+                            user={{
+                                ...user,
+                                picture: user?.picture || "https://placehold.jp/150x150.png"
+                            }} 
+                            onLogout={() => logout({ logoutParams: { returnTo: window.location.origin } })} 
+                        />
+                    </div>
                 ) : (
                     <button 
                         onClick={() => loginWithRedirect()} 
-                        className="px-4 py-2 bg-blue-600 rounded-lg hover:bg-blue-700 transition font-medium"
+                        className="px-6 py-2 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition font-bold shadow-md shadow-blue-200"
                     >
                         Login
                     </button>

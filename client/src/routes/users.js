@@ -4,7 +4,19 @@ import express from 'express';
 import { verifyAuth } from '../../AuthMiddleware/auth.js'; 
 // ✅ মডেল পাথ: দুই ধাপ উপরে (client) এসে models/User.js এ প্রবেশ
  import User from '../../data_models/user.js';
-
+// ----------------------------------------------------
+// ৪. সব ইউজারদের লিস্ট পাওয়া (Search/Explore এর জন্য)
+// GET /api/users
+// ----------------------------------------------------
+router.get('/', async (req, res) => {
+    try {
+        // সব ইউজারদের নিয়ে আসবে কিন্তু পাসওয়ার্ড ফিল্ড বাদ দিয়ে
+        const users = await User.find().select('name avatar bio followers');
+        res.status(200).json(users);
+    } catch (error) {
+        res.status(500).json({ message: "Error fetching users" });
+    }
+});
 const router = express.Router();
 
 // ----------------------------------------------------
@@ -74,6 +86,32 @@ router.post('/:userId/unfollow', verifyAuth, async (req, res) => {
             return res.status(404).json({ message: "User not found" });
         }
 
+// PUT /api/users/:userId (প্রোফাইল আপডেট করার জন্য)
+router.put('/:userId', verifyAuth, async (req, res) => {
+    // শুধুমাত্র নিজের প্রোফাইল এডিট করতে পারবে
+    if (req.user.id !== req.params.userId) {
+        return res.status(403).json({ message: "You can only update your own profile" });
+    }
+
+    try {
+        const updatedUser = await User.findByIdAndUpdate(
+            req.params.userId,
+            {
+                $set: {
+                    name: req.body.name,
+                    bio: req.body.bio,
+                    avatar: req.body.avatar,
+                    location: req.body.location
+                }
+            },
+            { new: true } // এটি আপডেট হওয়া নতুন ডাটা রিটার্ন করবে
+        ).select('-password');
+
+        res.status(200).json(updatedUser);
+    } catch (error) {
+        res.status(500).json({ message: "Update failed", error: error.message });
+    }
+});
         // আনফলো করার লজিক (অ্যারে থেকে আইডি মুছে ফেলা)
         if (userToUnfollow.followers.includes(currentUser.id)) {
             userToUnfollow.followers = userToUnfollow.followers.filter(
