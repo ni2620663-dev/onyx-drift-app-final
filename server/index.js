@@ -18,8 +18,10 @@ const jwtCheck = auth({
     tokenSigningAlg: 'RS256'
 });
 
-// --- CORS কনফিগারেশন ---
+// --- CORS কনফিগারেশন আপডেট করা হয়েছে ---
 const allowedOrigins = [
+    'https://www.onyx-drift.com', // আপনার মেইন ডোমেইন যোগ করা হলো
+    'https://onyx-drift.com',
     'https://c32dbd3f.onyx-drift-app.pages.dev', 
     'http://localhost:5173', 
     'http://localhost:3000', 
@@ -27,9 +29,11 @@ const allowedOrigins = [
 
 const corsOptions = {
     origin: (origin, callback) => {
+        // রিকোয়েস্ট আসা অরিজিন চেক করা
         if (!origin || allowedOrigins.includes(origin)) {
             callback(null, true);
         } else {
+            console.error(`CORS Error: Origin ${origin} is not allowed.`); // লগে এরর দেখাবে
             callback(new Error(`Not allowed by CORS: ${origin}`));
         }
     },
@@ -47,12 +51,8 @@ app.get('/', (req, res) => {
 });
 
 // --- API রাউটস ---
-
-// ✅ ১. প্রোফাইল রাউট মাউন্ট করা (এটি আপনার 404 এরর ঠিক করবে)
-// ব্রাউজারে টেস্ট করার জন্য এটি jwtCheck ছাড়া রাখা হয়েছে
 app.use("/api/profile", profileRoutes); 
 
-// ২. সুরক্ষিত রুট (টোকেন ছাড়া এটি কাজ করবে না)
 app.get('/api/posts', jwtCheck, (req, res) => {
     const userId = req.auth.payload.sub; 
     res.status(200).json({ 
@@ -62,9 +62,7 @@ app.get('/api/posts', jwtCheck, (req, res) => {
     });
 });
 
-// সার্ভার পোর্ট সেটআপ
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
     console.log(`✅ Server running on port ${PORT}`);
-    console.log(`🔗 Test Profile: http://localhost:${PORT}/api/profile/test123`);
 });
