@@ -9,7 +9,6 @@ const Explore = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const API_URL = import.meta.env.VITE_API_URL || "http://localhost:10000";
 
-  // ১. ইউজার ডাটা ফেচ করা
   useEffect(() => {
     const fetchUsers = async () => {
       try {
@@ -22,7 +21,6 @@ const Explore = () => {
     if (user?.sub) fetchUsers();
   }, [user?.sub, API_URL]);
 
-  // ২. ফলো লজিক (রিলোড ছাড়াই স্টেট আপডেট)
   const handleFollow = async (targetUserId) => {
     try {
       await axios.post(`${API_URL}/api/users/${targetUserId}/follow`, {
@@ -47,39 +45,38 @@ const Explore = () => {
     }
   };
 
-  // ৩. সার্চ ফিল্টার
   const filteredUsers = users.filter((u) =>
     u.name?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 py-12 px-4 md:px-10">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 py-12 px-4">
       <div className="max-w-6xl mx-auto">
         
-        {/* টাইটেল এবং হেডার */}
+        {/* ১. হেডার সেকশন - সেন্টারে আনা হয়েছে */}
         <div className="text-center mb-10">
           <h1 className="text-4xl font-extrabold text-gray-800 dark:text-white mb-4">
             Explore People
           </h1>
-          <p className="text-gray-500 dark:text-gray-400">
-            Find interesting people and grow your network
+          <p className="text-gray-500 dark:text-gray-400 max-w-md mx-auto">
+            Discover new connections and grow your network on OnyxDrift.
           </p>
         </div>
 
-        {/* সার্চ বার - একদম মাঝখানে ফিক্স করা হয়েছে */}
+        {/* ২. সার্চ বার - একদম মাঝখানে ফিক্স করা হয়েছে */}
         <div className="flex justify-center mb-16">
           <div className="relative w-full max-w-xl">
             <FaSearch className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400 z-10" />
             <input
               type="text"
               placeholder="Search users by name..."
-              className="w-full p-4 pl-14 rounded-full border-none bg-white dark:bg-gray-800 shadow-lg focus:ring-2 focus:ring-blue-500 dark:text-white outline-none transition-all placeholder:text-gray-400"
+              className="w-full p-4 pl-14 rounded-full border-none bg-white dark:bg-gray-800 shadow-lg focus:ring-2 focus:ring-blue-500 dark:text-white outline-none transition-all"
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
         </div>
 
-        {/* ইউজার গ্রিড */}
+        {/* ৩. ইউজার গ্রিড */}
         {filteredUsers.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
             {filteredUsers.map((otherUser) => (
@@ -92,26 +89,22 @@ const Explore = () => {
                     src={otherUser.picture || otherUser.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${otherUser.name}`}
                     className="w-24 h-24 rounded-full mx-auto object-cover border-4 border-blue-50 shadow-inner"
                     alt={otherUser.name}
-                    onError={(e) => {
-                      e.target.src = "https://cdn-icons-png.flaticon.com/512/149/149071.png";
-                    }}
+                    onError={(e) => { e.target.src = "https://cdn-icons-png.flaticon.com/512/149/149071.png"; }}
                   />
                   <div className="absolute bottom-1 right-1 w-5 h-5 bg-green-500 border-4 border-white dark:border-gray-800 rounded-full"></div>
                 </div>
 
-                <h3 className="font-bold text-xl dark:text-white mb-1">
-                  {otherUser.name}
-                </h3>
+                <h3 className="font-bold text-xl dark:text-white mb-1">{otherUser.name}</h3>
                 <p className="text-sm text-gray-500 dark:text-gray-400 mb-6 line-clamp-2 min-h-[40px]">
-                  {otherUser.bio || "Building something cool!"}
+                  {otherUser.bio || "Building something amazing!"}
                 </p>
                 
                 <button
                   onClick={() => handleFollow(otherUser._id)}
                   className={`w-full py-3 rounded-2xl font-bold transition-all flex items-center justify-center gap-2 ${
                     otherUser.followers?.includes(user?.sub)
-                      ? "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300 hover:bg-gray-200"
-                      : "bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-200 dark:shadow-none"
+                      ? "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300"
+                      : "bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-100 dark:shadow-none"
                   }`}
                 >
                   {otherUser.followers?.includes(user?.sub) ? (
@@ -124,8 +117,8 @@ const Explore = () => {
             ))}
           </div>
         ) : (
-          <div className="text-center py-20 bg-white/50 dark:bg-gray-800/50 rounded-3xl border-2 border-dashed border-gray-200 dark:border-gray-700">
-             <p className="text-gray-400 text-lg italic">No users found matching "{searchTerm}"</p>
+          <div className="text-center py-20 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-3xl">
+             <p className="text-gray-400 text-lg italic">No users found.</p>
           </div>
         )}
       </div>

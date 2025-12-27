@@ -15,7 +15,7 @@ import VideoCall from "./pages/VideoCall";
 /* Protected Route Wrapper */
 const ProtectedRoute = ({ component }) => {
   const Component = withAuthenticationRequired(component, { 
-    onRedirecting: () => <div className="p-10 text-center">Redirecting to login...</div> 
+    onRedirecting: () => <div className="p-10 text-center dark:text-white">Redirecting to login...</div> 
   });
   return <Component />;
 };
@@ -37,10 +37,10 @@ export default function App() {
 
   return (
     <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900">
-      {/* ১. লগইন থাকলে এবং কল না চললে বাম পাশে শুধু আইকন সাইডবার দেখাবে */}
+      {/* ১. সাইডবার: শুধুমাত্র লগইন থাকলে এবং ভিডিও কল না চললে দেখাবে */}
       {isAuthenticated && !isVideoCall && <Sidebar />}
 
-      {/* ২. মেইন কন্টেন্ট এরিয়া */}
+      {/* ২. মেইন কন্টেন্ট এরিয়া: সাইডবারের জন্য ml-20 মার্জিন দেওয়া হয়েছে */}
       <main className={`flex-1 transition-all duration-300 ${isAuthenticated && !isVideoCall ? "ml-20" : "ml-0"}`}>
         <Routes>
           {/* Public Route */}
@@ -48,7 +48,7 @@ export default function App() {
 
           {/* Protected Routes */}
           <Route path="/feed" element={<ProtectedRoute component={Dashboard} />} />
-          <Route path="/dashboard" element={<ProtectedRoute component={ProtectedRoute} component={Dashboard} />} />
+          <Route path="/dashboard" element={<ProtectedRoute component={Dashboard} />} />
           <Route path="/explore" element={<ProtectedRoute component={Explore} />} /> 
           <Route path="/profile" element={<ProtectedRoute component={Profile} />} />
           <Route path="/settings" element={<ProtectedRoute component={SettingsPage} />} />
