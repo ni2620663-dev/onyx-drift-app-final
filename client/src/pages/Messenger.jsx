@@ -2,9 +2,9 @@ import React, { useState, useEffect, useRef } from "react";
 import { useAuth0 } from "@auth0/auth0-react";
 import axios from "axios";
 import { io } from "socket.io-client";
-import { FaPaperPlane, FaUserCircle } from "react-icons/fa";
+import { FaPaperPlane, FaUserCircle, FaVideo, FaPhoneAlt, FaSearch, FaTimes } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
-import { FaVideo, FaPhoneAlt } from "react-icons/fa";
+
 const Messenger = () => {
   const { user } = useAuth0();
   const [conversations, setConversations] = useState([]);
@@ -12,51 +12,20 @@ const Messenger = () => {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState("");
   const [arrivalMessage, setArrivalMessage] = useState(null);
+  const [onlineUsers, setOnlineUsers] = useState([]);
+  const [incomingCall, setIncomingCall] = useState(null); // কল রিসিভ করার জন্য
+  const [searchTerm, setSearchTerm] = useState(""); // ইউজার খোঁজার জন্য
+  
   const socket = useRef();
   const scrollRef = useRef();
-  const API_URL = import.meta.env.VITE_API_URL;
-const navigate = useNavigate();
+  const navigate = useNavigate();
 
-const handleVideoCall = () => {
-  // কনভারসেশন আইডি রুম আইডি হিসেবে ব্যবহার হবে
-  navigate(`/call/${currentChat._id}`);
-};
+  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:10000";
 
-// UI এর হেডার অংশে বাটনটি যোগ করুন
-// কম্পোনেন্টের ভেতরে স্টেট হিসেবে যোগ করুন
-const [onlineUsers, setOnlineUsers] = useState([]);
-
-// Socket এর useEffect এর ভেতরে এটি যোগ করুন
-useEffect(() => {
-  socket.current.on("getOnlineUsers", (users) => {
-    setOnlineUsers(users);
-  });
-}, []);
-
-// ইউজার অনলাইন কি না তা চেক করার জন্য একটি হেল্পার ফাংশন
-const isOnline = (memberId) => {
-  return onlineUsers.some((u) => u.userId === memberId);
-};
-<div className="flex gap-4">
-  <button onClick={handleVideoCall} className="p-2 text-blue-500 hover:bg-gray-100 rounded-full transition">
-    <FaVideo size={20} />
-  </button>
-  <button className="p-2 text-green-500 hover:bg-gray-100 rounded-full transition">
-    <FaPhoneAlt size={18} />
-  </button>
-</div>
-
-// UI এর ভেতরে প্রোফাইল পিকচারের সাথে এই লজিকটি বসান:
-{/* চ্যাট লিস্টের প্রোফাইল পিকচার সেকশন */}
-<div className="relative">
-  <FaUserCircle className="text-3xl text-gray-400" />
-  {isOnline(otherUserId) && (
-    <div className="absolute top-0 right-0 w-3 h-3 bg-green-500 border-2 border-white dark:border-gray-800 rounded-full"></div>
-  )}
-</div>
-  // ১. Socket Connection ও Real-time Message রিসিভ
+  // ১. সকেট কানেকশন ও লিসেনার
   useEffect(() => {
-    socket.current = io("ws://localhost:5000"); // আপনার ব্যাকএন্ড পোর্ট
+    socket.current = io("http://localhost:10000");
+
     socket.current.on("getMessage", (data) => {
       setArrivalMessage({
         senderId: data.senderId,
@@ -64,64 +33,85 @@ const isOnline = (memberId) => {
         createdAt: Date.now(),
       });
     });
+
+    socket.current.on("getOnlineUsers", (users) => {
+      setOnlineUsers(users);
+    });
+
+    // ভিডিও কল আসলে মডাল দেখাবে
+    socket.current.on("incomingCall", (data) => {
+      setIncomingCall(data);
+    });
+
+    return () => socket.current.disconnect();
   }, []);
 
+  // ২. নতুন মেসেজ হ্যান্ডলিং
   useEffect(() => {
-    arrivalMessage &&
-      currentChat?.members.includes(arrivalMessage.senderId) &&
+    if (arrivalMessage && currentChat?.members.includes(arrivalMessage.senderId)) {
       setMessages((prev) => [...prev, arrivalMessage]);
+    }
   }, [arrivalMessage, currentChat]);
 
+  // ৩. অনলাইন স্ট্যাটাস আপডেট
   useEffect(() => {
-    socket.current.emit("addNewUser", user?.sub);
+    if (user?.sub) {
+      socket.current.emit("addNewUser", user.sub);
+    }
   }, [user]);
 
-  // ২. কনভারসেশন লিস্ট নিয়ে আসা
+  // ৪. কনভারসেশন লিস্ট লোড করা
   useEffect(() => {
     const getConversations = async () => {
       try {
         const res = await axios.get(`${API_URL}/api/messages/conversation/${user?.sub}`);
         setConversations(res.data);
-      } catch (err) { console.log(err); }
+      } catch (err) {
+        console.error("Error fetching conversations:", err);
+      }
     };
-    getConversations();
-  }, [user?.sub]);
+    if (user?.sub) getConversations();
+  }, [user?.sub, API_URL]);
 
-  // ৩. মেসেজ হিস্টোরি নিয়ে আসা
+  // ৫. মেসেজ হিস্টোরি লোড করা
   useEffect(() => {
     const getMessages = async () => {
       try {
         const res = await axios.get(`${API_URL}/api/messages/message/${currentChat?._id}`);
         setMessages(res.data);
-      } catch (err) { console.log(err); }
+      } catch (err) {
+        console.error("Error fetching messages:", err);
+      }
     };
     if (currentChat) getMessages();
-  }, [currentChat]);
+  }, [currentChat, API_URL]);
 
-  // ৪. মেসেজ পাঠানো
+  // ৬. ভিডিও কল শুরু করা
+  const handleVideoCall = () => {
+    if (!currentChat || !user) return;
+    const roomId = currentChat._id;
+    const receiverId = currentChat.members.find(m => m !== user.sub);
+
+    socket.current.emit("sendCallInvite", {
+      senderName: user.name || "A User",
+      roomId: roomId,
+      receiverId: receiverId
+    });
+
+    navigate(`/call/${roomId}`);
+  };
+
+  // ৭. মেসেজ পাঠানো
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const message = {
+    if (!newMessage.trim() || !currentChat) return;
+
+    const receiverId = currentChat.members.find((member) => member !== user.sub);
+    const messageObj = {
       senderId: user.sub,
       text: newMessage,
       conversationId: currentChat._id,
     };
-    const handleVideoCall = () => {
-  const roomId = currentChat._id;
-  const receiverId = currentChat.members.find(m => m !== user.sub);
-
-  // ১. সকেটের মাধ্যমে অপর ইউজারকে কল সিগন্যাল পাঠানো
-  socket.current.emit("sendCallInvite", {
-    senderName: user.name,
-    roomId: roomId,
-    receiverId: receiverId
-  });
-
-  // ২. নিজে কল রুমে চলে যাওয়া
-  navigate(`/call/${roomId}`);
-};
-
-    const receiverId = currentChat.members.find((member) => member !== user.sub);
 
     socket.current.emit("sendMessage", {
       senderId: user.sub,
@@ -130,59 +120,132 @@ const isOnline = (memberId) => {
     });
 
     try {
-      const res = await axios.post(`${API_URL}/api/messages/message`, message);
+      const res = await axios.post(`${API_URL}/api/messages/message`, messageObj);
       setMessages([...messages, res.data]);
       setNewMessage("");
-    } catch (err) { console.log(err); }
+    } catch (err) {
+      console.error("Error sending message:", err);
+    }
+  };
+
+  // ৮. নতুন চ্যাট শুরু করা (ইউজার আইডি দিয়ে টেস্ট করার জন্য)
+  const handleStartChat = async () => {
+    if (!searchTerm) return;
+    try {
+      const res = await axios.post(`${API_URL}/api/messages/conversation`, {
+        senderId: user.sub,
+        receiverId: searchTerm // এখানে ইউজারের Auth0 ID দিতে হবে
+      });
+      setConversations([...conversations, res.data]);
+      setSearchTerm("");
+    } catch (err) {
+      console.log("Conversation already exists or error", err);
+    }
   };
 
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  const isOnline = (members) => {
+    const otherMemberId = members.find(m => m !== user?.sub);
+    return onlineUsers.some((u) => u.userId === otherMemberId);
+  };
+
   return (
     <div className="flex h-[calc(100vh-64px)] bg-gray-100 dark:bg-gray-900 overflow-hidden">
-      {/* বাম পাশ: চ্যাট লিস্ট */}
-      <div className="w-1/4 bg-white dark:bg-gray-800 border-r dark:border-gray-700 hidden md:block">
-        <div className="p-4 border-b dark:border-gray-700">
-          <h2 className="text-xl font-bold dark:text-white">Messages</h2>
-        </div>
-        <div className="overflow-y-auto h-full">
-          {conversations.map((c) => (
-            <div 
-              key={c._id}
-              onClick={() => setCurrentChat(c)}
-              className={`p-4 flex items-center gap-3 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition ${currentChat?._id === c._id ? 'bg-blue-50 dark:bg-gray-700 border-r-4 border-blue-500' : ''}`}
-            >
-              <FaUserCircle className="text-3xl text-gray-400" />
-              <div className="text-sm font-semibold dark:text-white">Chat Room</div>
+      
+      {/* ইনকামিং কল মডাল */}
+      {incomingCall && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[1000] flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-gray-800 p-8 rounded-3xl shadow-2xl text-center max-w-sm w-full animate-bounce">
+            <FaVideo size={50} className="mx-auto text-blue-500 mb-4" />
+            <h2 className="text-xl font-bold dark:text-white mb-2">{incomingCall.senderName}</h2>
+            <p className="text-gray-500 mb-6">Incoming Video Call...</p>
+            <div className="flex gap-4">
+              <button 
+                onClick={() => navigate(`/call/${incomingCall.roomId}`)}
+                className="flex-1 bg-green-500 hover:bg-green-600 text-white py-3 rounded-xl font-bold transition"
+              > Accept </button>
+              <button 
+                onClick={() => setIncomingCall(null)}
+                className="flex-1 bg-red-500 hover:bg-red-600 text-white py-3 rounded-xl font-bold transition"
+              > Reject </button>
             </div>
-          ))}
+          </div>
+        </div>
+      )}
+
+      {/* Sidebar: চ্যাট লিস্ট */}
+      <div className="w-full md:w-1/4 bg-white dark:bg-gray-800 border-r dark:border-gray-700 flex flex-col">
+        <div className="p-4 border-b dark:border-gray-700">
+          <h2 className="text-xl font-bold dark:text-white mb-4">Messages</h2>
+          {/* চ্যাট শুরু করার ইনপুট */}
+          <div className="flex gap-2">
+            <input 
+              type="text" 
+              placeholder="Enter User ID..." 
+              value={searchTerm}
+              onChange={(e)=>setSearchTerm(e.target.value)}
+              className="flex-1 text-xs p-2 bg-gray-100 dark:bg-gray-700 rounded-lg outline-none dark:text-white"
+            />
+            <button onClick={handleStartChat} className="p-2 bg-blue-600 text-white rounded-lg"><FaSearch size={14}/></button>
+          </div>
+        </div>
+        
+        <div className="flex-1 overflow-y-auto">
+          {conversations.length > 0 ? (
+            conversations.map((c) => (
+              <div 
+                key={c._id}
+                onClick={() => setCurrentChat(c)}
+                className={`p-4 flex items-center gap-3 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition ${currentChat?._id === c._id ? 'bg-blue-50 dark:bg-gray-700 border-r-4 border-blue-500' : ''}`}
+              >
+                <div className="relative">
+                  <FaUserCircle className="text-4xl text-gray-400" />
+                  {isOnline(c.members) && (
+                    <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white dark:border-gray-800 rounded-full"></div>
+                  )}
+                </div>
+                <div className="text-sm font-semibold dark:text-white truncate">
+                  Chat Room
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="p-8 text-center text-gray-500 text-sm">
+              No conversations yet. Use search to start one!
+            </div>
+          )}
         </div>
       </div>
 
-      {/* ডান পাশ: মেইন চ্যাট উইন্ডো */}
-      <div className="flex-1 flex flex-col">
+      {/* Main Chat Area */}
+      <div className={`flex-1 flex flex-col ${!currentChat ? 'hidden md:flex' : 'flex'}`}>
         {currentChat ? (
           <>
-            {/* Chat Header */}
-            <div className="p-4 bg-white dark:bg-gray-800 border-b dark:border-gray-700 flex items-center gap-3">
-              <FaUserCircle className="text-2xl text-blue-500" />
-              <span className="font-bold dark:text-white">Chat with User</span>
+            <div className="p-4 bg-white dark:bg-gray-800 border-b dark:border-gray-700 flex justify-between items-center">
+              <div className="flex items-center gap-3">
+                <FaUserCircle className="text-3xl text-blue-500" />
+                <span className="font-bold dark:text-white">Active Chat</span>
+              </div>
+              <div className="flex gap-4">
+                <button onClick={handleVideoCall} className="p-2 text-blue-500 hover:bg-blue-50 dark:hover:bg-gray-700 rounded-full transition">
+                  <FaVideo size={20} />
+                </button>
+              </div>
             </div>
 
-            {/* Message Display Area */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-4">
-              {messages.map((m) => (
-                <div key={m._id} ref={scrollRef} className={`flex ${m.senderId === user.sub ? "justify-end" : "justify-start"}`}>
-                  <div className={`max-w-[70%] p-3 px-4 rounded-2xl shadow-sm ${m.senderId === user.sub ? "bg-blue-600 text-white rounded-br-none" : "bg-white dark:bg-gray-700 dark:text-white rounded-bl-none"}`}>
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {messages.map((m, index) => (
+                <div key={index} ref={scrollRef} className={`flex ${m.senderId === user.sub ? "justify-end" : "justify-start"}`}>
+                  <div className={`max-w-[75%] p-3 px-4 rounded-2xl shadow-sm ${m.senderId === user.sub ? "bg-blue-600 text-white rounded-br-none" : "bg-white dark:bg-gray-700 dark:text-white rounded-bl-none"}`}>
                     {m.text}
                   </div>
                 </div>
               ))}
             </div>
 
-            {/* Input Area */}
             <form onSubmit={handleSubmit} className="p-4 bg-white dark:bg-gray-800 border-t dark:border-gray-700 flex gap-3">
               <input
                 type="text"
@@ -192,13 +255,14 @@ const isOnline = (memberId) => {
                 className="flex-1 p-3 bg-gray-100 dark:bg-gray-700 rounded-xl outline-none dark:text-white focus:ring-2 focus:ring-blue-500"
               />
               <button type="submit" className="bg-blue-600 p-3 px-6 text-white rounded-xl hover:bg-blue-700 transition font-bold flex items-center gap-2">
-                <FaPaperPlane /> <span className="hidden sm:inline">Send</span>
+                <FaPaperPlane /> <span>Send</span>
               </button>
             </form>
           </>
         ) : (
-          <div className="flex-1 flex items-center justify-center text-gray-400 text-xl font-medium">
-            Open a conversation to start chatting
+          <div className="flex-1 flex flex-col items-center justify-center text-gray-400 bg-gray-50 dark:bg-gray-900">
+             <FaUserCircle size={80} className="mb-4 opacity-20" />
+             <p className="text-xl font-medium">Select a friend to start messaging</p>
           </div>
         )}
       </div>

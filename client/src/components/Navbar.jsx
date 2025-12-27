@@ -1,27 +1,30 @@
 import React from "react";
 import logo from "../assets/images/logo.png";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, NavLink } from "react-router-dom"; // NavLink যোগ করা হয়েছে
 import ProfileDropdown from "./ProfileDropdown";
 import { useAuth0 } from "@auth0/auth0-react"; 
-import { FaHome, FaUserFriends, FaUsers, FaCalendarAlt, FaStore, FaSearch } from "react-icons/fa";
+import { FaHome, FaUserFriends, FaUsers, FaCalendarAlt, FaStore, FaSearch, FaCommentDots } from "react-icons/fa";
 
 const Navbar = () => {
     const location = useLocation();
     const { isAuthenticated, user, logout, loginWithRedirect, isLoading } = useAuth0();
 
+    // নেভিগেশন আইটেমগুলো এখানে সাজানো
     const menuItems = [
         { path: "/feed", icon: <FaHome size={22} />, label: "Home" },
         { path: "/friends", icon: <FaUserFriends size={22} />, label: "Friends" },
+        { path: "/messenger", icon: <FaCommentDots size={22} />, label: "Messages" }, // চ্যাট এখানে যোগ করা হয়েছে
         { path: "/groups", icon: <FaUsers size={22} />, label: "Groups" },
-        { path: "/events", icon: <FaCalendarAlt size={22} />, label: "Events" },
         { path: "/marketplace", icon: <FaStore size={22} />, label: "Store" },
-       <NavLink to="/messenger" className={({ isActive }) => isActive ? "font-bold border-b-2" : ""}>Chat</NavLink> 
     ];
+
+    // ডিফল্ট ইমেজ লিঙ্ক (যদি মেইন ইমেজ কাজ না করে)
+    const fallbackImage = "https://api.dicebear.com/7.x/avataaars/svg?seed=Lucky";
 
     if (isLoading) {
         return (
-            <nav className="bg-gray-800 text-white h-16 flex items-center justify-center">
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
+            <nav className="bg-white border-b h-16 flex items-center justify-center">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
             </nav>
         );
     }
@@ -32,7 +35,12 @@ const Navbar = () => {
             {/* বাম পাশ: Logo and Search */}
             <div className="flex items-center space-x-3">
                 <Link to="/">
-                    <img src={logo} alt="Logo" className="h-10 w-10" onError={(e) => e.target.style.display='none'} />
+                    <img 
+                        src={logo} 
+                        alt="Logo" 
+                        className="h-10 w-10 object-contain" 
+                        onError={(e) => { e.target.style.display='none' }} 
+                    />
                 </Link>
                 <div className="hidden md:flex items-center bg-gray-100 px-3 py-2 rounded-full">
                     <FaSearch className="text-gray-500 mr-2" />
@@ -44,25 +52,27 @@ const Navbar = () => {
                 </div>
             </div>
 
-            {/* মাঝখান: Navigation Icons (শুধুমাত্র লগইন থাকলে) */}
+            {/* মাঝখান: Navigation Icons */}
             {isAuthenticated && (
-                <div className="flex items-center space-x-2 md:space-x-8">
+                <div className="flex items-center space-x-1 md:space-x-4">
                     {menuItems.map((item, index) => (
-                        <Link
+                        <NavLink
                             key={index}
                             to={item.path}
                             title={item.label}
-                            className={`p-3 rounded-xl transition-all duration-200 group relative ${
-                                location.pathname === item.path 
-                                ? "text-blue-600 bg-blue-50" 
-                                : "text-gray-500 hover:bg-gray-100"
-                            }`}
+                            className={({ isActive }) => `
+                                p-3 rounded-xl transition-all duration-200 group relative
+                                ${isActive 
+                                    ? "text-blue-600 bg-blue-50" 
+                                    : "text-gray-500 hover:bg-gray-100"
+                                }
+                            `}
                         >
                             {item.icon}
                             {location.pathname === item.path && (
                                 <div className="absolute bottom-0 left-0 w-full h-1 bg-blue-600 rounded-t-full"></div>
                             )}
-                        </Link>
+                        </NavLink>
                     ))}
                 </div>
             )}
@@ -71,11 +81,15 @@ const Navbar = () => {
             <div className="flex items-center space-x-4">
                 {isAuthenticated ? (
                     <div className="flex items-center space-x-2">
-                        <span className="hidden lg:block font-medium text-sm text-gray-700">Hi, {user?.given_name || user?.nickname}</span>
+                        <span className="hidden lg:block font-medium text-sm text-gray-700">
+                            Hi, {user?.given_name || user?.nickname || "User"}
+                        </span>
+                        
+                        {/* প্রোফাইল ড্রপডাউন এবং ইমেজ হ্যান্ডলিং */}
                         <ProfileDropdown 
                             user={{
                                 ...user,
-                                picture: user?.picture || "https://placehold.jp/150x150.png"
+                                picture: user?.picture || fallbackImage
                             }} 
                             onLogout={() => logout({ logoutParams: { returnTo: window.location.origin } })} 
                         />

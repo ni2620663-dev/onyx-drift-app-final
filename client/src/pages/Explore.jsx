@@ -7,81 +7,127 @@ const Explore = () => {
   const { user } = useAuth0();
   const [users, setUsers] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
-  const API_URL = import.meta.env.VITE_API_URL;
+  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:10000";
 
+  // ১. ইউজার ডাটা ফেচ করা
   useEffect(() => {
     const fetchUsers = async () => {
       try {
         const res = await axios.get(`${API_URL}/api/users`);
-        // নিজের প্রোফাইল বাদে বাকিদের ফিল্টার করে রাখা
         setUsers(res.data.filter((u) => u.userId !== user?.sub));
       } catch (err) {
         console.error("Fetch users error:", err);
       }
     };
-    fetchUsers();
-  }, [user?.sub]);
+    if (user?.sub) fetchUsers();
+  }, [user?.sub, API_URL]);
 
-  const handleFollow = async (userId) => {
+  // ২. ফলো লজিক (রিলোড ছাড়াই স্টেট আপডেট)
+  const handleFollow = async (targetUserId) => {
     try {
-      await axios.post(`${API_URL}/api/users/${userId}/follow`);
-      // UI আপডেট করার জন্য পুনরায় ডাটা ফেচ করা যেতে পারে অথবা লোকাল স্টেট আপডেট করা যায়
-      window.location.reload(); 
+      await axios.post(`${API_URL}/api/users/${targetUserId}/follow`, {
+        currentUserId: user.sub
+      });
+      
+      const updatedUsers = users.map(u => {
+        if (u._id === targetUserId) {
+          const isFollowing = u.followers.includes(user.sub);
+          return {
+            ...u,
+            followers: isFollowing 
+              ? u.followers.filter(id => id !== user.sub) 
+              : [...u.followers, user.sub]
+          };
+        }
+        return u;
+      });
+      setUsers(updatedUsers);
     } catch (err) {
-      alert("Follow failed!");
+      console.error("Follow failed", err);
     }
   };
 
-  // সার্চ লজিক
+  // ৩. সার্চ ফিল্টার
   const filteredUsers = users.filter((u) =>
-    u.name.toLowerCase().includes(searchTerm.toLowerCase())
+    u.name?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-4 md:p-10">
-      <div className="max-w-4xl mx-auto">
-        <h1 className="text-3xl font-bold dark:text-white mb-8">Explore People</h1>
-
-        {/* Search Bar */}
-        <div className="relative mb-8">
-          <FaSearch className="absolute left-4 top-4 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Search users by name..."
-            className="w-full p-4 pl-12 rounded-2xl border-none bg-white dark:bg-gray-800 shadow-sm focus:ring-2 focus:ring-blue-500 dark:text-white outline-none"
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 py-12 px-4 md:px-10">
+      <div className="max-w-6xl mx-auto">
+        
+        {/* টাইটেল এবং হেডার */}
+        <div className="text-center mb-10">
+          <h1 className="text-4xl font-extrabold text-gray-800 dark:text-white mb-4">
+            Explore People
+          </h1>
+          <p className="text-gray-500 dark:text-gray-400">
+            Find interesting people and grow your network
+          </p>
         </div>
 
-        {/* User Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredUsers.map((otherUser) => (
-            <div key={otherUser._id} className="bg-white dark:bg-gray-800 p-6 rounded-3xl shadow-sm border dark:border-gray-700 text-center transition-transform hover:scale-105">
-              <img
-                src={otherUser.avatar || "https://via.placeholder.com/100"}
-                className="w-20 h-20 rounded-full mx-auto mb-4 object-cover border-4 border-blue-100"
-                alt=""
-              />
-              <h3 className="font-bold text-lg dark:text-white mb-1">{otherUser.name}</h3>
-              <p className="text-sm text-gray-500 mb-4 line-clamp-1">{otherUser.bio || "No bio yet"}</p>
-              
-              <button
-                onClick={() => handleFollow(otherUser._id)}
-                className={`w-full py-2 rounded-xl font-bold transition flex items-center justify-center gap-2 ${
-                  otherUser.followers.includes(user?.sub)
-                    ? "bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300"
-                    : "bg-blue-600 text-white hover:bg-blue-700"
-                }`}
+        {/* সার্চ বার - একদম মাঝখানে ফিক্স করা হয়েছে */}
+        <div className="flex justify-center mb-16">
+          <div className="relative w-full max-w-xl">
+            <FaSearch className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400 z-10" />
+            <input
+              type="text"
+              placeholder="Search users by name..."
+              className="w-full p-4 pl-14 rounded-full border-none bg-white dark:bg-gray-800 shadow-lg focus:ring-2 focus:ring-blue-500 dark:text-white outline-none transition-all placeholder:text-gray-400"
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+        </div>
+
+        {/* ইউজার গ্রিড */}
+        {filteredUsers.length > 0 ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+            {filteredUsers.map((otherUser) => (
+              <div 
+                key={otherUser._id} 
+                className="bg-white dark:bg-gray-800 p-8 rounded-[2.5rem] shadow-sm border border-gray-100 dark:border-gray-700 text-center transition-all hover:shadow-xl hover:-translate-y-2"
               >
-                {otherUser.followers.includes(user?.sub) ? (
-                  <><FaUserCheck /> Following</>
-                ) : (
-                  <><FaUserPlus /> Follow</>
-                )}
-              </button>
-            </div>
-          ))}
-        </div>
+                <div className="relative inline-block mb-4">
+                  <img
+                    src={otherUser.picture || otherUser.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${otherUser.name}`}
+                    className="w-24 h-24 rounded-full mx-auto object-cover border-4 border-blue-50 shadow-inner"
+                    alt={otherUser.name}
+                    onError={(e) => {
+                      e.target.src = "https://cdn-icons-png.flaticon.com/512/149/149071.png";
+                    }}
+                  />
+                  <div className="absolute bottom-1 right-1 w-5 h-5 bg-green-500 border-4 border-white dark:border-gray-800 rounded-full"></div>
+                </div>
+
+                <h3 className="font-bold text-xl dark:text-white mb-1">
+                  {otherUser.name}
+                </h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-6 line-clamp-2 min-h-[40px]">
+                  {otherUser.bio || "Building something cool!"}
+                </p>
+                
+                <button
+                  onClick={() => handleFollow(otherUser._id)}
+                  className={`w-full py-3 rounded-2xl font-bold transition-all flex items-center justify-center gap-2 ${
+                    otherUser.followers?.includes(user?.sub)
+                      ? "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300 hover:bg-gray-200"
+                      : "bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-200 dark:shadow-none"
+                  }`}
+                >
+                  {otherUser.followers?.includes(user?.sub) ? (
+                    <><FaUserCheck /> Following</>
+                  ) : (
+                    <><FaUserPlus /> Follow</>
+                  )}
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-20 bg-white/50 dark:bg-gray-800/50 rounded-3xl border-2 border-dashed border-gray-200 dark:border-gray-700">
+             <p className="text-gray-400 text-lg italic">No users found matching "{searchTerm}"</p>
+          </div>
+        )}
       </div>
     </div>
   );
