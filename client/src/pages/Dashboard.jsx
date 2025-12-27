@@ -1,6 +1,6 @@
 import React, { useState } from "react";
-import PostBox from "../components/PostBox";
 import Feed from "../components/Feed";
+import PostBox from "../components/PostBox";
 
 const Dashboard = () => {
   const [refreshTrigger, setRefreshTrigger] = useState(0);

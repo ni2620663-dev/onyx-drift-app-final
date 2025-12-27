@@ -10,57 +10,49 @@ const Feed = ({ refreshTrigger }) => {
   const API_URL = import.meta.env.VITE_API_URL;
   const [commentText, setCommentText] = useState({});
 
+  // পোস্ট নিয়ে আসার ফাংশন
   const fetchPosts = async () => {
-    const res = await axios.get(`${API_URL}/api/posts`);
-    setPosts(res.data);
+    try {
+      const res = await axios.get(`${API_URL}/api/posts`);
+      setPosts(res.data);
+    } catch (err) {
+      console.error("Fetch posts failed", err);
+    }
   };
 
-  useEffect(() => { fetchPosts(); }, [refreshTrigger]);
+  useEffect(() => {
+    fetchPosts();
+  }, [refreshTrigger]);
 
+  // লাইক ফাংশন (ডুপ্লিকেট রিমুভ করা হয়েছে)
   const handleLike = async (postId) => {
     try {
       await axios.put(`${API_URL}/api/posts/${postId}/like`);
       fetchPosts(); // ডাটা রিফ্রেশ
-    } catch (err) { console.error(err); }
+    } catch (err) {
+      console.error("Like failed", err);
+    }
   };
 
+  // কমেন্ট ফাংশন (লজিক ফিক্স করা হয়েছে)
   const handleComment = async (postId) => {
-    if (!commentText[postId]) return;
+    const text = commentText[postId];
+    if (!text || !text.trim()) return; // ফাঁকা কমেন্ট আটকানোর জন্য
+
     try {
       await axios.post(`${API_URL}/api/posts/${postId}/comment`, {
         userName: user.name,
         userAvatar: user.picture,
-        text: commentText[postId]
+        text: text,
       });
+      // ইনপুট ফিল্ড খালি করা
       setCommentText({ ...commentText, [postId]: "" });
-      fetchPosts();
-    } catch (err) { console.error(err); }
+      fetchPosts(); // ডাটা রিফ্রেশ
+    } catch (err) {
+      console.error("Comment failed", err);
+    }
   };
 
-// লাইক ফাংশন
-const handleLike = async (postId) => {
-  try {
-    // PUT /api/posts/:postId/like রাউটে রিকোয়েস্ট পাঠাবে
-    await axios.put(`${API_URL}/api/posts/${postId}/like`);
-    fetchPosts(); // ডাটা আপডেট করার জন্য পুনরায় কল
-  } catch (err) {
-    console.error("Like failed", err);
-  }
-};
-
-// কমেন্ট ফাংশন
-const handleComment = async (postId, text) => {
-  try {
-    await axios.post(`${API_URL}/api/posts/${postId}/comment`, {
-      userName: user.name,
-      userAvatar: user.picture,
-      text: text
-    });
-    fetchPosts();
-  } catch (err) {
-    console.error("Comment failed", err);
-  }
-};
   return (
     <div className="max-w-2xl mx-auto space-y-6">
       {posts.map((post) => (
@@ -110,6 +102,7 @@ const handleComment = async (postId, text) => {
                 placeholder="Write a comment..."
                 value={commentText[post._id] || ""}
                 onChange={(e) => setCommentText({ ...commentText, [post._id]: e.target.value })}
+                onKeyPress={(e) => e.key === 'Enter' && handleComment(post._id)} // এন্টার চাপলে কমেন্ট হবে
                 className="flex-1 bg-white dark:bg-gray-800 border dark:border-gray-700 p-2 px-4 rounded-full text-sm outline-none focus:ring-1 focus:ring-blue-500 dark:text-white"
               />
               <button onClick={() => handleComment(post._id)} className="text-blue-500 p-2">

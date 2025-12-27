@@ -7,7 +7,7 @@ const Call = () => {
   const navigate = useNavigate();
 
   const appID = 905999037
-  const serverSecret = "";
+  const serverSecret = "d4e05520e2ee69e3ace35b6beble42";
 
   const myMeeting = async (element) => {
     const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(

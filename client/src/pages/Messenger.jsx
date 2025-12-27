@@ -15,7 +15,7 @@ const Messenger = () => {
   const socket = useRef();
   const scrollRef = useRef();
   const API_URL = import.meta.env.VITE_API_URL;
-  nst navigate = useNavigate();
+const navigate = useNavigate();
 
 const handleVideoCall = () => {
   // কনভারসেশন আইডি রুম আইডি হিসেবে ব্যবহার হবে
