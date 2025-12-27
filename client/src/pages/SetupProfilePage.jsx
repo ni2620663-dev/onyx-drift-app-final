@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth0 } from '@auth0/auth0-react';
-import axios from 'axios'; // axios ইম্পোর্ট করুন
+import axios from 'axios';
 
 // --- স্টেপ কম্পোনেন্ট ---
 
@@ -39,13 +39,16 @@ const Step2 = ({ formData, handleChange, previewUrl }) => (
   <div className="space-y-4 text-center">
     <h3 className="text-xl font-semibold text-gray-800">২. প্রোফাইল ছবি</h3>
     
-    {/* ইমেজ প্রিভিউ সেকশন */}
+    {/* ইমেজ প্রিভিউ সেকশন - এখানে onError যোগ করা হয়েছে */}
     <div className="flex justify-center mb-4">
       <img 
         src={previewUrl || "https://placehold.jp/150x150.png"} 
         alt="Avatar" 
         className="w-32 h-32 rounded-full object-cover border-2 border-blue-500"
-        onError={(e) => { e.target.src = "https://placehold.jp/150x150.png" }}
+        onError={(e) => { 
+          e.target.onerror = null;
+          e.target.src = "https://placehold.jp/150x150.png"; 
+        }}
       />
     </div>
 
@@ -70,17 +73,11 @@ const Step3 = () => (
   </div>
 );
 
-// --- মূল সেটআপ পেজ কম্পোনেন্ট ---
-
 const SetupProfilePage = () => {
   const { user, getAccessTokenSilently } = useAuth0();
   const [currentStep, setCurrentStep] = useState(1);
-  const [formData, setFormData] = useState({ 
-    username: '', 
-    bio: '', 
-    profilePicture: null 
-  });
-  const [previewUrl, setPreviewUrl] = useState(null); // প্রিভিউ URL এর জন্য
+  const [formData, setFormData] = useState({ username: '', bio: '', profilePicture: null });
+  const [previewUrl, setPreviewUrl] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -88,13 +85,14 @@ const SetupProfilePage = () => {
   const totalSteps = steps.length;
   const CurrentStepComponent = steps[currentStep - 1];
 
-  // ইনপুট পরিবর্তন এবং ইমেজ প্রিভিউ হ্যান্ডেল
   const handleChange = (e) => {
     const { name, value, type, files } = e.target;
     if (type === 'file') {
       const file = files[0];
-      setFormData(prev => ({ ...prev, [name]: file }));
-      setPreviewUrl(URL.createObjectURL(file)); // লোকাল প্রিভিউ তৈরি
+      if (file) {
+        setFormData(prev => ({ ...prev, [name]: file }));
+        setPreviewUrl(URL.createObjectURL(file));
+      }
     } else {
       setFormData(prev => ({ ...prev, [name]: value }));
     }
@@ -112,25 +110,17 @@ const SetupProfilePage = () => {
   const handleNext = () => { if (validateStep(currentStep)) setCurrentStep(prev => prev + 1); };
   const handleBack = () => { if (currentStep > 1) setCurrentStep(prev => prev - 1); };
 
-  // --- ডাটা সাবমিট (Backend এ পাঠানো) ---
   const handleSubmit = async () => {
     setLoading(true);
     try {
       const token = await getAccessTokenSilently();
-      
-      // ফাইল পাঠানোর জন্য FormData ব্যবহার করা জরুরি
       const dataToSend = new FormData();
       dataToSend.append('username', formData.username);
       dataToSend.append('bio', formData.bio);
       dataToSend.append('auth0Id', user.sub);
-      if (formData.profilePicture) {
-        dataToSend.append('profilePicture', formData.profilePicture);
-      }
+      if (formData.profilePicture) dataToSend.append('profilePicture', formData.profilePicture);
 
-      // আপনার Render ব্যাকএন্ডের সঠিক URL দিন
-      const API_URL = "https://onyx-drift-app-final.onrender.com/api/profile/update";
-      
-      const response = await axios.post(API_URL, dataToSend, {
+      const response = await axios.post("https://onyx-drift-app-final.onrender.com/api/profile/update", dataToSend, {
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'multipart/form-data'
@@ -142,8 +132,7 @@ const SetupProfilePage = () => {
         window.location.href = '/dashboard';
       }
     } catch (err) {
-      console.error('Submission Error:', err);
-      setError(err.response?.data?.message || 'প্রোফাইল সাবমিট করার সময় একটি ত্রুটি হয়েছে।');
+      setError(err.response?.data?.message || 'প্রোফাইল সাবমিট করার সময় ত্রুটি হয়েছে।');
     } finally {
       setLoading(false);
     }
@@ -153,24 +142,19 @@ const SetupProfilePage = () => {
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
       <div className="w-full max-w-lg bg-white p-8 rounded-xl shadow-2xl">
         <h1 className="text-3xl font-extrabold mb-6 text-center text-blue-600">প্রোফাইল সেটআপ</h1>
-
-        {/* ধাপ নির্দেশক */}
         <div className="mb-8">
           <div className="flex justify-between text-sm font-medium text-gray-600">
             <span>ধাপ {currentStep} of {totalSteps}</span>
             <span>{Math.round((currentStep / totalSteps) * 100)}% সম্পূর্ণ</span>
           </div>
           <div className="w-full bg-gray-200 rounded-full h-2.5 mt-1">
-            <div className="bg-blue-600 h-2.5 rounded-full transition-all duration-500" style={{ width: `${(currentStep / totalSteps) * 100}%` }}></div>
+            <div className="bg-blue-600 h-2.5 rounded-full" style={{ width: `${(currentStep / totalSteps) * 100}%` }}></div>
           </div>
         </div>
-
         {error && <div className="p-3 mb-4 text-red-700 bg-red-100 rounded-lg text-sm">{error}</div>}
-
         <div className="min-h-[200px] border border-gray-200 p-6 rounded-lg">
             <CurrentStepComponent formData={formData} handleChange={handleChange} previewUrl={previewUrl} />
         </div>
-
         <div className="flex justify-between mt-8">
           {currentStep > 1 && <button onClick={handleBack} className="px-4 py-2 bg-gray-200 rounded-md">পূর্ববর্তী</button>}
           {currentStep < totalSteps ? (
