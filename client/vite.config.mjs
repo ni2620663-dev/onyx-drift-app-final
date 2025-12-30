@@ -1,10 +1,12 @@
-import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react';
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+import path from 'path'
 
 export default defineConfig({
   plugins: [react()],
-  build: {
-    outDir: 'build', // এটা ঠিক আছে কি না দেখুন
+  resolve: {
+    alias: {
+      react: path.resolve('./node_modules/react'),
+    },
   },
-  base: './' // optional, relative path use করলে কখনও কখনও help করে
-});
+})

@@ -1,21 +1,17 @@
 /* client/index.css */
 
-/* 1. Tailwind CSS ডিরেক্টিভগুলি - এগুলি প্রথমে থাকা আবশ্যক */
+/* 1. Tailwind CSS ডিরেক্টিভগুলি */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* 2. রুট স্টাইল ওভাররাইড এবং ফিক্স */
-
-/* ডিফল্ট ভেরিয়েবল সেট করুন (যদি প্রয়োজন হয়) */
+/* 2. রুট স্টাইল এবং ডিফল্ট সেটিংস */
 :root {
-  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; /* ফেসবুকের ফন্ট স্টাইল */
   line-height: 1.5;
   font-weight: 400;
-  
-  /* ডার্ক থিম রঙগুলি সরিয়ে সাদা রঙকে ডিফল্ট করুন */
-  color: #333333; 
-  background-color: #ffffff;
+  color: #1c1e21; 
+  background-color: #f0f2f5; /* ফেসবুকের হালকা ধূসর ব্যাকগ্রাউন্ড */
   
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -23,37 +19,79 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* 3. Body এবং Root ফিক্স (কালো/সাদা স্ক্রিন এড়াতে) */
+/* 3. Body এবং Root ফিক্স */
 body, #root, html {
-    background-color: #ffffff; /* সাদা ব্যাকগ্রাউন্ড নিশ্চিত করা হলো */
+    background-color: #f0f2f5; 
     min-height: 100vh;
     margin: 0;
     padding: 0;
-    color: #333333; /* টেক্সট ডিফল্ট গাঢ় ধূসর */
 }
 
-/* 4. অন্যান্য ডিফল্ট উপাদান স্টাইল (যদি প্রয়োজন হয়) */
-
-code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
+/* 4. স্ক্রলবার হাইড করার ক্লাস */
+.no-scrollbar::-webkit-scrollbar {
+    display: none;
+}
+.no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
 }
 
-a {
-  font-weight: 500;
-  color: #1a73e8; /* একটি দৃশ্যমান নীল রঙ ব্যবহার করা হলো */
-  text-decoration: inherit;
+/* 5. ফেসবুকের মতো স্টোরি কার্ড ডিজাইন (নতুন যোগ করা হয়েছে) */
+
+/* স্টোরি কন্টেইনার */
+.story-card {
+  width: 110px;
+  height: 190px;
+  border-radius: 12px;
+  overflow: hidden;
+  position: relative;
+  background-size: cover;
+  background-position: center;
+  cursor: pointer;
+  transition: transform 0.2s ease-in-out;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
-a:hover {
-  color: #1558b3;
+.story-card:hover {
+  transform: scale(1.02);
 }
 
-h1 {
-  /* H1 এর জন্য ডিফল্ট স্টাইল, তবে Tailwind ক্লাস ব্যবহার করা ভালো */
-  line-height: 1.1;
+/* স্টোরির উপরে ইউজারের ছোট গোল ছবি */
+.story-user-img {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 3px solid #1877f2; /* ফেসবুকের সিগনেচার ব্লু বর্ডার */
+  object-fit: cover;
+  z-index: 10;
 }
 
+/* স্টোরির নিচে ইউজারের নাম */
+.story-username {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  color: white;
+  font-size: 12px;
+  font-weight: 600;
+  text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+  z-index: 10;
+}
+
+/* স্টোরির উপর হালকা কালো শেড (যাতে নাম পরিষ্কার বোঝা যায়) */
+.story-card::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  width: 100%;
+  height: 40%;
+  background: linear-gradient(transparent, rgba(0,0,0,0.5));
+}
+
+/* 6. অন্যান্য উপাদান স্টাইল */
 button {
   border-radius: 8px;
   border: 1px solid transparent;
@@ -61,30 +99,22 @@ button {
   font-size: 1em;
   font-weight: 500;
   font-family: inherit;
-  /* ডিফল্ট ব্যাকগ্রাউন্ড কালার সাদা করা হলো, যাতে কালো না দেখায় */
-  background-color: #f0f0f0; 
+  background-color: #e4e6eb; 
   cursor: pointer;
-  transition: border-color 0.25s;
+  transition: background-color 0.2s;
 }
 
 button:hover {
-  border-color: #646cff;
-}
-button:focus,
-button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
+  background-color: #d8dadf;
 }
 
-/* 5. লাইট মোড মিডিয়া কোয়েরি (যা এখন আর কালো ব্যাকগ্রাউন্ড সেট করবে না) */
-@media (prefers-color-scheme: light) {
-  :root {
-    color: #213547;
-    background-color: #ffffff;
-  }
-  a:hover {
-    color: #747bff;
-  }
-  button {
-    background-color: #f9f9f9;
-  }
+a {
+  font-weight: 500;
+  color: #1877f2;
+  text-decoration: none;
+}
+
+/* ইমেজ লোড না হলে অল্টারনেটিভ স্টাইল */
+img {
+  background-color: #e4e6eb;
 }

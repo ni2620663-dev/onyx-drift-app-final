@@ -1,12 +1,14 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { FaUser, FaCog, FaSignOutAlt, FaShieldAlt, FaQuestionCircle } from "react-icons/fa";
+import { useAuth0 } from "@auth0/auth0-react"; // Auth0 ইমপোর্ট যোগ করা হয়েছে
+import { FaCog, FaSignOutAlt, FaQuestionCircle, FaChevronRight } from "react-icons/fa";
 
-const ProfileDropdown = ({ user, onLogout }) => {
+const ProfileDropdown = ({ user }) => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
+  const { logout } = useAuth0(); // সরাসরি এখান থেকেই লগআউট ফাংশন নেওয়া হচ্ছে
 
-  // ড্রপডাউনের বাইরে ক্লিক করলে সেটি বন্ধ করার লজিক
+  // বাইরে ক্লিক করলে ড্রপডাউন বন্ধ হওয়ার লজিক
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
@@ -19,59 +21,75 @@ const ProfileDropdown = ({ user, onLogout }) => {
 
   return (
     <div className="relative" ref={dropdownRef}>
-      {/* প্রোফাইল ইমেজ বাটন */}
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center focus:outline-none"
+      {/* প্রোফাইল বাটন */}
+      <button 
+        onClick={() => setIsOpen(!isOpen)} 
+        className="focus:outline-none flex items-center"
       >
         <img
-          className="h-10 w-10 rounded-full border-2 border-blue-500 object-cover p-0.5 hover:opacity-90 transition"
-          src={user?.picture || "https://placehold.jp/150x150.png"}
-          alt="User Profile"
-          onError={(e) => {
-            e.target.onerror = null;
-            e.target.src = "https://placehold.jp/150x150.png";
-          }}
+          className={`h-9 w-9 rounded-full object-cover border-2 transition-all duration-200 ${
+            isOpen ? "border-blue-500 scale-105" : "border-gray-700 hover:border-gray-500"
+          }`}
+          src={user?.picture || `https://api.dicebear.com/7.x/initials/svg?seed=${user?.name}`}
+          alt="User"
         />
       </button>
 
       {/* ড্রপডাউন মেনু */}
       {isOpen && (
-        <div className="absolute right-0 mt-3 w-72 bg-white rounded-2xl shadow-2xl border border-gray-100 py-2 z-50 transform origin-top-right transition-all animate-in fade-in zoom-in duration-200">
+        <div className="absolute right-0 mt-3 w-72 bg-[#242526] rounded-2xl shadow-2xl border border-white/10 py-3 z-[100] transform origin-top-right animate-in fade-in zoom-in duration-200">
           
-          {/* ইউজার ইনফো সেকশন */}
-          <Link to="/profile" onClick={() => setIsOpen(false)} className="flex items-center p-4 mx-2 rounded-xl hover:bg-gray-50 transition">
-            <img
-              className="h-12 w-12 rounded-full object-cover"
-              src={user?.picture || "https://placehold.jp/150x150.png"}
-              alt="Profile"
-            />
-            <div className="ml-3">
-              <p className="text-sm font-bold text-gray-900">{user?.name || user?.nickname}</p>
-              <p className="text-xs text-gray-500">See your profile</p>
+          {/* প্রোফাইল লিংক সেকশন */}
+          <Link 
+            to="/profile" 
+            onClick={() => setIsOpen(false)}
+            className="block px-4 py-3 mb-2 mx-2 bg-white/5 rounded-xl hover:bg-white/10 transition"
+          >
+            <div className="flex items-center gap-3">
+               <img
+                  className="h-10 w-10 rounded-full object-cover"
+                  src={user?.picture}
+                  alt=""
+               />
+               <div>
+                  <p className="text-[16px] font-bold text-white leading-tight">
+                    {user?.name || "User Name"}
+                  </p>
+                  <p className="text-xs text-blue-400 font-medium mt-1">
+                    See your profile
+                  </p>
+               </div>
             </div>
           </Link>
 
-          <hr className="my-2 border-gray-100" />
+          <div className="border-b border-white/10 my-2 mx-4"></div>
 
           {/* মেনু আইটেমসমূহ */}
           <div className="px-2 space-y-1">
-            <MenuLink to="/settings" icon={<FaCog />} label="Settings & Privacy" onClick={() => setIsOpen(false)} />
-            <MenuLink to="/help" icon={<FaQuestionCircle />} label="Help & Support" onClick={() => setIsOpen(false)} />
-            <MenuLink to="/security" icon={<FaShieldAlt />} label="Security Center" onClick={() => setIsOpen(false)} />
+            <MenuLink 
+                to="/settings" 
+                icon={<FaCog />} 
+                label="Settings & Privacy" 
+                onClick={() => setIsOpen(false)} 
+            />
+            <MenuLink 
+                to="/help" 
+                icon={<FaQuestionCircle />} 
+                label="Help & Support" 
+                onClick={() => setIsOpen(false)} 
+            />
             
             {/* লগআউট বাটন */}
             <button
-              onClick={() => {
-                setIsOpen(false);
-                onLogout();
-              }}
-              className="w-full flex items-center p-3 rounded-xl text-red-600 hover:bg-red-50 transition font-medium"
+              onClick={() => logout({ logoutParams: { returnTo: window.location.origin } })}
+              className="w-full flex items-center justify-between p-3 rounded-xl text-red-500 hover:bg-red-500/10 transition group"
             >
-              <div className="bg-red-100 p-2 rounded-full mr-3">
-                <FaSignOutAlt size={16} />
+              <div className="flex items-center">
+                <div className="bg-red-500/10 p-2 rounded-full mr-3 text-red-500 group-hover:bg-red-500/20">
+                  <FaSignOutAlt size={16} />
+                </div>
+                <span className="text-[15px] font-bold">Log Out</span>
               </div>
-              Log Out
             </button>
           </div>
         </div>
@@ -80,17 +98,20 @@ const ProfileDropdown = ({ user, onLogout }) => {
   );
 };
 
-// ছোট হেল্পার কম্পোনেন্ট মেনু লিঙ্কগুলোর জন্য
+// সাব-কম্পোনেন্ট: মেনু লিংক
 const MenuLink = ({ to, icon, label, onClick }) => (
   <Link
     to={to}
     onClick={onClick}
-    className="flex items-center p-3 rounded-xl text-gray-700 hover:bg-gray-100 transition font-medium"
+    className="flex items-center justify-between p-3 rounded-xl text-gray-300 hover:bg-white/5 transition group"
   >
-    <div className="bg-gray-200 p-2 rounded-full mr-3 text-gray-600">
-      {React.cloneElement(icon, { size: 16 })}
+    <div className="flex items-center">
+      <div className="bg-white/10 p-2 rounded-full mr-3 text-gray-300 group-hover:bg-white/20">
+        {React.cloneElement(icon, { size: 16 })}
+      </div>
+      <span className="text-[15px] font-bold">{label}</span>
     </div>
-    {label}
+    <FaChevronRight size={12} className="text-gray-600 group-hover:text-gray-400" />
   </Link>
 );
 

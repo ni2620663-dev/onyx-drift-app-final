@@ -2,7 +2,24 @@
 import express from 'express';
 import auth from '../middleware/auth.js';
 import User from '../models/User.js';
+// Example Route (Express.js)
+router.put("/profile/update", checkJwt, async (req, res) => {
+  try {
+    const userId = req.user.sub; // Auth0 থেকে আসা ইউজার আইডি
+    const { name, bio, workplace, location, isVerified } = req.body;
 
+    // আপনার User মডেল অনুযায়ী আপডেট করুন
+    const updatedUser = await User.findOneAndUpdate(
+      { auth0Id: userId }, 
+      { $set: { name, bio, workplace, location, isVerified } },
+      { new: true, upsert: true }
+    );
+
+    res.json(updatedUser);
+  } catch (err) {
+    res.status(500).send("Server Error");
+  }
+});
 const router = express.Router();
 
 // get user profile by id

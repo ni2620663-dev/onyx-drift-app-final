@@ -6,9 +6,7 @@ const postSchema = new mongoose.Schema({
   userAvatar: { type: String },
   content: { type: String, required: true },
   image: { type: String },
-  // লাইক যারা দিয়েছে তাদের ID থাকবে এই অ্যারেতে
   likes: { type: [String], default: [] }, 
-  // কমেন্টগুলো অবজেক্ট হিসেবে থাকবে
   comments: [
     {
       userId: String,

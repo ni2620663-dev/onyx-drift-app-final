@@ -4,104 +4,79 @@ import { verifyAuth } from '../../AuthMiddleware/auth.js';
 
 const router = express.Router();
 
-// ----------------------------------------------------
-// ১. সব পোস্ট নিয়ে আসা (Feed এর জন্য)
-// GET /api/posts
-// ----------------------------------------------------
+// ১. সব পোস্ট গেট করা (ফিড)
 router.get('/', async (req, res) => {
     try {
-        // নতুন পোস্টগুলো সবার আগে দেখানোর জন্য sort({ createdAt: -1 })
         const posts = await Post.find().sort({ createdAt: -1 });
         res.status(200).json(posts);
     } catch (error) {
-        res.status(500).json({ message: "Error fetching posts", error: error.message });
+        res.status(500).json({ message: error.message });
     }
 });
 
-// ----------------------------------------------------
-// ২. নতুন পোস্ট তৈরি করা (প্রমাণীকরণ প্রয়োজন)
-// POST /api/posts
-// ----------------------------------------------------
+// ২. নতুন পোস্ট তৈরি
 router.post('/', verifyAuth, async (req, res) => {
     try {
         const newPost = new Post({
-            userId: req.user.sub, // Auth0 থেকে আসা অনন্য ID
+            userId: req.user.sub, // Auth0 থেকে আসা আইডি
             userName: req.body.userName,
             userAvatar: req.body.userAvatar,
             content: req.body.content,
             image: req.body.image || ""
         });
-
         const savedPost = await newPost.save();
         res.status(201).json(savedPost);
     } catch (error) {
-        res.status(500).json({ message: "Post creation failed", error: error.message });
+        res.status(500).json({ message: error.message });
     }
 });
 
-// ----------------------------------------------------
-// ৩. পোস্টে লাইক বা আনলাইক করা
-// PUT /api/posts/:postId/like
-// ----------------------------------------------------
+// ৩. লাইক বা আনলাইক করা
 router.put('/:postId/like', verifyAuth, async (req, res) => {
     try {
         const post = await Post.findById(req.params.postId);
         if (!post) return res.status(404).json("Post not found");
 
-        // যদি ইউজার আগে লাইক না দিয়ে থাকে, তবে লাইক হবে
         if (!post.likes.includes(req.user.sub)) {
             await post.updateOne({ $push: { likes: req.user.sub } });
-            res.status(200).json({ message: "The post has been liked", liked: true });
+            res.status(200).json("Liked");
         } else {
-            // আগে লাইক দেওয়া থাকলে এখন আনলাইক হবে
             await post.updateOne({ $pull: { likes: req.user.sub } });
-            res.status(200).json({ message: "The post has been unliked", liked: false });
+            res.status(200).json("Unliked");
         }
     } catch (err) {
-        res.status(500).json({ message: "Like action failed", error: err.message });
+        res.status(500).json(err);
     }
 });
 
-// ----------------------------------------------------
-// ৪. পোস্টে কমেন্ট করা
-// POST /api/posts/:postId/comment
-// ----------------------------------------------------
+// ৪. কমেন্ট করা (নতুন যোগ করা হয়েছে)
 router.post('/:postId/comment', verifyAuth, async (req, res) => {
     try {
-        const { text, userName, userAvatar } = req.body;
-        
-        if (!text) return res.status(400).json("Comment text is required");
+        const post = await Post.findById(req.params.postId);
+        if (!post) return res.status(404).json("Post not found");
 
-        const comment = {
+        const newComment = {
             userId: req.user.sub,
-            userName: userName,
-            userAvatar: userAvatar,
-            text: text,
+            userName: req.body.userName || "Anonymous", // ফ্রন্টএন্ড থেকে পাঠানো নাম
+            userAvatar: req.body.userAvatar || "",      // ফ্রন্টএন্ড থেকে পাঠানো ইমেজ
+            text: req.body.text,
             createdAt: new Date()
         };
 
-        const updatedPost = await Post.findByIdAndUpdate(
-            req.params.postId,
-            { $push: { comments: comment } },
-            { new: true } // আপডেট হওয়ার পর নতুন ডাটা রিটার্ন করবে
-        );
-
-        res.status(200).json(updatedPost);
+        await post.updateOne({ $push: { comments: newComment } });
+        res.status(200).json("Comment added");
     } catch (err) {
-        res.status(500).json({ message: "Comment failed", error: err.message });
+        res.status(500).json(err);
     }
 });
 
-// ----------------------------------------------------
-// ৫. পোস্ট ডিলিট করা
-// DELETE /api/posts/:postId
-// ----------------------------------------------------
+// ৫. পোস্ট ডিলিট করা (নতুন যোগ করা হয়েছে)
 router.delete('/:postId', verifyAuth, async (req, res) => {
     try {
         const post = await Post.findById(req.params.postId);
         if (!post) return res.status(404).json("Post not found");
 
-        // শুধুমাত্র পোস্টের মালিক ডিলিট করতে পারবে
+        // চেক করা হচ্ছে যে ইউজার তার নিজের পোস্ট ডিলিট করছে কিনা
         if (post.userId === req.user.sub) {
             await post.deleteOne();
             res.status(200).json("Post deleted successfully");
@@ -109,7 +84,7 @@ router.delete('/:postId', verifyAuth, async (req, res) => {
             res.status(403).json("You can only delete your own posts");
         }
     } catch (err) {
-        res.status(500).json({ message: "Delete failed", error: err.message });
+        res.status(500).json(err);
     }
 });
 

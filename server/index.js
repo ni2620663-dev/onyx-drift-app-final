@@ -1,140 +1,107 @@
 import express from "express";
+import http from "http";
+import { Server } from "socket.io";
 import cors from "cors";
 import dotenv from "dotenv";
-import path from "path";
-import { fileURLToPath } from 'url';
-import helmet from 'helmet';
-import rateLimit from 'express-rate-limit';
-import http from "http"; 
-import { Server } from "socket.io"; 
-import profileRoutes from "./src/routes/profile.js";
+import connectDB from "./config/db.js"; 
+
+// রাউট ইম্পোর্ট
+import profileRoutes from "./src/routes/profile.js"; 
+import userRoutes from "./routes/userRoutes.js";    
+import postRoutes from "./routes/posts.js";        
+// ⚠️ নিশ্চিত হোন এই ফাইলগুলো আপনার routes ফোল্ডারে আছে
+import messageRoutes from "./routes/messages.js"; 
 
 dotenv.config();
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const buildPath = path.join(__dirname, "../client/build"); // dist এর জায়গায় build থাকলে এটি দিন
 const app = express();
 
-// --- ১. HTTP সার্ভার এবং সকেট সেটআপ ---
-const server = http.createServer(app); 
-const io = new Server(server, {
-    cors: {
-        origin: [
-            "https://www.onyx-drift.com",
-            "https://onyx-drift.com",
-            "http://localhost:5173",
-            "https://onyx-drift-app-final.onrender.com"
-        ],
-        methods: ["GET", "POST"],
-        credentials: true
-    }
-});
-
-// অনলাইন ইউজার ট্র্যাক করার জন্য স্টোরেজ
-let onlineUsers = [];
-
-const addUser = (userId, socketId) => {
-    if (userId && !onlineUsers.some((user) => user.userId === userId)) {
-        onlineUsers.push({ userId, socketId });
-    }
-};
-
-const removeUser = (socketId) => {
-    onlineUsers = onlineUsers.filter((user) => user.socketId !== socketId);
-};
-
-const getUser = (userId) => {
-    return onlineUsers.find((user) => user.userId === userId);
-};
-
-// --- ২. সকেট কানেকশন লজিক (Real-time & Video Call) ---
-io.on("connection", (socket) => {
-    console.log("Connected to Socket.io:", socket.id);
-
-    // ইউজার অনলাইন হলে
-    socket.on("addNewUser", (userId) => {
-        addUser(userId, socket.id);
-        io.emit("getOnlineUsers", onlineUsers);
-    });
-
-    // ১-টু-১ মেসেজ পাঠানো
-    socket.on("sendMessage", ({ senderId, receiverId, text }) => {
-        const user = getUser(receiverId);
-        if (user) {
-            io.to(user.socketId).emit("getMessage", { senderId, text });
-        }
-    });
-
-    // ভিডিও কল ইনভাইট পাঠানো
-    socket.on("sendCallInvite", ({ senderName, roomId, receiverId }) => {
-        const user = getUser(receiverId);
-        if (user) {
-            console.log(`Sending call invite to: ${receiverId}`);
-            io.to(user.socketId).emit("incomingCall", { senderName, roomId });
-        }
-    });
-
-    // কল রিজেক্ট করা
-    socket.on("rejectCall", ({ receiverId }) => {
-        const user = getUser(receiverId);
-        if (user) {
-            io.to(user.socketId).emit("callRejected");
-        }
-    });
-
-    // ডিসকানেক্ট হ্যান্ডলিং
-    socket.on("disconnect", () => {
-        removeUser(socket.id);
-        io.emit("getOnlineUsers", onlineUsers);
-        console.log("User disconnected:", socket.id);
-    });
-});
-
-// --- ৩. মিডলওয়্যার ও সিকিউরিটি ---
-app.use(helmet({ contentSecurityPolicy: false }));
-app.use(express.json());
-
-const allowedOrigins = [
-    'https://www.onyx-drift.com',
-    'https://onyx-drift.com',
-    'https://onyx-drift-app-final.onrender.com',
-    'http://localhost:5173'
-];
-
+// ১. মিডেলওয়্যার সেটআপ
 app.use(cors({
-    origin: (origin, callback) => {
-        if (!origin || allowedOrigins.includes(origin)) {
-            callback(null, true);
-        } else {
-            callback(new Error('Not allowed by CORS'));
-        }
-    },
+    origin: ["http://localhost:5173", "http://127.0.0.1:5173"],
     credentials: true
 }));
+app.use(express.json());
 
-const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max: 100,
-    message: "Too many requests, please try again later."
+// ২. HTTP Server তৈরি
+const server = http.createServer(app);
+
+// ৩. Socket.io কনফিগারেশন
+const io = new Server(server, {
+  cors: {
+    origin: ["http://localhost:5173", "http://127.0.0.1:5173"],
+    methods: ["GET", "POST"],
+    credentials: true
+  },
+  transports: ["websocket", "polling"]
 });
-app.use("/api/", limiter);
 
-// --- ৪. Routes ---
+// ৪. ডাটাবেস কানেক্ট
+connectDB();
+
+// ৫. এপিআই রাউটস মাউন্ট করা
 app.use("/api/profile", profileRoutes);
+app.use("/api/user", userRoutes); 
+app.use("/api/posts", postRoutes);
 
-// --- ৫. Static Files (Frontend Build) ---
-const buildPath = path.join(__dirname, "../client/dist");
-app.use(express.static(buildPath));
+// ✅ মেসেজ রাউট মাউন্ট (যাতে Messenger.jsx এর 404 এরর চলে যায়)
+// যদি routes/messages.js ফাইলটি থাকে তবে এটি আনকমেন্ট করুন
+if (messageRoutes) {
+    app.use("/api/messages", messageRoutes);
+}
 
-app.get("*", (req, res) => {
-    if (!req.path.startsWith('/api')) {
-        res.sendFile(path.join(buildPath, "index.html"));
-    }
+// ✅ Watch পেজের 404 এরর বন্ধ করার জন্য সাময়িক রাউট
+app.get("/api/watch", (req, res) => {
+    res.json([]); // আপাতত খালি ডাটা পাঠাবে যাতে ক্রাশ না করে
 });
 
-// --- ৬. সার্ভার স্টার্ট ---
+app.get("/", (req, res) => res.send("✅ OnyxDrift API is running..."));
+
+// --- সকেট লজিক ---
+let onlineUsers = []; 
+
+io.on("connection", (socket) => {
+  console.log("🚀 New Connection:", socket.id);
+
+  socket.on("addNewUser", (userId) => {
+    if (!userId) return;
+    onlineUsers = onlineUsers.filter((u) => u.userId !== userId);
+    onlineUsers.push({ userId, socketId: socket.id });
+    console.log("👥 Online Users Updated:", onlineUsers);
+    io.emit("getOnlineUsers", onlineUsers);
+  });
+
+  socket.on("sendNotification", ({ senderName, receiverId, type, image }) => {
+    const receiver = onlineUsers.find((u) => u.userId === receiverId);
+    if (receiver) {
+      io.to(receiver.socketId).emit("getNotification", {
+        senderName,
+        type,
+        image,
+        createdAt: new Date(),
+      });
+    }
+  });
+
+  socket.on("sendMessage", (message) => {
+    const receiver = onlineUsers.find((u) => u.userId === message.receiverId);
+    if (receiver) {
+      io.to(receiver.socketId).emit("getMessage", message);
+    }
+  });
+
+  socket.on("disconnect", () => {
+    onlineUsers = onlineUsers.filter((u) => u.socketId !== socket.id);
+    io.emit("getOnlineUsers", onlineUsers);
+    console.log("❌ User disconnected");
+  });
+});
+
+// ৬. সার্ভার স্টার্ট
 const PORT = process.env.PORT || 10000;
-server.listen(PORT, '0.0.0.0', () => {
-    console.log(`✅ Server & Socket running on port ${PORT}`);
+server.listen(PORT, () => {
+  console.log(`\n============================================`);
+  console.log(`✅ OnyxDrift Server is Live on Port ${PORT}`);
+  console.log(`🚀 Socket.io is ready for connections`);
+  console.log(`============================================\n`);
 });

@@ -10,41 +10,49 @@ const VideoCall = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
+    // ইউজার ডাটা লোড না হওয়া পর্যন্ত অপেক্ষা করবে
     if (isLoading || !isAuthenticated || !user) return;
 
     const myMeeting = async () => {
-      // ZegoCloud Credentials
+      // ZegoCloud Credentials (আপনার ড্যাশবোর্ড থেকে প্রাপ্ত)
       const appID = 905999037; 
-      const serverSecret = "d4e0505520e2ee69e3ace35b6beb1e42"; // কোটেশন মার্ক যোগ করা হয়েছে
+      const serverSecret = "d4e0505520e2ee69e3ace35b6beb1e42"; 
       
       // কিট টোকেন জেনারেট করা
       const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(
         appID,
         serverSecret,
         roomId,
-        user.sub, // ইউজার আইডি
-        user.name || user.nickname || "User" // ইউজারের নাম
+        user.sub, // ইউনিক ইউজার আইডি (Auth0 থেকে প্রাপ্ত)
+        user.name || "User" // ইউজারের নাম
       );
 
-      // ভিডিও কল তৈরি করা
+      // ভিডিও কল অবজেক্ট তৈরি করা
       const zp = ZegoUIKitPrebuilt.create(kitToken);
       
+      // কল জয়েন করা
       zp.joinRoom({
         container: containerRef.current,
         scenario: {
           mode: ZegoUIKitPrebuilt.OneONoneCall, // ১-টু-১ কলের জন্য
         },
         showScreenSharingButton: true,
-        showPreJoinView: false, // সরাসরি কলে ঢুকে যাবে
+        showPreJoinView: false, // সরাসরি কলে প্রবেশ করবে
+        turnOnMicrophoneWhenJoining: true,
+        turnOnCameraWhenJoining: true,
+        showMyCameraToggleButton: true,
+        showMyMicrophoneToggleButton: true,
+        showAudioVideoSettingsButton: true,
         onLeaveRoom: () => {
-          navigate('/messenger'); // কল শেষ হলে মেসেঞ্জারে ফিরে যাবে
+          // কল লিভ করলে মেসেঞ্জারে পাঠিয়ে দিবে
+          navigate('/messenger'); 
         },
       });
     };
 
     myMeeting();
 
-    // ক্লিনআপ ফাংশন: পেজ থেকে চলে গেলে যেন ক্যামেরা অফ হয়
+    // ক্লিনআপ ফাংশন
     return () => {
       if (containerRef.current) {
         containerRef.current.innerHTML = "";
@@ -52,11 +60,18 @@ const VideoCall = () => {
     };
   }, [user, roomId, isAuthenticated, isLoading, navigate]);
 
-  if (isLoading) return <div className="h-screen bg-black text-white flex items-center justify-center">Loading Call...</div>;
+  if (isLoading) {
+    return (
+      <div className="h-screen bg-black text-white flex flex-col items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-white mb-4"></div>
+        <p>Connecting to secure call...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full h-screen bg-black relative overflow-hidden">
-        {/* কল কন্টেইনার */}
+      {/* ভিডিও কল কন্টেইনার */}
       <div 
         ref={containerRef} 
         className="w-full h-full" 

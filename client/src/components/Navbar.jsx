@@ -1,110 +1,106 @@
-import React from "react";
-import logo from "../assets/images/logo.png";
-import { Link, useLocation, NavLink } from "react-router-dom"; // NavLink যোগ করা হয়েছে
+import React, { useState, useEffect } from "react";
+import { NavLink, Link, useLocation } from "react-router-dom";
+import { useAuth0 } from "@auth0/auth0-react";
+import { FaHome, FaUserFriends, FaFacebookMessenger, FaBell, FaTv, FaStore, FaBars } from "react-icons/fa";
 import ProfileDropdown from "./ProfileDropdown";
-import { useAuth0 } from "@auth0/auth0-react"; 
-import { FaHome, FaUserFriends, FaUsers, FaCalendarAlt, FaStore, FaSearch, FaCommentDots } from "react-icons/fa";
+import { toast } from "react-toastify";
 
-const Navbar = () => {
-    const location = useLocation();
-    const { isAuthenticated, user, logout, loginWithRedirect, isLoading } = useAuth0();
+const Navbar = ({ socket }) => {
+  const { isAuthenticated, user } = useAuth0();
+  const location = useLocation();
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
 
-    // নেভিগেশন আইটেমগুলো এখানে সাজানো
-    const menuItems = [
-        { path: "/feed", icon: <FaHome size={22} />, label: "Home" },
-        { path: "/friends", icon: <FaUserFriends size={22} />, label: "Friends" },
-        { path: "/messenger", icon: <FaCommentDots size={22} />, label: "Messages" }, // চ্যাট এখানে যোগ করা হয়েছে
-        { path: "/groups", icon: <FaUsers size={22} />, label: "Groups" },
-        { path: "/marketplace", icon: <FaStore size={22} />, label: "Store" },
-    ];
-
-    // ডিফল্ট ইমেজ লিঙ্ক (যদি মেইন ইমেজ কাজ না করে)
-    const fallbackImage = "https://api.dicebear.com/7.x/avataaars/svg?seed=Lucky";
-
-    if (isLoading) {
-        return (
-            <nav className="bg-white border-b h-16 flex items-center justify-center">
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
-            </nav>
+  useEffect(() => {
+    if (socket?.current) {
+      socket.current.on("getNotification", (data) => {
+        setUnreadNotifications((prev) => prev + 1);
+        
+        // ফেসবুক স্টাইল কাস্টম নোটিফিকেশন
+        toast.info(
+          <div className="flex items-center gap-3">
+            <img 
+              src={data.image || "https://via.placeholder.com/40"} 
+              alt="User" 
+              className="w-10 h-10 rounded-full border border-gray-600"
+            />
+            <div>
+              <p className="font-bold text-sm text-white">{data.senderName}</p>
+              <p className="text-xs text-gray-300">
+                {data.type === "friend_request" ? "Sent you a friend request" : "Interacted with your profile"}
+              </p>
+            </div>
+          </div>,
+          {
+            icon: false, // ডিফল্ট আইকন বন্ধ রাখা হয়েছে কাস্টম ছবি ব্যবহারের জন্য
+            style: { background: "#242526", borderRadius: "12px", border: "1px solid #3a3b3c" }
+          }
         );
+      });
     }
-    
-    return (
-        <nav className="bg-white text-gray-800 h-16 px-4 flex justify-between items-center shadow-sm sticky top-0 z-50 border-b border-gray-200">
-            
-            {/* বাম পাশ: Logo and Search */}
-            <div className="flex items-center space-x-3">
-                <Link to="/">
-                    <img 
-                        src={logo} 
-                        alt="Logo" 
-                        className="h-10 w-10 object-contain" 
-                        onError={(e) => { e.target.style.display='none' }} 
-                    />
-                </Link>
-                <div className="hidden md:flex items-center bg-gray-100 px-3 py-2 rounded-full">
-                    <FaSearch className="text-gray-500 mr-2" />
-                    <input 
-                        type="text" 
-                        placeholder="Search OnyxDrift" 
-                        className="bg-transparent border-none focus:outline-none text-sm w-48"
-                    />
-                </div>
-            </div>
+    return () => socket?.current?.off("getNotification");
+  }, [socket]);
 
-            {/* মাঝখান: Navigation Icons */}
-            {isAuthenticated && (
-                <div className="flex items-center space-x-1 md:space-x-4">
-                    {menuItems.map((item, index) => (
-                        <NavLink
-                            key={index}
-                            to={item.path}
-                            title={item.label}
-                            className={({ isActive }) => `
-                                p-3 rounded-xl transition-all duration-200 group relative
-                                ${isActive 
-                                    ? "text-blue-600 bg-blue-50" 
-                                    : "text-gray-500 hover:bg-gray-100"
-                                }
-                            `}
-                        >
-                            {item.icon}
-                            {location.pathname === item.path && (
-                                <div className="absolute bottom-0 left-0 w-full h-1 bg-blue-600 rounded-t-full"></div>
-                            )}
-                        </NavLink>
-                    ))}
-                </div>
+  useEffect(() => {
+    if (location.pathname === "/notifications") {
+      setUnreadNotifications(0);
+    }
+  }, [location.pathname]);
+
+  const menuItems = [
+    { path: "/feed", icon: <FaHome size={24} /> },
+    { path: "/friends", icon: <FaUserFriends size={26} /> },
+    { path: "/messenger", icon: <FaFacebookMessenger size={22} /> },
+    { 
+      path: "/notifications", 
+      icon: <FaBell size={22} />, 
+      count: unreadNotifications 
+    },
+    { path: "/watch", icon: <FaTv size={22} /> },
+    { path: "/marketplace", icon: <FaStore size={22} /> },
+  ];
+
+  return (
+    <nav className="bg-[#242526] sticky top-0 z-[100] border-b border-gray-700 shadow-md w-full select-none">
+      <div className="flex justify-between items-center px-4 py-2">
+        <Link to="/" className="bg-gradient-to-r from-blue-500 to-indigo-400 bg-clip-text text-transparent text-2xl font-black tracking-tighter">
+          OnyxDrift
+        </Link>
+
+        <div className="flex items-center space-x-3">
+          <button className="p-2.5 bg-[#3a3b3c] hover:bg-[#4e4f50] rounded-full text-gray-200 transition">
+            <FaBars size={18} />
+          </button>
+          {isAuthenticated && user && <ProfileDropdown user={user} />}
+        </div>
+      </div>
+
+      <div className="flex justify-around items-center h-12 max-w-[600px] mx-auto">
+        {menuItems.map((item, index) => (
+          <NavLink
+            key={index}
+            to={item.path}
+            className={({ isActive }) =>
+              `flex-1 flex justify-center items-center h-full relative transition-all ${
+                isActive ? "text-blue-500" : "text-gray-400 hover:bg-[#3a3b3c] rounded-lg mx-1"
+              }`
+            }
+          >
+            <div className="relative">
+              {item.icon}
+              {item.count > 0 && (
+                <span className="absolute -top-2 -right-3 bg-red-600 text-white text-[10px] font-bold px-1.5 rounded-full border border-[#242526]">
+                  {item.count}
+                </span>
+              )}
+            </div>
+            {location.pathname === item.path && (
+              <div className="absolute bottom-0 w-full h-[3px] bg-blue-500 rounded-t-full"></div>
             )}
-
-            {/* ডান পাশ: Profile and Logout */}
-            <div className="flex items-center space-x-4">
-                {isAuthenticated ? (
-                    <div className="flex items-center space-x-2">
-                        <span className="hidden lg:block font-medium text-sm text-gray-700">
-                            Hi, {user?.given_name || user?.nickname || "User"}
-                        </span>
-                        
-                        {/* প্রোফাইল ড্রপডাউন এবং ইমেজ হ্যান্ডলিং */}
-                        <ProfileDropdown 
-                            user={{
-                                ...user,
-                                picture: user?.picture || fallbackImage
-                            }} 
-                            onLogout={() => logout({ logoutParams: { returnTo: window.location.origin } })} 
-                        />
-                    </div>
-                ) : (
-                    <button 
-                        onClick={() => loginWithRedirect()} 
-                        className="px-6 py-2 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition font-bold shadow-md shadow-blue-200"
-                    >
-                        Login
-                    </button>
-                )}
-            </div>
-        </nav>
-    );
+          </NavLink>
+        ))}
+      </div>
+    </nav>
+  );
 };
 
 export default Navbar;

@@ -1,239 +1,93 @@
-import React, { useState, useEffect } from "react";
+import React from "react";
 import { useAuth0 } from "@auth0/auth0-react";
-import axios from "axios";
-import { 
-  FaCamera, FaSave, FaUser, FaEnvelope, 
-  FaMapMarkerAlt, FaCalendarAlt, FaTimes, FaEdit, FaUserCircle 
-} from "react-icons/fa";
+import { FaEdit, FaCamera, FaMapMarkerAlt, FaBriefcase, FaGraduationCap, FaLink } from "react-icons/fa";
 
-// ডিফল্ট ইমেজ লিঙ্ক (এটি অনেক স্ট্যাবল)
-const DEFAULT_AVATAR = "https://api.dicebear.com/7.x/avataaars/svg?seed=Lucky";
-
-// ==========================================
-// ১. এডিট প্রোফাইল মডাল কম্পোনেন্ট
-// ==========================================
-const EditProfileModal = ({ isOpen, onClose, currentProfile, onSave, saving }) => {
-  const [formData, setFormData] = useState({ ...currentProfile });
-
-  useEffect(() => {
-    if (isOpen) setFormData({ ...currentProfile });
-  }, [currentProfile, isOpen]);
-
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
-      <div className="bg-white dark:bg-gray-800 w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden transform transition-all scale-100">
-        
-        <div className="flex justify-between items-center p-6 border-b dark:border-gray-700">
-          <h2 className="text-xl font-bold text-gray-800 dark:text-white">Edit Profile</h2>
-          <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition">
-            <FaTimes className="text-gray-500" />
-          </button>
-        </div>
-
-        <div className="p-6 space-y-5">
-          <div className="flex flex-col items-center mb-4">
-            <div className="relative group">
-              <img 
-                src={formData.avatar || DEFAULT_AVATAR} 
-                onError={(e) => { e.target.src = DEFAULT_AVATAR }}
-                className="w-24 h-24 rounded-full object-cover border-4 border-blue-500 shadow-md"
-                alt="Preview"
-              />
-              <label className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-full opacity-0 group-hover:opacity-100 cursor-pointer transition">
-                <FaCamera className="text-white text-xl" />
-                <input type="file" className="hidden" accept="image/*" />
-              </label>
-            </div>
-            <p className="text-xs text-gray-500 mt-2">Update Profile Picture</p>
-          </div>
-
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Full Name</label>
-            <input
-              type="text"
-              value={formData.name}
-              onChange={(e) => setFormData({...formData, name: e.target.value})}
-              className="w-full p-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none dark:text-white"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Bio</label>
-            <textarea
-              rows="3"
-              value={formData.bio}
-              onChange={(e) => setFormData({...formData, bio: e.target.value})}
-              className="w-full p-3 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none dark:text-white resize-none"
-              placeholder="Tell us about yourself..."
-            />
-          </div>
-        </div>
-
-        <div className="p-6 border-t dark:border-gray-700 flex gap-3">
-          <button onClick={onClose} className="flex-1 py-3 border border-gray-200 dark:border-gray-600 rounded-xl font-bold dark:text-white hover:bg-gray-50 transition">
-            Cancel
-          </button>
-          <button 
-            onClick={() => onSave(formData)}
-            disabled={saving}
-            className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold transition shadow-lg disabled:bg-blue-300"
-          >
-            {saving ? "Saving..." : "Save Changes"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// ==========================================
-// ২. মেইন প্রোফাইল কম্পোনেন্ট
-// ==========================================
 const Profile = () => {
-  const { user, isLoading, isAuthenticated } = useAuth0();
-  const userId = user?.sub;
-  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:10000";
+  const { user, isAuthenticated, isLoading } = useAuth0();
 
-  const [profile, setProfile] = useState({
-    name: "",
-    email: "",
-    avatar: "",
-    bio: "Software Engineer & Tech Enthusiast",
-  });
-
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    if (!userId) return;
-
-    axios.get(`${API_URL}/api/profile/${encodeURIComponent(userId)}`)
-      .then((res) => {
-        setProfile({
-          name: res.data.name || user?.name || "User Name",
-          email: res.data.email || user?.email || "",
-          avatar: res.data.avatar || user?.picture || DEFAULT_AVATAR,
-          bio: res.data.bio || "Available",
-        });
-      })
-      .catch((err) => {
-        console.error("❌ Profile fetch error:", err);
-        // যদি ডাটাবেসে ইউজার না থাকে তবে Auth0 এর ডাটা সেট করা
-        setProfile(prev => ({
-          ...prev,
-          name: user?.name || "",
-          email: user?.email || "",
-          avatar: user?.picture || DEFAULT_AVATAR
-        }));
-      });
-  }, [userId, API_URL, user]);
-
-  const handleUpdateSave = async (updatedData) => {
-    if (!userId) return;
-    try {
-      setSaving(true);
-      const res = await axios.put(
-        `${API_URL}/api/profile/${encodeURIComponent(userId)}`,
-        updatedData
-      );
-      setProfile(prev => ({ ...prev, ...res.data }));
-      setIsModalOpen(false);
-    } catch (err) {
-      console.error("❌ Save error:", err);
-      alert("Failed to update profile");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  if (isLoading) return <div className="flex justify-center items-center h-screen font-bold dark:text-white">Loading...</div>;
-  if (!isAuthenticated) return <div className="text-center mt-20 text-red-500 font-bold">Please log in to view profile.</div>;
+  if (isLoading) return <div className="h-screen flex items-center justify-center font-bold text-blue-600 animate-pulse text-2xl">OnyxDrift...</div>;
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors pb-10">
-      
-      {/* Cover Photo */}
-      <div className="h-56 md:h-80 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-700 relative">
-        <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')]"></div>
-      </div>
+    <div className="min-h-screen bg-gray-50 pb-10">
+      {/* ১. কভার এবং প্রোফাইল সেকশন */}
+      <div className="relative max-w-[1000px] mx-auto bg-white rounded-b-3xl shadow-sm overflow-hidden border-x border-b border-gray-100">
+        
+        {/* কভার ফটো (ইউনিক গ্রেডিয়েন্ট লুক) */}
+        <div className="h-48 md:h-80 bg-gradient-to-r from-blue-400 via-indigo-500 to-purple-600 relative group">
+          <button className="absolute bottom-4 right-4 bg-white/20 backdrop-blur-md text-white px-4 py-2 rounded-xl flex items-center gap-2 hover:bg-white/30 transition shadow-lg">
+            <FaCamera /> <span className="text-sm font-bold">Edit Cover Photo</span>
+          </button>
+        </div>
 
-      <div className="max-w-5xl mx-auto px-4 -mt-24 relative z-10">
-        <div className="bg-white dark:bg-gray-800 rounded-[2.5rem] shadow-2xl border border-white/10 overflow-hidden">
-          
-          <div className="p-8 md:p-12">
-            <div className="flex flex-col md:flex-row items-center md:items-end gap-8">
-              
-              {/* Profile Image with Fallback */}
-              <div className="relative">
-                {profile.avatar ? (
-                  <img
-                    src={profile.avatar}
-                    onError={(e) => { e.target.src = DEFAULT_AVATAR }}
-                    alt="Avatar"
-                    className="w-40 h-40 md:w-48 md:h-48 rounded-full object-cover border-8 border-white dark:border-gray-800 shadow-2xl transition hover:scale-105"
-                  />
-                ) : (
-                  <FaUserCircle className="w-40 h-40 md:w-48 md:h-48 text-gray-300 bg-white rounded-full border-8 border-white" />
-                )}
-                <div className="absolute bottom-4 right-6 bg-green-500 w-6 h-6 rounded-full border-4 border-white dark:border-gray-800 shadow-lg"></div>
-              </div>
+        {/* প্রোফাইল ইমেজ ও নাম */}
+        <div className="px-6 pb-6 flex flex-col items-center md:items-start md:flex-row md:gap-6 -mt-12 md:-mt-16">
+          <div className="relative group">
+            <img 
+              src={user?.picture || "https://api.dicebear.com/7.x/avataaars/svg?seed=Lucky"} 
+              className="w-32 h-32 md:w-44 md:h-44 rounded-full border-4 border-white shadow-xl object-cover bg-white" 
+              alt="Profile"
+            />
+            <button className="absolute bottom-2 right-2 p-2 bg-gray-100 rounded-full border-2 border-white hover:bg-gray-200 transition">
+              <FaCamera className="text-gray-700" size={14} />
+            </button>
+          </div>
 
-              <div className="flex-1 text-center md:text-left mb-4">
-                <h1 className="text-4xl font-black text-gray-900 dark:text-white mb-2 tracking-tight">
-                  {profile.name}
-                </h1>
-                <p className="text-lg text-gray-600 dark:text-gray-400 font-medium max-w-md mx-auto md:mx-0">
-                  {profile.bio}
-                </p>
-                
-                <div className="flex flex-wrap justify-center md:justify-start gap-5 mt-6 text-sm font-semibold text-gray-500 dark:text-gray-400">
-                  <span className="flex items-center gap-2 px-3 py-1 bg-gray-100 dark:bg-gray-700 rounded-lg">
-                    <FaEnvelope className="text-blue-500" /> {profile.email}
-                  </span>
-                  <span className="flex items-center gap-2 px-3 py-1 bg-gray-100 dark:bg-gray-700 rounded-lg">
-                    <FaMapMarkerAlt className="text-red-500" /> Dhaka, BD
-                  </span>
-                </div>
-              </div>
-
-              <button
-                onClick={() => setIsModalOpen(true)}
-                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-8 py-3.5 rounded-2xl font-bold transition transform active:scale-95 shadow-xl shadow-blue-200 dark:shadow-none"
-              >
-                <FaEdit /> Edit Profile
+          <div className="mt-4 md:mt-20 text-center md:text-left flex-1">
+            <h1 className="text-3xl font-black text-gray-900 tracking-tight">{user?.name}</h1>
+            <p className="text-gray-500 font-medium">500 friends • {user?.nickname || "Dreamer"}</p>
+            
+            <div className="flex flex-wrap justify-center md:justify-start gap-2 mt-4">
+              <button className="bg-blue-600 text-white px-6 py-2 rounded-xl font-bold hover:bg-blue-700 transition flex items-center gap-2">
+                <FaPlus size={14}/> Add to Story
+              </button>
+              <button className="bg-gray-100 text-gray-800 px-6 py-2 rounded-xl font-bold hover:bg-gray-200 transition flex items-center gap-2">
+                <FaEdit size={14}/> Edit Profile
               </button>
             </div>
-
-            <hr className="my-10 border-gray-100 dark:border-gray-700" />
-
-            {/* Statistics Section */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="bg-blue-50/50 dark:bg-gray-700/40 p-6 rounded-3xl border border-blue-100 dark:border-gray-700 text-center">
-                <p className="text-3xl font-black text-blue-600 dark:text-blue-400">1.2k</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400 font-bold uppercase tracking-widest mt-1">Followers</p>
-              </div>
-              <div className="bg-purple-50/50 dark:bg-gray-700/40 p-6 rounded-3xl border border-purple-100 dark:border-gray-700 text-center">
-                <p className="text-3xl font-black text-purple-600 dark:text-purple-400">450</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400 font-bold uppercase tracking-widest mt-1">Following</p>
-              </div>
-              <div className="bg-indigo-50/50 dark:bg-gray-700/40 p-6 rounded-3xl border border-indigo-100 dark:border-gray-700 text-center">
-                <p className="text-3xl font-black text-indigo-600 dark:text-indigo-400">84</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400 font-bold uppercase tracking-widest mt-1">Posts</p>
-              </div>
-            </div>
           </div>
         </div>
       </div>
 
-      <EditProfileModal 
-        isOpen={isModalOpen} 
-        onClose={() => setIsModalOpen(false)}
-        currentProfile={profile}
-        onSave={handleUpdateSave}
-        saving={saving}
-      />
+      {/* ২. ইনফরমেশন গ্রিড (Main Content) */}
+      <div className="max-w-[1000px] mx-auto mt-6 grid grid-cols-1 lg:grid-cols-12 gap-6 px-2">
+        
+        {/* বাম পাশ: ইন্ট্রো এবং ডিটেইলস */}
+        <div className="lg:col-span-5 space-y-6">
+          <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+            <h2 className="text-xl font-black mb-4">Intro</h2>
+            <div className="space-y-4">
+              <div className="flex items-center gap-3 text-gray-700">
+                <FaBriefcase className="text-gray-400" /> 
+                <span>Works at <span className="font-bold">OnyxDrift Tech</span></span>
+              </div>
+              <div className="flex items-center gap-3 text-gray-700">
+                <FaGraduationCap className="text-gray-400" size={20} /> 
+                <span>Studied at <span className="font-bold">Software Engineering</span></span>
+              </div>
+              <div className="flex items-center gap-3 text-gray-700">
+                <FaMapMarkerAlt className="text-gray-400" /> 
+                <span>From <span className="font-bold">Dhaka, Bangladesh</span></span>
+              </div>
+              <div className="flex items-center gap-3 text-gray-700">
+                <FaLink className="text-gray-400" /> 
+                <a href="#" className="text-blue-600 font-medium hover:underline">onyxdrift.com</a>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ডান পাশ: পোস্ট এবং ফিড */}
+        <div className="lg:col-span-7 space-y-6">
+          <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 text-center text-gray-500 font-medium italic">
+            "Every developer is an artist, and the code is their canvas."
+          </div>
+          {/* এখানে আপনি আপনার PostBox এবং PostFeed কম্পোনেন্টটি রাখতে পারেন */}
+          <div className="opacity-50 text-center py-10 border-2 border-dashed border-gray-200 rounded-2xl">
+            Your posts will appear here...
+          </div>
+        </div>
+
+      </div>
     </div>
   );
 };
