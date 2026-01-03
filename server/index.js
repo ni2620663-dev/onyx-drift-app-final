@@ -5,14 +5,13 @@ import cors from "cors";
 import dotenv from "dotenv";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
-// ১. কনফিগারেশন ইমপোর্ট
+// ১. ডাটাবেস কনফিগারেশন
 import connectDB from "./config/db.js"; 
 
-// ২. রাউট ইমপোর্ট (আপনার স্ক্রিনশট অনুযায়ী পাথ ফিক্স করা হয়েছে)
+// ২. রাউট ইমপোর্ট
 import profileRoutes from "./src/routes/profile.js"; 
-import userRoutes from "./routes/userRoutes.js";     
 import postRoutes from "./routes/posts.js";
- import userRoutes from './routes/users.js';        
+import usersRoutes from './routes/users.js'; // নাম পরিবর্তন করে 'usersRoutes' করা হয়েছে
 import messageRoutes from "./routes/messages.js";   
 
 dotenv.config();
@@ -60,9 +59,9 @@ const io = new Server(server, {
 // ৬. ডাটাবেস কানেকশন
 connectDB();
 
-// ৭. এপিআই এন্ডপয়েন্টস মাউন্টিং
+// ৭. এপিআই এন্ডপয়েন্টস মাউন্টিং
 app.use("/api/profile", profileRoutes);
-app.use("/api/user", userRoutes); 
+app.use("/api/user", usersRoutes); // এখানে সঠিক রাউটটি মাউন্ট করা হয়েছে
 app.use("/api/posts", postRoutes); 
 if (messageRoutes) {
     app.use("/api/messages", messageRoutes);
