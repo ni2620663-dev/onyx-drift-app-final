@@ -4,7 +4,7 @@ import Post from '../models/Post.js';
 
 const router = express.Router();
 
-// --- ১. সব পোস্ট গেট করা ---
+// --- ১. সব পোস্ট গেট করা (Global Feed) ---
 router.get('/', async (req, res) => {
   try {
     const posts = await Post.find().sort({ createdAt: -1 });
@@ -15,8 +15,23 @@ router.get('/', async (req, res) => {
   }
 });
 
-// --- ২. নতুন পোস্ট তৈরি করা ---
-router.post('/', auth, async (req, res) => {
+// --- ২. নির্দিষ্ট ইউজারের সব পোস্ট গেট করা (FIXES PROFILE 404 ERROR) ---
+// এই রাউটটিই আপনার প্রোফাইল পেজের এরর ঠিক করবে
+router.get('/user/:userId', auth, async (req, res) => {
+  try {
+    // Auth0 ID (google-oauth2|...) দিয়ে ডাটাবেসে সার্চ করা হচ্ছে
+    const posts = await Post.find({ author: req.params.userId }).sort({ createdAt: -1 });
+    
+    // পোস্ট না থাকলে খালি অ্যারে পাঠাবে, 404 নয়
+    res.json(posts || []); 
+  } catch (err) {
+    console.error('User Post Fetch Error:', err.message);
+    res.status(500).send('Server error');
+  }
+});
+
+// --- ৩. নতুন পোস্ট তৈরি করা ---
+router.post('/create', auth, async (req, res) => {
   try {
     const { text, media, mediaType, authorName, authorAvatar } = req.body;
 
@@ -39,13 +54,13 @@ router.post('/', auth, async (req, res) => {
   }
 });
 
-// --- ৩. পোস্ট আপডেট/এডিট করা ---
+// --- ৪. পোস্ট আপডেট/এডিট করা ---
 router.put('/:id', auth, async (req, res) => {
   try {
     let post = await Post.findById(req.params.id);
     if (!post) return res.status(404).json({ msg: 'Post not found' });
 
-    // Ownership Check (Auth0 ID match)
+    // Ownership Check
     if (post.author !== req.user.id) {
       return res.status(403).json({ msg: 'Unauthorized to edit this post' });
     }
@@ -66,7 +81,7 @@ router.put('/:id', auth, async (req, res) => {
   }
 });
 
-// --- ৪. পোস্ট ডিলিট করা ---
+// --- ৫. পোস্ট ডিলিট করা ---
 router.delete('/:id', auth, async (req, res) => {
   try {
     const post = await Post.findById(req.params.id);
@@ -84,20 +99,17 @@ router.delete('/:id', auth, async (req, res) => {
   }
 });
 
-// --- ৫. লাইক বা আনলাইক করা ---
+// --- ৬. লাইক বা আনলাইক করা ---
 router.put('/:id/like', auth, async (req, res) => {
   try {
     const post = await Post.findById(req.params.id);
     if (!post) return res.status(404).json({ msg: 'Post not found' });
 
-    // চেক করা হচ্ছে ইউজার অলরেডি লাইক দিয়েছে কি না
     const likeIndex = post.likes.indexOf(req.user.id);
     
     if (likeIndex > -1) {
-      // অলরেডি লাইক থাকলে রিমুভ (Unlike)
       post.likes.splice(likeIndex, 1);
     } else {
-      // না থাকলে অ্যাড (Like)
       post.likes.push(req.user.id);
     }
 
