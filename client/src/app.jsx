@@ -30,18 +30,21 @@ export default function App() {
   const socket = useRef(null);
   const [searchQuery, setSearchQuery] = useState("");
 
-  // ১. সকেট কানেকশন লজিক
+  // ১. সকেট কানেকশন লজিক (আপডেট করা হয়েছে)
   useEffect(() => {
     if (isAuthenticated && user?.sub) {
       const socketUrl = window.location.hostname === "localhost"
         ? "http://localhost:10000"
         : "https://onyx-drift-app-final.onrender.com";
 
+      // এখানে কিছু অপশন যোগ করা হয়েছে কানেকশন স্ট্যাবল রাখতে
       socket.current = io(socketUrl, {
-        transports: ["polling", "websocket"],
+        transports: ["websocket", "polling"], // websocket আগে রাখা ভালো
         withCredentials: true,
         reconnection: true,
-        reconnectionAttempts: 5
+        reconnectionAttempts: 10, // চেষ্টার সংখ্যা বাড়ানো হলো
+        reconnectionDelay: 2000,
+        timeout: 40000 // টাইমআউট ৪০ সেকেন্ড করা হলো
       });
 
       socket.current.on("connect", () => {
@@ -50,7 +53,7 @@ export default function App() {
       });
 
       socket.current.on("connect_error", (err) => {
-        console.error("Socket Error:", err.message);
+        console.error("Socket Error Details:", err);
       });
     }
 
@@ -86,7 +89,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-[#020617] text-gray-200 overflow-x-hidden selection:bg-cyan-500/30 font-sans">
       
-      {/* ৪. প্রিমিয়াম নেভবার */}
+      {/* ৪. প্রিমিয়াম নেভবার */}
       {isAuthenticated && !isLanding && (
         <div className="fixed top-0 w-full z-[100] backdrop-blur-xl border-b border-white/5 bg-[#020617]/80">
           <Navbar user={user} socket={socket} setSearchQuery={setSearchQuery} />

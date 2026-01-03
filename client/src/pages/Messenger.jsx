@@ -30,89 +30,128 @@ const Messenger = () => {
   const socket = useRef();
   const scrollRef = useRef();
   const navigate = useNavigate();
-  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:10000";
+
+  // URL এবং টাইমআউট আপডেট করা হয়েছে স্ট্যাবিলিটির জন্য
+  const API_URL = "https://onyx-drift-app-final.onrender.com";
   const glassPanel = "bg-white/5 backdrop-blur-3xl border border-white/10 shadow-2xl overflow-hidden";
 
   // চ্যাট শুরু করার ফাংশন
   const startChat = (person) => {
-    // এখানে একটি ফেক চ্যাট অবজেক্ট তৈরি করা হচ্ছে টেস্টের জন্য
     setCurrentChat({
       _id: person._id,
       members: [user?.sub, person._id],
       isTest: true,
-      name: person.name
+      name: person.name,
+      img: person.img
     });
     setMessages([
       { senderId: person._id, text: `Hello! This is ${person.name}. Signal is clear.`, createdAt: Date.now() }
     ]);
   };
 
+  // ১. সকেট কানেকশন লজিক (আপডেটেড)
   useEffect(() => {
-    socket.current = io(API_URL);
-    socket.current.on("getMessage", (data) => {
-      setArrivalMessage({ senderId: data.senderId, text: data.text, createdAt: Date.now() });
+    socket.current = io(API_URL, {
+      transports: ["websocket", "polling"],
+      withCredentials: true,
+      reconnectionAttempts: 10,
+      timeout: 60000, // Render সার্ভারের জন্য ১ মিনিট টাইমআউট
     });
+
+    socket.current.on("getMessage", (data) => {
+      setArrivalMessage({ 
+        senderId: data.senderId, 
+        text: data.text, 
+        createdAt: Date.now() 
+      });
+    });
+
     socket.current.on("getOnlineUsers", (users) => setOnlineUsers(users));
-    return () => socket.current.disconnect();
+
+    return () => {
+      if (socket.current) socket.current.disconnect();
+    };
   }, [API_URL]);
 
+  // ২. ইনকামিং মেসেজ হ্যান্ডেল করা
   useEffect(() => {
     if (arrivalMessage && currentChat?.members.includes(arrivalMessage.senderId)) {
       setMessages((prev) => [...prev, arrivalMessage]);
     }
   }, [arrivalMessage, currentChat]);
 
+  // ৩. অনলাইন স্ট্যাটাস আপডেট
   useEffect(() => {
-    if (user?.sub) socket.current.emit("addNewUser", user.sub);
+    if (user?.sub && socket.current) {
+      socket.current.emit("addNewUser", user.sub);
+    }
   }, [user]);
 
+  // ৪. কনভারসেশন লিস্ট আনা
   useEffect(() => {
     const getConversations = async () => {
       try {
         const res = await axios.get(`${API_URL}/api/messages/conversation/${user?.sub}`);
         setConversations(res.data);
-      } catch (err) { console.error(err); }
+      } catch (err) { console.error("Conversation Fetch Error:", err); }
     };
     if (user?.sub) getConversations();
   }, [user?.sub, API_URL]);
 
+  // ৫. মেসেজ হিস্ট্রি আনা
   useEffect(() => {
     const getMessages = async () => {
-      if (currentChat?.isTest) return; // টেস্ট চ্যাট হলে API কল করবে না
+      if (!currentChat || currentChat?.isTest) return; 
       try {
         const res = await axios.get(`${API_URL}/api/messages/message/${currentChat?._id}`);
         setMessages(res.data);
-      } catch (err) { console.error(err); }
+      } catch (err) { console.error("Message Fetch Error:", err); }
     };
-    if (currentChat) getMessages();
+    getMessages();
   }, [currentChat, API_URL]);
 
+  // ৬. মেসেজ পাঠানোর ফাংশন (রিয়েল-টাইম + এপিআই)
   const handleSubmit = async () => {
     if (!newMessage.trim() || !currentChat) return;
-    const receiverId = currentChat.members.find((member) => member !== user.sub);
-    const messageObj = { senderId: user.sub, text: newMessage, conversationId: currentChat._id };
     
-    // টেস্ট চ্যাট হলে শুধু লোকাল স্টেটে আপডেট হবে
+    const receiverId = currentChat.members.find((member) => member !== user.sub);
+    const messageObj = { 
+      senderId: user.sub, 
+      text: newMessage, 
+      conversationId: currentChat._id 
+    };
+    
+    // সকেটে পাঠানো
+    socket.current.emit("sendMessage", { 
+      senderId: user.sub, 
+      receiverId, 
+      text: newMessage 
+    });
+
+    // টেস্ট চ্যাট হলে শুধু লোকাল স্টেটে আপডেট
     if (currentChat.isTest) {
-        setMessages([...messages, { ...messageObj, createdAt: Date.now() }]);
+        setMessages((prev) => [...prev, { ...messageObj, createdAt: Date.now() }]);
         setNewMessage("");
         return;
     }
 
-    socket.current.emit("sendMessage", { senderId: user.sub, receiverId, text: newMessage });
     try {
       const res = await axios.post(`${API_URL}/api/messages/message`, messageObj);
-      setMessages([...messages, res.data]);
+      setMessages((prev) => [...prev, res.data]);
       setNewMessage("");
-    } catch (err) { console.error(err); }
+    } catch (err) { console.error("Send Error:", err); }
   };
 
+  // অনলাইন চেক ফাংশন
   const isOnline = (members) => {
     const otherMemberId = members.find(m => m !== user?.sub);
     return onlineUsers.some((u) => u.userId === otherMemberId);
   };
 
-  useEffect(() => { scrollRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
+  // স্ক্রল অটোমেশন
+  useEffect(() => { 
+    scrollRef.current?.scrollIntoView({ behavior: "smooth" }); 
+  }, [messages]);
 
   return (
     <div className="flex h-[calc(100vh-100px)] bg-transparent text-white overflow-hidden font-sans gap-4 p-2">
@@ -138,7 +177,7 @@ const Messenger = () => {
         </div>
         
         <div className="flex-1 overflow-y-auto no-scrollbar px-3 space-y-6 pb-6">
-          {/* Active Conversations Section */}
+          {/* Active Conversations */}
           <div>
             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500 mb-3 ml-4">Active Channels</p>
             {conversations.map((c) => (
@@ -151,13 +190,15 @@ const Messenger = () => {
                 <img src={`https://i.pravatar.cc/150?u=${c._id}`} className="w-11 h-11 rounded-2xl object-cover" alt="" />
                 <div className="flex-1 min-w-0">
                   <h4 className="font-bold text-sm truncate uppercase italic text-white/90">User {c._id.slice(-4)}</h4>
-                  <p className="text-[10px] truncate text-gray-500">Connected...</p>
+                  <p className="text-[10px] truncate text-gray-500">
+                    {isOnline(c.members) ? "● Online" : "Connected..."}
+                  </p>
                 </div>
               </motion.div>
             ))}
           </div>
 
-          {/* Test People Section (এখানে আপনি ক্লিক করে চেক করতে পারবেন) */}
+          {/* Test People Section */}
           <div>
             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-cyan-400/60 mb-3 ml-4">Neural Contacts (Test)</p>
             {staticPeople.map((person) => (
