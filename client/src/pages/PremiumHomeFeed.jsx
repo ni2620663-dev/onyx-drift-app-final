@@ -7,10 +7,12 @@ import {
 import { HiMenuAlt3 } from 'react-icons/hi'; 
 import { useAuth0 } from "@auth0/auth0-react";
 import axios from "axios";
+import { useNavigate } from 'react-router-dom'; // Navigation এর জন্য যুক্ত করা হয়েছে
 import PostCard from "../components/PostCard"; 
 
 const PremiumHomeFeed = ({ searchQuery }) => {
   const { user, getAccessTokenSilently } = useAuth0();
+  const navigate = useNavigate(); // Navigation হুক
   const [postText, setPostText] = useState("");
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -22,6 +24,12 @@ const PremiumHomeFeed = ({ searchQuery }) => {
   const postFileInputRef = useRef(null);
 
   const API_URL = import.meta.env.VITE_API_URL || "http://localhost:10000";
+
+  // মেনু ক্লিক হ্যান্ডেলার
+  const handleMenuClick = (path) => {
+    navigate(path);
+    setIsSidebarOpen(false); // ক্লিক করলে ড্রয়ার বন্ধ হবে
+  };
 
   const fetchPosts = async () => {
     try {
@@ -163,7 +171,7 @@ const PremiumHomeFeed = ({ searchQuery }) => {
         )}
       </AnimatePresence>
 
-      {/* স্লাইড আউট সাইডবার (ডেস্কটপ আইটেমসহ) */}
+      {/* স্লাইড আউট সাইডবার (অ্যাকশনসহ) */}
       <aside className={`
         fixed top-0 left-0 h-full w-[290px] bg-[#020617] border-r border-white/10 z-[1001]
         transform transition-transform duration-300 ease-in-out flex flex-col
@@ -178,31 +186,46 @@ const PremiumHomeFeed = ({ searchQuery }) => {
         <div className="flex-1 overflow-y-auto p-4 space-y-2 no-scrollbar">
           <nav className="space-y-1">
             {/* FEED */}
-            <div className="flex items-center gap-4 p-4 bg-cyan-500/10 text-cyan-400 rounded-2xl border border-cyan-500/20 cursor-pointer">
+            <div 
+              onClick={() => handleMenuClick('/')}
+              className="flex items-center gap-4 p-4 bg-cyan-500/10 text-cyan-400 rounded-2xl border border-cyan-500/20 cursor-pointer active:scale-95 transition-all"
+            >
               <FaPlus size={14} />
               <span className="font-bold uppercase text-[11px] tracking-widest">Feed</span>
             </div>
 
             {/* ANALYTICS */}
-            <div className="flex items-center gap-4 p-4 text-gray-400 hover:bg-white/5 rounded-2xl transition-all cursor-pointer group">
+            <div 
+              onClick={() => handleMenuClick('/analytics')}
+              className="flex items-center gap-4 p-4 text-gray-400 hover:bg-white/5 rounded-2xl transition-all cursor-pointer active:scale-95 group"
+            >
               <FaMagic size={16} />
               <span className="font-bold uppercase text-[11px] tracking-widest">Analytics</span>
             </div>
 
             {/* MESSAGES */}
-            <div className="flex items-center gap-4 p-4 text-gray-400 hover:bg-white/5 rounded-2xl transition-all cursor-pointer group">
+            <div 
+              onClick={() => handleMenuClick('/messages')}
+              className="flex items-center gap-4 p-4 text-gray-400 hover:bg-white/5 rounded-2xl transition-all cursor-pointer active:scale-95 group"
+            >
               <FaPaperPlane size={16} />
               <span className="font-bold uppercase text-[11px] tracking-widest">Messages</span>
             </div>
 
             {/* EXPLORE */}
-            <div className="flex items-center gap-4 p-4 text-gray-400 hover:bg-white/5 rounded-2xl transition-all cursor-pointer group">
+            <div 
+              onClick={() => handleMenuClick('/explore')}
+              className="flex items-center gap-4 p-4 text-gray-400 hover:bg-white/5 rounded-2xl transition-all cursor-pointer active:scale-95 group"
+            >
               <FaImage size={16} />
               <span className="font-bold uppercase text-[11px] tracking-widest">Explore</span>
             </div>
 
             {/* SETTINGS */}
-            <div className="flex items-center gap-4 p-4 text-gray-400 hover:bg-white/5 rounded-2xl transition-all cursor-pointer group">
+            <div 
+              onClick={() => handleMenuClick('/settings')}
+              className="flex items-center gap-4 p-4 text-gray-400 hover:bg-white/5 rounded-2xl transition-all cursor-pointer active:scale-95 group"
+            >
               <FaEllipsisH size={16} />
               <span className="font-bold uppercase text-[11px] tracking-widest">Settings</span>
             </div>
@@ -213,7 +236,10 @@ const PremiumHomeFeed = ({ searchQuery }) => {
             <div className="relative z-10">
               <span className="text-[10px] font-black text-cyan-400 uppercase tracking-tighter">Onyx Pro</span>
               <p className="text-[11px] text-gray-400 mt-1 leading-relaxed">Level up your neural experience today.</p>
-              <button className="mt-4 w-full py-3 bg-white/5 border border-white/10 rounded-xl text-[9px] font-black uppercase tracking-widest">
+              <button 
+                onClick={() => handleMenuClick('/upgrade')}
+                className="mt-4 w-full py-3 bg-white/5 border border-white/10 rounded-xl text-[9px] font-black uppercase tracking-widest active:bg-cyan-500 active:text-black transition-all"
+              >
                 Upgrade System
               </button>
             </div>
