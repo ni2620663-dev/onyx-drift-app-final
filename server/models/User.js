@@ -2,14 +2,19 @@ import mongoose from "mongoose";
 
 const userSchema = new mongoose.Schema(
   {
+    // Auth0 থেকে আসা ইউনিক আইডি (sub)
+    auth0Id: { type: String, required: true, unique: true },
     name: { type: String, required: true, trim: true },
     email: { type: String, required: true, unique: true, lowercase: true },
-    password: { type: String, required: true, minlength: 6 },
     avatar: { type: String, default: "" },
+    bio: { type: String, default: "" },
+    location: { type: String, default: "" },
+    workplace: { type: String, default: "" },
+    isVerified: { type: Boolean, default: false },
     
     // --- Unique Security Features ---
-    ghostMode: { type: Boolean, default: false }, // সার্চে প্রোফাইল হাইড করবে
-    antiScreenshot: { type: Boolean, default: false }, // স্ক্রিনশট ব্লক সিগন্যাল
+    ghostMode: { type: Boolean, default: false },
+    antiScreenshot: { type: Boolean, default: false },
     neuralShieldActive: { type: Boolean, default: true },
     
     // ডিভাইস ট্র্যাকিং লজিক
@@ -22,8 +27,10 @@ const userSchema = new mongoose.Schema(
       }
     ],
 
-    friends: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
-    following: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+    // আইডিগুলো String হিসেবে সেভ হবে কারণ Auth0 আইডি ObjectId নয়
+    followers: [{ type: String }], 
+    following: [{ type: String }],
+    friends: [{ type: String }],
   },
   { timestamps: true }
 );
