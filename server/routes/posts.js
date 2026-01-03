@@ -16,13 +16,14 @@ router.get('/', async (req, res) => {
 });
 
 // --- ২. নির্দিষ্ট ইউজারের সব পোস্ট গেট করা (FIXES PROFILE 404 ERROR) ---
-// এই রাউটটিই আপনার প্রোফাইল পেজের এরর ঠিক করবে
+// এটি আপনার প্রোফাইল পেজের ৪MD৪ এররটি সমাধান করবে
 router.get('/user/:userId', auth, async (req, res) => {
   try {
-    // Auth0 ID (google-oauth2|...) দিয়ে ডাটাবেসে সার্চ করা হচ্ছে
+    // এখানে userId হলো Auth0 সাব আইডি (google-oauth2|...) 
+    // আমরা ডাটাবেসের 'author' ফিল্ডের সাথে এটি মেলাচ্ছি
     const posts = await Post.find({ author: req.params.userId }).sort({ createdAt: -1 });
     
-    // পোস্ট না থাকলে খালি অ্যারে পাঠাবে, 404 নয়
+    // যদি পোস্ট না থাকে তবে খালি অ্যারে পাঠাবে, এরর নয়
     res.json(posts || []); 
   } catch (err) {
     console.error('User Post Fetch Error:', err.message);
