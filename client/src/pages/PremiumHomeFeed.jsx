@@ -4,7 +4,7 @@ import {
   FaPlus, FaTimes, FaMusic, FaMagic,
   FaCloudUploadAlt, FaImage, FaVideo, FaRegSmile, FaEllipsisH, FaPaperPlane
 } from 'react-icons/fa';
-import { HiMenuAlt3 } from 'react-icons/hi'; // মেনু আইকন
+import { HiMenuAlt3 } from 'react-icons/hi'; 
 import { useAuth0 } from "@auth0/auth0-react";
 import axios from "axios";
 import PostCard from "../components/PostCard"; 
@@ -15,7 +15,6 @@ const PremiumHomeFeed = ({ searchQuery }) => {
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   
-  // মেনু ড্রয়ার স্টেট
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const [selectedPostMedia, setSelectedPostMedia] = useState(null);
@@ -140,7 +139,7 @@ const PremiumHomeFeed = ({ searchQuery }) => {
   return (
     <div className="w-full min-h-screen bg-transparent space-y-4 md:space-y-6 pb-24 overflow-x-hidden relative">
       
-      {/* মোবাইল ড্রয়ার বাটন (এটি টপ কর্নারে থাকবে) */}
+      {/* মোবাইল ড্রয়ার বাটন */}
       <div className="md:hidden flex justify-between items-center px-4 pt-4">
         <h1 className="text-xl font-black text-white italic tracking-tighter">ONYX<span className="text-cyan-400">DRIFT</span></h1>
         <button 
@@ -151,7 +150,7 @@ const PremiumHomeFeed = ({ searchQuery }) => {
         </button>
       </div>
 
-      {/* ড্রয়ার ওভারলে (মোবাইল) */}
+      {/* ড্রয়ার ওভারলে */}
       <AnimatePresence>
         {isSidebarOpen && (
           <motion.div 
@@ -164,28 +163,62 @@ const PremiumHomeFeed = ({ searchQuery }) => {
         )}
       </AnimatePresence>
 
-      {/* স্লাইড আউট সাইডবার (মোবাইল ড্রয়ার) */}
+      {/* স্লাইড আউট সাইডবার (ডেস্কটপ আইটেমসহ) */}
       <aside className={`
-        fixed top-0 left-0 h-full w-[280px] bg-[#020617] border-r border-white/10 z-[1001]
-        transform transition-transform duration-300 ease-in-out p-6
+        fixed top-0 left-0 h-full w-[290px] bg-[#020617] border-r border-white/10 z-[1001]
+        transform transition-transform duration-300 ease-in-out flex flex-col
         ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
         md:hidden
       `}>
-        <div className="flex justify-between items-center mb-10">
-          <span className="text-cyan-400 font-black tracking-widest text-xs">NEURAL MENU</span>
-          <button onClick={() => setIsSidebarOpen(false)} className="text-white/50"><FaTimes /></button>
+        <div className="flex justify-between items-center p-6 border-b border-white/5">
+          <span className="text-cyan-400 font-black tracking-widest text-[10px]">NEURAL MENU</span>
+          <button onClick={() => setIsSidebarOpen(false)} className="text-white/50"><FaTimes size={18} /></button>
         </div>
         
-        {/* আপনি আপনার অরিজিনাল মেনু আইটেমগুলো এখানে বসাবেন */}
-        <nav className="space-y-4 text-gray-400 font-bold uppercase text-[10px] tracking-widest">
-           <div className="flex items-center gap-4 p-4 bg-cyan-500/10 text-cyan-400 rounded-2xl border border-cyan-500/20 cursor-pointer">
-              <FaPaperPlane /> FEED
-           </div>
-           <div className="flex items-center gap-4 p-4 hover:bg-white/5 rounded-2xl cursor-pointer">
-              <FaMagic /> ANALYTICS
-           </div>
-           {/* ... বাকি মেনুগুলো এভাবে থাকবে */}
-        </nav>
+        <div className="flex-1 overflow-y-auto p-4 space-y-2 no-scrollbar">
+          <nav className="space-y-1">
+            {/* FEED */}
+            <div className="flex items-center gap-4 p-4 bg-cyan-500/10 text-cyan-400 rounded-2xl border border-cyan-500/20 cursor-pointer">
+              <FaPlus size={14} />
+              <span className="font-bold uppercase text-[11px] tracking-widest">Feed</span>
+            </div>
+
+            {/* ANALYTICS */}
+            <div className="flex items-center gap-4 p-4 text-gray-400 hover:bg-white/5 rounded-2xl transition-all cursor-pointer group">
+              <FaMagic size={16} />
+              <span className="font-bold uppercase text-[11px] tracking-widest">Analytics</span>
+            </div>
+
+            {/* MESSAGES */}
+            <div className="flex items-center gap-4 p-4 text-gray-400 hover:bg-white/5 rounded-2xl transition-all cursor-pointer group">
+              <FaPaperPlane size={16} />
+              <span className="font-bold uppercase text-[11px] tracking-widest">Messages</span>
+            </div>
+
+            {/* EXPLORE */}
+            <div className="flex items-center gap-4 p-4 text-gray-400 hover:bg-white/5 rounded-2xl transition-all cursor-pointer group">
+              <FaImage size={16} />
+              <span className="font-bold uppercase text-[11px] tracking-widest">Explore</span>
+            </div>
+
+            {/* SETTINGS */}
+            <div className="flex items-center gap-4 p-4 text-gray-400 hover:bg-white/5 rounded-2xl transition-all cursor-pointer group">
+              <FaEllipsisH size={16} />
+              <span className="font-bold uppercase text-[11px] tracking-widest">Settings</span>
+            </div>
+          </nav>
+
+          {/* ONYX PRO CARD */}
+          <div className="mt-8 p-5 bg-gradient-to-br from-cyan-500/20 to-purple-500/10 rounded-[2rem] border border-white/10 relative overflow-hidden group">
+            <div className="relative z-10">
+              <span className="text-[10px] font-black text-cyan-400 uppercase tracking-tighter">Onyx Pro</span>
+              <p className="text-[11px] text-gray-400 mt-1 leading-relaxed">Level up your neural experience today.</p>
+              <button className="mt-4 w-full py-3 bg-white/5 border border-white/10 rounded-xl text-[9px] font-black uppercase tracking-widest">
+                Upgrade System
+              </button>
+            </div>
+          </div>
+        </div>
       </aside>
 
       {/* স্টোরি সেকশন */}
@@ -273,7 +306,7 @@ const PremiumHomeFeed = ({ searchQuery }) => {
         )}
       </section>
 
-      {/* মোডালসমূহ - আগের মতোই */}
+      {/* মোডালসমূহ */}
       <AnimatePresence>
         {isModalOpen && (
           <div className="fixed inset-0 z-[1500] flex items-center justify-center bg-black/95 backdrop-blur-2xl p-4">
