@@ -11,7 +11,7 @@ import connectDB from "./config/db.js";
 // ২. রাউট ইমপোর্ট
 import profileRoutes from "./src/routes/profile.js"; 
 import postRoutes from "./routes/posts.js";
-import usersRoutes from './routes/users.js'; // নাম পরিবর্তন করে 'usersRoutes' করা হয়েছে
+import usersRoutes from './routes/users.js'; 
 import messageRoutes from "./routes/messages.js";   
 
 dotenv.config();
@@ -60,9 +60,11 @@ const io = new Server(server, {
 connectDB();
 
 // ৭. এপিআই এন্ডপয়েন্টস মাউন্টিং
+// গুরুত্বপূর্ণ: এখানে নিশ্চিত করা হয়েছে যে /api/user এবং /api/profile আলাদা কাজ করবে
 app.use("/api/profile", profileRoutes);
-app.use("/api/user", usersRoutes); // এখানে সঠিক রাউটটি মাউন্ট করা হয়েছে
+app.use("/api/user", usersRoutes); 
 app.use("/api/posts", postRoutes); 
+
 if (messageRoutes) {
     app.use("/api/messages", messageRoutes);
 }
