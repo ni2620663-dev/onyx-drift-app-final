@@ -11,7 +11,8 @@ import connectDB from "./config/db.js";
 // ২. রাউট ইমপোর্ট (আপনার স্ক্রিনশট অনুযায়ী পাথ ফিক্স করা হয়েছে)
 import profileRoutes from "./src/routes/profile.js"; 
 import userRoutes from "./routes/userRoutes.js";     
-import postRoutes from "./routes/posts.js";         
+import postRoutes from "./routes/posts.js";
+ import userRoutes from './routes/users.js';        
 import messageRoutes from "./routes/messages.js";   
 
 dotenv.config();

@@ -4,13 +4,18 @@ import User from '../models/User.js';
 
 const router = express.Router();
 
-// --- ১. প্রোফাইল আপডেট বা তৈরি করা (Fixes 404 update-profile) ---
+/**
+ * @route   PUT /api/user/update-profile
+ * @desc    Update user profile data or avatar
+ * @access  Private
+ */
 router.put("/update-profile", auth, async (req, res) => {
   try {
     const { name, avatar, bio, workplace, location, email } = req.body;
 
+    // auth middleware থেকে পাওয়া req.user.id (Auth0 sub) ব্যবহার করে আপডেট করা
     const updatedUser = await User.findOneAndUpdate(
-      { auth0Id: req.user.id }, // auth middleware থেকে আসা id
+      { auth0Id: req.user.id }, 
       { 
         $set: { 
           name, 
@@ -21,71 +26,26 @@ router.put("/update-profile", auth, async (req, res) => {
           email 
         } 
       },
-      { new: true, upsert: true } // ইউজার না থাকলে তৈরি করবে
+      { new: true, upsert: true } // ইউজার ডাটাবেসে না থাকলে নতুন তৈরি করবে
     );
 
     res.json(updatedUser);
   } catch (err) {
-    console.error("Profile Update Error:", err.message);
-    res.status(500).send("Server Error");
+    console.error("❌ Profile Update Error:", err.message);
+    res.status(500).json({ msg: 'Server Error', error: err.message });
   }
 });
 
-// --- ২. ইউজার আইডি দিয়ে প্রোফাইল গেট করা ---
+/**
+ * @route   GET /api/user/:id
+ * @desc    Get user profile by Auth0 ID
+ * @access  Private
+ */
 router.get('/:id', auth, async (req, res) => {
   try {
-    // এখানে id বলতে Auth0 sub আইডি বোঝানো হচ্ছে
     const user = await User.findOne({ auth0Id: req.params.id });
-    
     if (!user) return res.status(404).json({ msg: 'User not found' });
     res.json(user);
-  } catch (err) {
-    console.error('Fetch Profile Error:', err.message);
-    res.status(500).send('Server error');
-  }
-});
-
-// --- ৩. ফলো ইউজার ---
-router.post('/:id/follow', auth, async (req, res) => {
-  try {
-    if (req.user.id === req.params.id) return res.status(400).json({ msg: "Can't follow yourself" });
-
-    const me = await User.findOne({ auth0Id: req.user.id });
-    const other = await User.findOne({ auth0Id: req.params.id });
-
-    if (!other || !me) return res.status(404).json({ msg: 'User not found' });
-
-    if (other.followers.includes(req.user.id)) {
-      return res.status(400).json({ msg: 'Already following' });
-    }
-
-    other.followers.push(req.user.id);
-    me.following.push(req.params.id);
-
-    await other.save();
-    await me.save();
-    
-    res.json({ msg: 'Followed', followersCount: other.followers.length });
-  } catch (err) {
-    res.status(500).send('Server error');
-  }
-});
-
-// --- ৪. আনফলো ইউজার ---
-router.post('/:id/unfollow', auth, async (req, res) => {
-  try {
-    const me = await User.findOne({ auth0Id: req.user.id });
-    const other = await User.findOne({ auth0Id: req.params.id });
-
-    if (!other || !me) return res.status(404).json({ msg: 'User not found' });
-
-    other.followers = other.followers.filter(id => id !== req.user.id);
-    me.following = me.following.filter(id => id !== req.params.id);
-
-    await other.save();
-    await me.save();
-    
-    res.json({ msg: 'Unfollowed' });
   } catch (err) {
     res.status(500).send('Server error');
   }
