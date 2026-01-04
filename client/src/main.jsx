@@ -18,6 +18,8 @@ ReactDOM.createRoot(document.getElementById("root")).render(
       authorizationParams={{
         redirect_uri: window.location.origin,
         audience: API_AUDIENCE,
+        // নিচে এই স্কোপ লাইনটি অবশ্যই যোগ করুন
+        scope: "openid profile email offline_access"
       }}
       useRefreshTokens={true}
       cacheLocation="localstorage"

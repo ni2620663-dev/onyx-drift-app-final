@@ -36,6 +36,8 @@ const userSchema = new mongoose.Schema(
     followers: [{ type: String }], 
     following: [{ type: String }],
     friends: [{ type: String }],
+    // এটি যোগ করা হলো যাতে রিকোয়েস্টগুলো সেভ হতে পারে (আপনার রাউট অনুযায়ী)
+    pendingRequests: [{ type: String }], 
   },
   { timestamps: true }
 );

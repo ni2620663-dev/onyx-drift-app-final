@@ -11,19 +11,19 @@ const Navbar = ({ user, setSearchQuery }) => {
   const [showNotifications, setShowNotifications] = useState(false);
   const [localSearch, setLocalSearch] = useState("");
   const [showResults, setShowResults] = useState(false);
-  const [searchResults, setSearchResults] = useState([]); // ব্যাকেন্ড থেকে আসা ডাটা থাকবে এখানে
+  const [searchResults, setSearchResults] = useState([]); // ব্যাকেন্ড থেকে আসা ডাটা
   const [loading, setLoading] = useState(false);
 
   const API_URL = import.meta.env.VITE_API_URL || "http://localhost:10000";
 
-  // ব্যাকেন্ড থেকে ইউজার সার্চ করার ফাংশন
+  // ব্যাকেন্ড থেকে ইউজার সার্চ করার ফাংশন (Debounced Search)
   useEffect(() => {
     const delayDebounceFn = setTimeout(async () => {
       if (localSearch.length > 0) {
         setLoading(true);
         try {
           const token = await getAccessTokenSilently();
-          // আপনার ব্যাকেন্ডে এই রাউটটি থাকতে হবে: /api/user/search?query=...
+          // API Call to database
           const res = await axios.get(`${API_URL}/api/user/search?query=${localSearch}`, {
             headers: { Authorization: `Bearer ${token}` }
           });
@@ -38,10 +38,10 @@ const Navbar = ({ user, setSearchQuery }) => {
         setSearchResults([]);
         setShowResults(false);
       }
-    }, 300); // ৩০০০ মিলি-সেকেন্ড বিরতি যেন প্রতি টাইপে রিকোয়েস্ট না যায়
+    }, 300); // ৩০০ মিলি-সেকেন্ড বিরতি
 
     return () => clearTimeout(delayDebounceFn);
-  }, [localSearch]);
+  }, [localSearch, getAccessTokenSilently, API_URL]);
 
   const handleSearchChange = (e) => {
     const value = e.target.value;
@@ -186,7 +186,8 @@ const Navbar = ({ user, setSearchQuery }) => {
           </div>
         </motion.div>
       </div>
-      {/* ক্লিক করলে যেন সার্চ রেজাল্ট চলে যায় */}
+      
+      {/* ড্রপডাউন বন্ধ করার জন্য ব্যাকড্রপ */}
       {showResults && <div className="fixed inset-0 z-[250]" onClick={() => setShowResults(false)}></div>}
     </nav>
   );
