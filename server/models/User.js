@@ -7,7 +7,7 @@ const userSchema = new mongoose.Schema(
     
     name: { type: String, required: true, trim: true },
     
-    // sparse: true যোগ করা হয়েছে যাতে ইমেইল না থাকলে (null হলে) ডুপ্লিকেট এরর না দেয়
+    // sparse: true যোগ করা হয়েছে যাতে ইমেইল না থাকলে (null হলে) ডুপ্লিকেট এরর না দেয়
     email: { 
       type: String, 
       unique: true, 
