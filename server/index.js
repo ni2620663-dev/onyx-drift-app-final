@@ -3,7 +3,7 @@ import http from "http";
 import { Server } from "socket.io";
 import cors from "cors";
 import dotenv from "dotenv";
-import mongoose from "mongoose"; // mongoose ইমপোর্ট করা হয়েছে
+import mongoose from "mongoose"; 
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 // ১. ডাটাবেস কনফিগারেশন
@@ -57,19 +57,19 @@ const io = new Server(server, {
   transports: ['websocket', 'polling']
 });
 
-// ৬. ডাটাবেস কানেকশন এবং ইনডেক্স ফিক্সিং
+// ৬. ডাটাবেস কানেকশন
 connectDB();
 
-// এই অংশটি আপনার ডুপ্লিকেট ইমেইল এরর (500 Error) সমাধান করবে
+// ডাটাবেস কানেক্ট হওয়ার পর ডুপ্লিকেট ইনডেক্স ডিলিট করার লজিক
 mongoose.connection.once('open', async () => {
   try {
-    // এটি অটোমেটিক 'email_1' ইনডেক্সটি ডিলিট করে দিবে
     const adminDb = mongoose.connection.db;
+    // এটি 'email_1' নামক পুরোনো ইনডেক্সটি ডিলিট করবে যা ৫০০ এরর দিচ্ছিল
     await adminDb.collection('users').dropIndex('email_1');
     console.log('✅ System: Old email index dropped successfully!');
   } catch (err) {
-    // যদি ইনডেক্স আগে থেকেই ডিলিট করা থাকে তবে কোনো এরর দিবে না
-    console.log('ℹ️ System: Email index clean or sparse mode active.');
+    // যদি ইনডেক্স না থাকে বা আগে থেকেই ডিলিট করা থাকে
+    console.log('ℹ️ System: Database is clean and ready.');
   }
 });
 
