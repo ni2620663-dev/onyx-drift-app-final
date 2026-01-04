@@ -1,10 +1,32 @@
 import express from 'express';
 import auth from '../middleware/auth.js'; 
 import Post from '../models/Post.js';
+import multer from 'multer';
+import { v2 as cloudinary } from 'cloudinary';
+import { CloudinaryStorage } from 'multer-storage-cloudinary';
 
 const router = express.Router();
 
-// --- ১. সব পোস্ট গেট করা (Global Feed) ---
+// ১. Cloudinary কনফিগারেশন (ভিডিও এবং ফটোর জন্য auto রিসোর্স টাইপ সেট করা হয়েছে)
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
+});
+
+// ২. Multer Storage সেটআপ (ফটো, ভিডিও এবং রিলস সাপোর্ট করার জন্য)
+const storage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'onyx_drift_posts',
+    resource_type: "auto", // এটি ফটো এবং ভিডিও উভয়ই গ্রহণ করবে
+    allowed_formats: ['jpg', 'png', 'jpeg', 'gif', 'mp4', 'mov', 'webm']
+  }
+});
+
+const upload = multer({ storage: storage });
+
+// --- ৩. সব পোস্ট গেট করা (Global Feed) ---
 router.get('/', async (req, res) => {
   try {
     const posts = await Post.find().sort({ createdAt: -1 });
@@ -15,15 +37,10 @@ router.get('/', async (req, res) => {
   }
 });
 
-// --- ২. নির্দিষ্ট ইউজারের সব পোস্ট গেট করা (FIXES PROFILE 404 ERROR) ---
-// এটি আপনার প্রোফাইল পেজের ৪MD৪ এররটি সমাধান করবে
+// --- ৪. নির্দিষ্ট ইউজারের সব পোস্ট গেট করা ---
 router.get('/user/:userId', auth, async (req, res) => {
   try {
-    // এখানে userId হলো Auth0 সাব আইডি (google-oauth2|...) 
-    // আমরা ডাটাবেসের 'author' ফিল্ডের সাথে এটি মেলাচ্ছি
     const posts = await Post.find({ author: req.params.userId }).sort({ createdAt: -1 });
-    
-    // যদি পোস্ট না থাকে তবে খালি অ্যারে পাঠাবে, এরর নয়
     res.json(posts || []); 
   } catch (err) {
     console.error('User Post Fetch Error:', err.message);
@@ -31,18 +48,19 @@ router.get('/user/:userId', auth, async (req, res) => {
   }
 });
 
-// --- ৩. নতুন পোস্ট তৈরি করা ---
-router.post('/create', auth, async (req, res) => {
+// --- ৫. নতুন পোস্ট তৈরি করা (ফটো, ভিডিও এবং রিলস আপলোড সাপোর্টসহ) ---
+// এখানে 'media' ফিল্ডে ফাইল রিসিভ করা হবে
+router.post('/create', auth, upload.single('media'), async (req, res) => {
   try {
-    const { text, media, mediaType, authorName, authorAvatar } = req.body;
+    const { text, mediaType, authorName, authorAvatar } = req.body;
 
     const newPost = new Post({
       text,
-      media,
-      mediaType: mediaType || 'text',
+      media: req.file ? req.file.path : null, // Cloudinary থেকে আসা ফাইল লিঙ্ক
+      mediaType: mediaType || (req.file ? (req.file.mimetype.includes('video') ? 'video' : 'image') : 'text'),
       authorName,
       authorAvatar,
-      author: req.user.id, // Auth0 থেকে আসা ইউনিক আইডি
+      author: req.user.id, 
       likes: [],
       comments: []
     });
@@ -55,13 +73,12 @@ router.post('/create', auth, async (req, res) => {
   }
 });
 
-// --- ৪. পোস্ট আপডেট/এডিট করা ---
+// --- ৬. পোস্ট আপডেট/এডিট করা ---
 router.put('/:id', auth, async (req, res) => {
   try {
     let post = await Post.findById(req.params.id);
     if (!post) return res.status(404).json({ msg: 'Post not found' });
 
-    // Ownership Check
     if (post.author !== req.user.id) {
       return res.status(403).json({ msg: 'Unauthorized to edit this post' });
     }
@@ -82,13 +99,12 @@ router.put('/:id', auth, async (req, res) => {
   }
 });
 
-// --- ৫. পোস্ট ডিলিট করা ---
+// --- ৭. পোস্ট ডিলিট করা ---
 router.delete('/:id', auth, async (req, res) => {
   try {
     const post = await Post.findById(req.params.id);
     if (!post) return res.status(404).json({ msg: 'Post not found' });
 
-    // Ownership Check
     if (post.author !== req.user.id) {
       return res.status(403).json({ msg: 'Unauthorized to delete this post' });
     }
@@ -100,7 +116,7 @@ router.delete('/:id', auth, async (req, res) => {
   }
 });
 
-// --- ৬. লাইক বা আনলাইক করা ---
+// --- ৮. লাইক বা আনলাইক করা ---
 router.put('/:id/like', auth, async (req, res) => {
   try {
     const post = await Post.findById(req.params.id);
