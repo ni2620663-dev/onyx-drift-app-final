@@ -24,7 +24,7 @@ const Profile = () => {
   // Search & User List States
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState([]);
-  const [suggestedUsers, setSuggestedUsers] = useState([]); // Sidebar এর জন্য
+  const [suggestedUsers, setSuggestedUsers] = useState([]);
 
   // Friend Request States
   const [isFriendRequestSent, setIsFriendRequestSent] = useState(false);
@@ -41,10 +41,11 @@ const Profile = () => {
   const [postType, setPostType] = useState("photo"); 
   const [isTransmitting, setIsTransmitting] = useState(false);
 
-  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:10000";
+  // API URL logic (Ensure it points to your Render backend)
+  const API_URL = import.meta.env.VITE_API_URL || "https://onyx-drift-api-server.onrender.com";
   const fileInputRef = useRef(null);
 
-  // প্রোফাইল এডিটের স্টেটস
+  // Profile Edit States
   const [editData, setEditData] = useState({ nickname: "", bio: "", location: "" });
   const [avatarFile, setAvatarFile] = useState(null);
   const [coverFile, setCoverFile] = useState(null);
@@ -76,14 +77,13 @@ const Profile = () => {
       });
       setUserPosts(postsRes.data);
 
-      // Sidebar এর জন্য কিছু ইউজার ডাটা ফেচ করা (Sample)
       const usersRes = await axios.get(`${API_URL}/api/user/all`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setSuggestedUsers(usersRes.data.slice(0, 5));
 
     } catch (err) {
-      console.error("Neural Fetch Error:", err);
+      console.error("Neural Fetch Error:", err.response?.data || err.message);
     } finally {
       setLoading(false);
     }
@@ -93,7 +93,6 @@ const Profile = () => {
     if (currentUser || userId) fetchProfileData();
   }, [userId, currentUser]);
 
-  // সার্চ লজিক
   const handleSearch = async (e) => {
     const query = e.target.value;
     setSearchQuery(query);
@@ -110,7 +109,6 @@ const Profile = () => {
     }
   };
 
-  // ফ্রেন্ড রিকোয়েস্ট লজিক
   const handleAddFriend = async (targetUserId) => {
     setIsProcessingFriend(true);
     try {
@@ -127,6 +125,7 @@ const Profile = () => {
     }
   };
 
+  // সংশোধিত Identity Update লজিক (৫০০ এরর সমাধান)
   const handleUpdateIdentity = async () => {
     setIsUpdating(true);
     try {
@@ -135,6 +134,7 @@ const Profile = () => {
       formData.append("nickname", editData.nickname);
       formData.append("bio", editData.bio);
       formData.append("location", editData.location);
+      formData.append("email", currentUser.email); // User identity রক্ষার জন্য ইমেইল জরুরি
       
       if (avatarFile) formData.append("avatar", avatarFile);
       if (coverFile) formData.append("cover", coverFile);
@@ -150,8 +150,8 @@ const Profile = () => {
       setIsEditOpen(false);
       fetchProfileData(); 
     } catch (err) {
-      console.error(err);
-      alert("Sync Failed!");
+      console.error("Update Fail:", err.response?.data || err.message);
+      alert("Sync Failed! Check console for neural interferences.");
     } finally {
       setIsUpdating(false);
     }
@@ -205,7 +205,7 @@ const Profile = () => {
   return (
     <div className={`w-full min-h-screen transition-all duration-700 ${isGhostMode ? 'bg-black' : 'bg-[#020617]'} text-gray-200 overflow-x-hidden flex flex-col`}>
       
-      {/* ১. টপ সার্চ বার (স্ক্রিনশট অনুযায়ী) */}
+      {/* ১. টপ সার্চ বার */}
       <div className="w-full py-4 px-6 border-b border-white/5 sticky top-0 z-[60] bg-[#020617]/80 backdrop-blur-xl">
         <div className="max-w-[1400px] mx-auto flex items-center justify-center relative">
           <div className="relative w-full max-w-xl">
@@ -217,7 +217,6 @@ const Profile = () => {
               value={searchQuery}
               onChange={handleSearch}
             />
-            {/* সার্চ রেজাল্ট ড্রপডাউন */}
             <AnimatePresence>
               {searchResults.length > 0 && (
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="absolute top-full left-0 right-0 mt-2 bg-[#0f172a] border border-white/10 rounded-2xl shadow-2xl p-2 max-h-80 overflow-y-auto">
@@ -239,7 +238,7 @@ const Profile = () => {
 
       <div className="flex flex-row max-w-[1400px] mx-auto w-full">
         
-        {/* ২. বাম পাশের সাইডবার (স্ক্রিনশট অনুযায়ী) */}
+        {/* ২. বাম পাশের সাইডবার */}
         <aside className="hidden lg:block w-72 p-6 sticky top-20 h-[calc(100vh-80px)] overflow-y-auto border-r border-white/5">
           <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500 mb-6">Neural Connects</h3>
           <div className="space-y-6">
@@ -258,9 +257,8 @@ const Profile = () => {
           </div>
         </aside>
 
-        {/* ৩. প্রোফাইল কন্টেন্ট (মূল কোড) */}
+        {/* ৩. প্রোফাইল কন্টেন্ট */}
         <main className="flex-1 pb-20">
-          {/* ব্যানার সেকশন */}
           <div className="relative h-48 md:h-72 w-full overflow-hidden">
             <img 
               src={userProfile?.coverImg || "https://images.unsplash.com/photo-1614850523296-d8c1af93d400?q=80&w=1000"} 
