@@ -51,7 +51,6 @@ const Profile = () => {
   const fetchProfileData = async () => {
     try {
       const token = await getAccessTokenSilently();
-      // FIX: URL Safe ID encoding (এটি 404 এরর ফিক্স করবে)
       const rawId = userId || currentUser?.sub;
       const targetId = encodeURIComponent(rawId); 
       
@@ -84,6 +83,7 @@ const Profile = () => {
       formData.append("bio", editData.bio);
       formData.append("location", editData.location);
       
+      // ব্যাকএন্ডের সাথে ফিল্ড নেম মিলানো হলো
       if (avatarFile) formData.append("avatar", avatarFile);
       if (coverFile) formData.append("cover", coverFile);
 
@@ -112,8 +112,12 @@ const Profile = () => {
       const token = await getAccessTokenSilently();
       const formData = new FormData();
       formData.append("text", content);
-      formData.append("type", postType);
-      if (file) formData.append("file", file);
+      
+      // FIX: 'type' এর বদলে ব্যাকএন্ডের 'mediaType' পাঠানো হচ্ছে
+      formData.append("mediaType", postType); 
+      
+      // FIX: 'file' এর বদলে ব্যাকএন্ডের প্রত্যাশিত 'media' ফিল্ড ব্যবহার করা হলো
+      if (file) formData.append("media", file);
 
       const res = await axios.post(`${API_URL}/api/posts/create`, formData, {
         headers: {
@@ -128,7 +132,7 @@ const Profile = () => {
       setFile(null);
       alert("Echo Transmitted!");
     } catch (err) {
-      console.error(err);
+      console.error("Transmission Error:", err);
       alert("Transmission Interrupted!");
     } finally {
       setIsTransmitting(false);
@@ -137,7 +141,9 @@ const Profile = () => {
 
   const handleFileSelect = (type) => {
     setPostType(type);
-    fileInputRef.current.click();
+    setTimeout(() => {
+      fileInputRef.current.click();
+    }, 100);
   };
 
   if (loading) return (
@@ -239,7 +245,6 @@ const Profile = () => {
 
       {/* --- MODALS --- */}
       <AnimatePresence>
-        {/* EDIT PROFILE MODAL */}
         {isEditOpen && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/95 backdrop-blur-2xl">
             <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} className="bg-[#0f172a] w-full max-w-lg rounded-[3rem] border border-white/10 p-8 shadow-2xl overflow-y-auto max-h-[90vh] no-scrollbar">
@@ -295,7 +300,6 @@ const Profile = () => {
           </motion.div>
         )}
 
-        {/* CREATE POST MODAL */}
         {isCreateOpen && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-xl">
             <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} className="bg-[#0f172a] w-full max-w-lg rounded-[3rem] border border-white/10 p-8 shadow-2xl">
@@ -311,7 +315,13 @@ const Profile = () => {
                 onChange={(e) => setContent(e.target.value)}
               />
 
-              <input type="file" ref={fileInputRef} className="hidden" onChange={(e) => setFile(e.target.files[0])} accept={postType === 'photo' ? 'image/*' : 'video/*'} />
+              <input 
+                type="file" 
+                ref={fileInputRef} 
+                className="hidden" 
+                onChange={(e) => setFile(e.target.files[0])} 
+                accept={postType === 'photo' ? 'image/*' : 'video/*'} 
+              />
 
               <div className="grid grid-cols-3 gap-3 mb-8">
                 <button onClick={() => handleFileSelect('photo')} className={`flex flex-col items-center gap-2 p-4 bg-white/5 rounded-2xl border transition-all ${file && postType === 'photo' ? 'border-cyan-400 bg-cyan-400/10' : 'border-white/5 hover:border-cyan-400'}`}>
