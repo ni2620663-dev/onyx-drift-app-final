@@ -20,13 +20,13 @@ const PremiumHomeFeed = ({ searchQuery }) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const [selectedPostMedia, setSelectedPostMedia] = useState(null);
+  const [mediaFile, setMediaFile] = useState(null); // বাইনারি ফাইল রাখার জন্য
   const [mediaType, setMediaType] = useState(null); 
   const postFileInputRef = useRef(null);
 
-  // আপনার রেন্ডার সার্ভারের লিঙ্ক
-  const API_URL = "https://onyx-drift-app-final.onrender.com";
+  // ফিক্সড এপিআই ইউআরএল (আপনার স্ক্রিনশট অনুযায়ী সঠিক ব্যাকএন্ড ডোমেইন)
+  const API_URL = "https://onyx-drift-api-server.onrender.com";
 
-  // মেনু ক্লিক হ্যান্ডেলার
   const handleMenuClick = (path) => {
     navigate(path);
     setIsSidebarOpen(false); 
@@ -35,7 +35,7 @@ const PremiumHomeFeed = ({ searchQuery }) => {
   const fetchPosts = async () => {
     try {
       setLoading(true);
-      // ক্যাশ-বাস্টিং কুয়েরি সহ ডাটা ফেচ
+      // সঠিক এন্ডপয়েন্ট: /api/posts
       const response = await axios.get(`${API_URL}/api/posts?t=${Date.now()}`);
       setPosts(response.data);
     } catch (err) {
@@ -89,6 +89,7 @@ const PremiumHomeFeed = ({ searchQuery }) => {
   const handlePostMediaChange = (e) => {
     const file = e.target.files[0];
     if (file) {
+      setMediaFile(file); // অরিজিনাল ফাইলটি সেভ করুন
       const reader = new FileReader();
       reader.onloadend = () => {
         setSelectedPostMedia(reader.result);
@@ -99,26 +100,36 @@ const PremiumHomeFeed = ({ searchQuery }) => {
   };
 
   const handlePostSubmit = async () => {
-    if (!postText.trim() && !selectedPostMedia) return;
+    if (!postText.trim() && !mediaFile) return;
     try {
       const token = await getAccessTokenSilently();
-      const newPost = {
-        text: postText,
-        media: selectedPostMedia,
-        mediaType: mediaType || 'text',
-        authorName: user.name,
-        authorAvatar: user.picture,
-        authorId: user.sub
-      };
-      await axios.post(`${API_URL}/api/posts`, newPost, {
-        headers: { Authorization: `Bearer ${token}` }
+      
+      // FormData ব্যবহার করলে ফাইল আপলোড এরর কম হয়
+      const formData = new FormData();
+      formData.append("text", postText);
+      formData.append("authorName", user?.name || user?.nickname);
+      formData.append("authorAvatar", user?.picture);
+      formData.append("authorId", user?.sub);
+      formData.append("mediaType", mediaType || 'text');
+      
+      if (mediaFile) {
+        formData.append("media", mediaFile);
+      }
+
+      await axios.post(`${API_URL}/api/posts/create`, formData, {
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "multipart/form-data"
+        }
       });
+
       setPostText("");
       setSelectedPostMedia(null);
+      setMediaFile(null);
       setMediaType(null);
       fetchPosts();
     } catch (err) {
-      console.error("Post Error:", err);
+      console.error("Post Error:", err.response?.data || err);
       alert("Something went wrong while posting. Check console for details.");
     }
   };
@@ -285,7 +296,7 @@ const PremiumHomeFeed = ({ searchQuery }) => {
               {selectedPostMedia && (
                 <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} 
                   className="mt-3 relative rounded-xl overflow-hidden border border-white/10 aspect-video w-full max-w-sm bg-black">
-                  <button onClick={() => setSelectedPostMedia(null)} className="absolute top-2 right-2 z-10 p-2 bg-black/60 rounded-full text-white"><FaTimes size={10}/></button>
+                  <button onClick={() => {setSelectedPostMedia(null); setMediaFile(null);}} className="absolute top-2 right-2 z-10 p-2 bg-black/60 rounded-full text-white"><FaTimes size={10}/></button>
                   {mediaType === 'video' ? <video src={selectedPostMedia} className="w-full h-full object-cover" controls /> : <img src={selectedPostMedia} className="w-full h-full object-cover" alt="" />}
                 </motion.div>
               )}
@@ -302,7 +313,7 @@ const PremiumHomeFeed = ({ searchQuery }) => {
           </div>
 
           <button 
-            disabled={!postText.trim() && !selectedPostMedia}
+            disabled={!postText.trim() && !mediaFile}
             onClick={handlePostSubmit}
             className="w-full sm:w-auto bg-cyan-500 text-black text-[10px] font-black uppercase px-6 py-2 rounded-xl shadow-lg active:scale-95 disabled:opacity-30 flex items-center justify-center gap-2"
           >
