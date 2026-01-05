@@ -7,7 +7,6 @@ import {
 import { useAuth0 } from "@auth0/auth0-react";
 import axios from "axios";
 
-// এখানে onDelete প্রোপ্রপার্টি যোগ করা হয়েছে
 const PostCard = ({ post, onAction, onDelete }) => {
   const { user, getAccessTokenSilently } = useAuth0();
   const [isLiking, setIsLiking] = useState(false);
@@ -19,7 +18,9 @@ const PostCard = ({ post, onAction, onDelete }) => {
 
   if (!post) return null;
 
-  const API_URL = import.meta.env.VITE_API_URL || "https://onyx-drift-app-final.onrender.com";
+  // FIX: API URL অবশ্যই প্রোফাইল ফাইলের সাথে মিল থাকতে হবে
+  const API_URL = import.meta.env.VITE_API_URL || "https://onyx-drift-api-server.onrender.com";
+  
   const likesArray = Array.isArray(post.likes) ? post.likes : [];
   const isLiked = likesArray.includes(user?.sub);
 
@@ -35,15 +36,21 @@ const PostCard = ({ post, onAction, onDelete }) => {
     e.stopPropagation();
     if (!user) return alert("Please login to like");
     if (isLiking) return;
+    
     try {
       setIsLiking(true);
       const token = await getAccessTokenSilently();
+      
+      // লাইক রিকোয়েস্ট
       await axios.put(`${API_URL}/api/posts/${post._id}/like`, {}, {
         headers: { Authorization: `Bearer ${token}` }
       });
+      
+      // ডাটা রিফ্রেশ করা
       if (onAction) onAction();
     } catch (err) { 
-      console.error("Like Error:", err); 
+      console.error("Like Error:", err.response?.data || err.message);
+      // যদি ৪-০-৪ আসে, তবে বুঝতে হবে ব্যাকএন্ডে এই রাউটটি নেই
     } finally { 
       setIsLiking(false); 
     }
@@ -117,10 +124,14 @@ const PostCard = ({ post, onAction, onDelete }) => {
           </div>
         </div>
 
-        {/* ডিলিট লজিক: শুধুমাত্র নিজের পোস্ট হলে বাটনটি দেখা যাবে */}
         {user?.sub === post.authorId && (
           <button 
-            onClick={onDelete} 
+            onClick={(e) => {
+              e.stopPropagation();
+              if(window.confirm("Are you sure you want to delete this signal?")) {
+                onDelete(post._id);
+              }
+            }} 
             className="p-2 text-gray-600 hover:text-rose-500 hover:bg-rose-500/10 rounded-full transition-all"
             title="Delete Signal"
           >
@@ -141,7 +152,11 @@ const PostCard = ({ post, onAction, onDelete }) => {
 
       <div className="px-8 py-5 flex items-center justify-between border-t border-white/5 bg-white/[0.01]">
         <div className="flex items-center gap-8">
-          <button onClick={handleLike} className={`flex items-center gap-2 group ${isLiked ? "text-rose-500" : "text-gray-500"}`}>
+          <button 
+            onClick={handleLike} 
+            disabled={isLiking}
+            className={`flex items-center gap-2 group transition-all ${isLiked ? "text-rose-500" : "text-gray-500 hover:text-rose-400"}`}
+          >
             <motion.div whileTap={{ scale: 0.8 }}>
               {isLiked ? <FaHeart size={18} className="drop-shadow-[0_0_10px_rgba(244,63,94,0.4)]" /> : <FaRegHeart size={18} />}
             </motion.div>
@@ -158,8 +173,13 @@ const PostCard = ({ post, onAction, onDelete }) => {
 
       <AnimatePresence>
         {showComments && (
-          <motion.div initial={{ height: 0 }} animate={{ height: "auto" }} exit={{ height: 0 }} className="px-6 pb-6 overflow-hidden bg-black/20">
-            <div className="space-y-4 pt-4">
+          <motion.div 
+            initial={{ height: 0, opacity: 0 }} 
+            animate={{ height: "auto", opacity: 1 }} 
+            exit={{ height: 0, opacity: 0 }} 
+            className="px-6 pb-6 overflow-hidden bg-black/20"
+          >
+            <div className="space-y-4 pt-4 border-t border-white/5">
               <div className="flex gap-2 bg-white/5 p-3 rounded-2xl border border-white/10">
                 <input 
                   type="text" 
@@ -168,7 +188,9 @@ const PostCard = ({ post, onAction, onDelete }) => {
                   value={commentText}
                   onChange={(e) => setCommentText(e.target.value)}
                 />
-                <button className="text-cyan-400 p-2 hover:scale-110 transition-transform"><FaPaperPlane size={14}/></button>
+                <button className="text-cyan-400 p-2 hover:scale-110 transition-transform">
+                  <FaPaperPlane size={14}/>
+                </button>
               </div>
             </div>
           </motion.div>

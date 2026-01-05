@@ -15,37 +15,30 @@ const Profile = () => {
   const navigate = useNavigate();
   const { user: currentUser, getAccessTokenSilently } = useAuth0();
   
-  // States
   const [userProfile, setUserProfile] = useState(null);
   const [userPosts, setUserPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("Echoes");
   
-  // Search & User List States
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState([]);
   const [suggestedUsers, setSuggestedUsers] = useState([]);
 
-  // Friend Request States
   const [isFriendRequestSent, setIsFriendRequestSent] = useState(false);
   const [isProcessingFriend, setIsProcessingFriend] = useState(false);
   
-  // Ghost Mode logic
   const isGhostMode = userProfile?.isGhostMode || false;
   
-  // Post & Edit States
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [file, setFile] = useState(null);
   const [content, setContent] = useState("");
-  const [postType, setPostType] = useState("photo"); 
+  const [postType, setPostType] = useState("image"); 
   const [isTransmitting, setIsTransmitting] = useState(false);
 
-  // API URL logic
   const API_URL = import.meta.env.VITE_API_URL || "https://onyx-drift-api-server.onrender.com";
   const fileInputRef = useRef(null);
 
-  // Profile Edit States
   const [editData, setEditData] = useState({ nickname: "", bio: "", location: "" });
   const [avatarFile, setAvatarFile] = useState(null);
   const [coverFile, setCoverFile] = useState(null);
@@ -60,6 +53,22 @@ const Profile = () => {
       });
     }
   }, [userProfile]);
+
+  // --- DELETE POST FUNCTION ADDED ---
+  const handleDeletePost = async (postId) => {
+    if (!window.confirm("Are you sure you want to terminate this neural echo?")) return;
+    try {
+      const token = await getAccessTokenSilently();
+      await axios.delete(`${API_URL}/api/posts/${postId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      // Update UI after delete
+      setUserPosts(prev => prev.filter(p => p._id !== postId));
+    } catch (err) {
+      console.error("Delete Error:", err);
+      alert("Failed to terminate signal.");
+    }
+  };
 
   const fetchProfileData = async () => {
     try {
@@ -125,13 +134,11 @@ const Profile = () => {
     }
   };
 
-  // FIXED: Added 'name' field to satisfy backend validation
   const handleUpdateIdentity = async () => {
     setIsUpdating(true);
     try {
       const token = await getAccessTokenSilently();
       const formData = new FormData();
-      // 'name' ফিল্ডটি রিকোয়ার্ড হওয়ায় এটি পাঠানো বাধ্যতামূলক
       formData.append("name", editData.nickname); 
       formData.append("nickname", editData.nickname);
       formData.append("bio", editData.bio);
@@ -153,7 +160,7 @@ const Profile = () => {
       fetchProfileData(); 
     } catch (err) {
       console.error("Update Fail:", err.response?.data || err.message);
-      alert(`Sync Failed: ${err.response?.data?.error || "Neural interference detected."}`);
+      alert("Sync Failed: " + (err.response?.data?.error || "Neural interferences."));
     } finally {
       setIsUpdating(false);
     }
@@ -166,7 +173,7 @@ const Profile = () => {
       const token = await getAccessTokenSilently();
       const formData = new FormData();
       formData.append("text", content);
-      formData.append("mediaType", postType); 
+      formData.append("mediaType", postType === 'photo' ? 'image' : postType); 
       if (file) formData.append("media", file);
 
       const res = await axios.post(`${API_URL}/api/posts/create`, formData, {
@@ -183,14 +190,15 @@ const Profile = () => {
       alert("Echo Transmitted!");
     } catch (err) {
       console.error("Transmission Error:", err.response?.data || err.message);
-      alert("Transmission Interrupted!");
+      alert("Transmission Interrupted: " + (err.response?.data?.error || "Unknown Error"));
     } finally {
       setIsTransmitting(false);
     }
   };
 
   const handleFileSelect = (type) => {
-    setPostType(type);
+    const backendType = type === 'photo' ? 'image' : type;
+    setPostType(backendType);
     setTimeout(() => {
       fileInputRef.current.click();
     }, 100);
@@ -207,7 +215,7 @@ const Profile = () => {
   return (
     <div className={`w-full min-h-screen transition-all duration-700 ${isGhostMode ? 'bg-black' : 'bg-[#020617]'} text-gray-200 overflow-x-hidden flex flex-col`}>
       
-      {/* ১. টপ সার্চ বার */}
+      {/* Search Bar */}
       <div className="w-full py-4 px-6 border-b border-white/5 sticky top-0 z-[60] bg-[#020617]/80 backdrop-blur-xl">
         <div className="max-w-[1400px] mx-auto flex items-center justify-center relative">
           <div className="relative w-full max-w-xl">
@@ -239,8 +247,6 @@ const Profile = () => {
       </div>
 
       <div className="flex flex-row max-w-[1400px] mx-auto w-full">
-        
-        {/* ২. বাম পাশের সাইডবার */}
         <aside className="hidden lg:block w-72 p-6 sticky top-20 h-[calc(100vh-80px)] overflow-y-auto border-r border-white/5">
           <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500 mb-6">Neural Connects</h3>
           <div className="space-y-6">
@@ -259,7 +265,6 @@ const Profile = () => {
           </div>
         </aside>
 
-        {/* ৩. প্রোফাইল কন্টেন্ট */}
         <main className="flex-1 pb-20">
           <div className="relative h-48 md:h-72 w-full overflow-hidden">
             <img 
@@ -344,14 +349,6 @@ const Profile = () => {
                   <p className="text-gray-400 text-xs md:text-sm leading-relaxed italic text-center md:text-left">
                     "{isGhostMode ? "Transmission encrypted. Identity masked by ghost protocol." : (userProfile?.bio || "Scanning the drift for meaning...")}"
                   </p>
-                  <AnimatePresence>
-                    {!isGhostMode && (
-                      <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="flex flex-wrap justify-center md:justify-start gap-3 md:gap-5 mt-6 text-[8px] md:text-[9px] font-black text-gray-500 uppercase tracking-widest">
-                        <span className="flex items-center gap-2 bg-white/5 px-3 py-1.5 rounded-full"><FaMapMarkerAlt className="text-cyan-400" /> {userProfile?.location || "Unknown Sector"}</span>
-                        <span className="flex items-center gap-2 bg-white/5 px-3 py-1.5 rounded-full"><FaCalendarAlt className="text-purple-500" /> Joined 2026</span>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
                 </div>
                 <div className="flex flex-row md:flex-col justify-around md:justify-center gap-4 bg-white/5 rounded-2xl md:rounded-3xl p-4 md:p-6 border border-white/5">
                   <div className="text-center md:text-left">
@@ -366,7 +363,7 @@ const Profile = () => {
               </div>
             </motion.div>
 
-            {/* ফিড ট্যাব */}
+            {/* Tabs */}
             <div className="mt-12">
               <div className="flex items-center justify-center md:justify-start gap-6 md:gap-8 px-2 md:px-6 mb-8 border-b border-white/5">
                 {["Echoes", "Insights", "Media"].map((tab) => (
@@ -381,7 +378,11 @@ const Profile = () => {
                 <AnimatePresence mode="wait">
                   {userPosts.length > 0 ? userPosts.map((post, index) => (
                     <motion.div key={post._id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.1 }}>
-                      <PostCard post={post} onAction={fetchProfileData} />
+                      <PostCard 
+                        post={post} 
+                        onAction={fetchProfileData} 
+                        onDelete={() => handleDeletePost(post._id)} // PASSING DELETE FUNCTION
+                      />
                     </motion.div>
                   )) : (
                     <div className="py-20 text-center bg-white/5 rounded-[2rem] md:rounded-[3rem] border border-dashed border-white/10 mx-2">
@@ -409,27 +410,27 @@ const Profile = () => {
                 <div className="space-y-4">
                   <div className="space-y-1">
                     <p className="text-[9px] font-bold text-gray-500 uppercase ml-2">Display Name</p>
-                    <input type="text" className="w-full bg-white/5 border border-white/10 rounded-xl md:rounded-2xl p-4 text-base md:text-sm outline-none focus:border-cyan-400 text-white" value={editData.nickname} onChange={(e) => setEditData({...editData, nickname: e.target.value})} />
+                    <input type="text" className="w-full bg-white/5 border border-white/10 rounded-xl md:rounded-2xl p-4 text-white" value={editData.nickname} onChange={(e) => setEditData({...editData, nickname: e.target.value})} />
                   </div>
                   <div className="space-y-1">
                     <p className="text-[9px] font-bold text-gray-500 uppercase ml-2">Neural Bio</p>
-                    <textarea className="w-full bg-white/5 border border-white/10 rounded-xl md:rounded-2xl p-4 text-base md:text-sm outline-none focus:border-cyan-400 h-24 text-white resize-none" value={editData.bio} onChange={(e) => setEditData({...editData, bio: e.target.value})} />
+                    <textarea className="w-full bg-white/5 border border-white/10 rounded-xl md:rounded-2xl p-4 h-24 text-white resize-none" value={editData.bio} onChange={(e) => setEditData({...editData, bio: e.target.value})} />
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3 md:gap-4">
-                  <label className={`cursor-pointer p-4 bg-white/5 border rounded-2xl flex flex-col items-center justify-center gap-2 transition-all ${coverFile ? 'border-purple-500' : 'border-white/10 hover:border-cyan-400'}`}>
-                    <FaImage className="text-purple-500 text-xl md:text-base" />
-                    <span className="text-[8px] md:text-[9px] font-black uppercase text-center">{coverFile ? "Ready" : "Cover"}</span>
+                  <label className={`cursor-pointer p-4 bg-white/5 border rounded-2xl flex flex-col items-center justify-center gap-2 ${coverFile ? 'border-purple-500' : 'border-white/10'}`}>
+                    <FaImage className="text-purple-500 text-xl" />
+                    <span className="text-[8px] font-black uppercase">{coverFile ? "Ready" : "Cover"}</span>
                     <input type="file" className="hidden" onChange={(e) => setCoverFile(e.target.files[0])} accept="image/*" />
                   </label>
-                  <label className={`cursor-pointer p-4 bg-white/5 border rounded-2xl flex flex-col items-center justify-center gap-2 transition-all ${avatarFile ? 'border-cyan-400' : 'border-white/10 hover:border-cyan-400'}`}>
-                    <FaCamera className="text-cyan-400 text-xl md:text-base" />
-                    <span className="text-[8px] md:text-[9px] font-black uppercase text-center">{avatarFile ? "Ready" : "Avatar"}</span>
+                  <label className={`cursor-pointer p-4 bg-white/5 border rounded-2xl flex flex-col items-center justify-center gap-2 ${avatarFile ? 'border-cyan-400' : 'border-white/10'}`}>
+                    <FaCamera className="text-cyan-400 text-xl" />
+                    <span className="text-[8px] font-black uppercase">{avatarFile ? "Ready" : "Avatar"}</span>
                     <input type="file" className="hidden" onChange={(e) => setAvatarFile(e.target.files[0])} accept="image/*" />
                   </label>
                 </div>
               </div>
-              <button onClick={handleUpdateIdentity} disabled={isUpdating} className="w-full mt-8 py-4 bg-gradient-to-r from-cyan-500 to-purple-600 rounded-xl md:rounded-2xl font-black text-[10px] md:text-xs uppercase tracking-[0.2em] md:tracking-[0.3em] shadow-lg shadow-cyan-500/20 disabled:opacity-50">
+              <button onClick={handleUpdateIdentity} disabled={isUpdating} className="w-full mt-8 py-4 bg-gradient-to-r from-cyan-500 to-purple-600 rounded-xl font-black uppercase text-[10px] tracking-[0.3em] disabled:opacity-50">
                 {isUpdating ? "Synchronizing..." : "Update Identity"}
               </button>
             </motion.div>
@@ -438,31 +439,31 @@ const Profile = () => {
 
         {isCreateOpen && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[100] flex items-center justify-center p-3 md:p-4 bg-black/90 backdrop-blur-xl">
-            <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} className="bg-[#0f172a] w-full max-w-lg rounded-[2.5rem] md:rounded-[3rem] border border-white/10 p-6 md:p-8 shadow-2xl overflow-y-auto max-h-[85vh]">
-              <div className="flex justify-between items-center mb-6 md:mb-8">
+            <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} className="bg-[#0f172a] w-full max-w-lg rounded-[2.5rem] md:rounded-[3rem] border border-white/10 p-6 md:p-8 shadow-2xl">
+              <div className="flex justify-between items-center mb-8">
                 <h2 className="text-lg md:text-xl font-black italic text-purple-400 uppercase tracking-tighter">New Echo</h2>
                 <button onClick={() => setIsCreateOpen(false)} className="text-gray-500 hover:text-white p-2"><FaTimes size={20}/></button>
               </div>
-              <textarea className="w-full bg-transparent border-none outline-none text-white placeholder:text-gray-700 text-base md:text-lg mb-6 resize-none h-32" placeholder="Share your neural drift..." value={content} onChange={(e) => setContent(e.target.value)} />
-              <input type="file" ref={fileInputRef} className="hidden" onChange={(e) => setFile(e.target.files[0])} accept={postType === 'photo' ? 'image/*' : 'video/*'} />
-              <div className="grid grid-cols-3 gap-2 md:gap-3 mb-8">
-                <button onClick={() => handleFileSelect('photo')} className={`flex flex-col items-center gap-2 p-3 md:p-4 bg-white/5 rounded-2xl border transition-all ${file && postType === 'photo' ? 'border-cyan-400 bg-cyan-400/10' : 'border-white/5 hover:border-cyan-400'}`}>
-                  <FaImage size={20} className="text-cyan-400 md:text-[24px]"/><span className="text-[7px] md:text-[8px] font-black uppercase text-center">Photo</span>
+              <textarea className="w-full bg-transparent border-none outline-none text-white text-base mb-6 resize-none h-32" placeholder="Share your neural drift..." value={content} onChange={(e) => setContent(e.target.value)} />
+              <input type="file" ref={fileInputRef} className="hidden" onChange={(e) => setFile(e.target.files[0])} accept={postType === 'image' ? 'image/*' : 'video/*'} />
+              <div className="grid grid-cols-3 gap-2 mb-8">
+                <button onClick={() => handleFileSelect('photo')} className={`flex flex-col items-center gap-2 p-3 bg-white/5 rounded-2xl border ${postType === 'image' && file ? 'border-cyan-400' : 'border-white/5'}`}>
+                  <FaImage size={20} className="text-cyan-400"/><span className="text-[7px] font-black uppercase">Photo</span>
                 </button>
-                <button onClick={() => handleFileSelect('video')} className={`flex flex-col items-center gap-2 p-3 md:p-4 bg-white/5 rounded-2xl border transition-all ${file && postType === 'video' ? 'border-purple-500 bg-purple-500/10' : 'border-white/5 hover:border-purple-500'}`}>
-                  <FaFilm size={20} className="text-purple-500 md:text-[24px]"/><span className="text-[7px] md:text-[8px] font-black uppercase text-center">Video</span>
+                <button onClick={() => handleFileSelect('video')} className={`flex flex-col items-center gap-2 p-3 bg-white/5 rounded-2xl border ${postType === 'video' && file ? 'border-purple-500' : 'border-white/5'}`}>
+                  <FaFilm size={20} className="text-purple-500"/><span className="text-[7px] font-black uppercase">Video</span>
                 </button>
-                <button onClick={() => handleFileSelect('reel')} className={`flex flex-col items-center gap-2 p-3 md:p-4 bg-white/5 rounded-2xl border transition-all ${file && postType === 'reel' ? 'border-rose-500 bg-rose-500/10' : 'border-white/5 hover:border-rose-500'}`}>
-                  <FaPlayCircle size={20} className="text-rose-500 md:text-[24px]"/><span className="text-[7px] md:text-[8px] font-black uppercase text-center">Reels</span>
+                <button onClick={() => handleFileSelect('reel')} className={`flex flex-col items-center gap-2 p-3 bg-white/5 rounded-2xl border ${postType === 'reel' && file ? 'border-rose-500' : 'border-white/5'}`}>
+                  <FaPlayCircle size={20} className="text-rose-500"/><span className="text-[7px] font-black uppercase">Reels</span>
                 </button>
               </div>
               {file && (
                 <div className="mb-6 p-3 bg-cyan-400/10 border border-cyan-400/20 rounded-xl flex items-center justify-between">
-                  <span className="text-[9px] md:text-[10px] text-cyan-400 font-bold truncate max-w-[150px] md:max-w-[200px]">{file.name}</span>
+                  <span className="text-[9px] text-cyan-400 font-bold truncate">{file.name}</span>
                   <FaCheckCircle className="text-cyan-400" />
                 </div>
               )}
-              <button onClick={handleTransmit} disabled={isTransmitting} className="w-full py-4 bg-white text-black rounded-xl md:rounded-2xl font-black text-[10px] md:text-xs uppercase tracking-[0.2em] md:tracking-[0.3em] hover:bg-cyan-400 transition-all disabled:opacity-50">
+              <button onClick={handleTransmit} disabled={isTransmitting} className="w-full py-4 bg-white text-black rounded-xl font-black uppercase text-[10px] tracking-[0.3em] disabled:opacity-50">
                 {isTransmitting ? "Transmitting..." : "Transmit Echo"}
               </button>
             </motion.div>
