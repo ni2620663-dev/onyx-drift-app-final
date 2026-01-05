@@ -36,6 +36,7 @@ const Profile = () => {
   const [postType, setPostType] = useState("image"); 
   const [isTransmitting, setIsTransmitting] = useState(false);
 
+  // API URL logic
   const API_URL = import.meta.env.VITE_API_URL || "https://onyx-drift-api-server.onrender.com";
   const fileInputRef = useRef(null);
 
@@ -47,14 +48,13 @@ const Profile = () => {
   useEffect(() => {
     if (userProfile) {
       setEditData({
-        nickname: userProfile.nickname || userProfile.name || "",
+        nickname: userProfile.name || userProfile.nickname || "",
         bio: userProfile.bio || "",
         location: userProfile.location || ""
       });
     }
   }, [userProfile]);
 
-  // --- DELETE POST FUNCTION ADDED ---
   const handleDeletePost = async (postId) => {
     if (!window.confirm("Are you sure you want to terminate this neural echo?")) return;
     try {
@@ -62,7 +62,6 @@ const Profile = () => {
       await axios.delete(`${API_URL}/api/posts/${postId}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      // Update UI after delete
       setUserPosts(prev => prev.filter(p => p._id !== postId));
     } catch (err) {
       console.error("Delete Error:", err);
@@ -72,23 +71,27 @@ const Profile = () => {
 
   const fetchProfileData = async () => {
     try {
+      setLoading(true);
       const token = await getAccessTokenSilently();
       const rawId = userId || currentUser?.sub;
+      
+      // গুরুত্বপূর্ণ: আইডিটি এনকোড করা হয়েছে যাতে ব্যাকএন্ড ৪-০-৪ না দেয়
       const targetId = encodeURIComponent(rawId); 
       
-      const profileRes = await axios.get(`${API_URL}/api/user/profile/${targetId}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const [profileRes, postsRes, usersRes] = await Promise.all([
+        axios.get(`${API_URL}/api/user/profile/${targetId}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        }),
+        axios.get(`${API_URL}/api/posts/user/${targetId}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        }),
+        axios.get(`${API_URL}/api/user/all`, {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+      ]);
+
       setUserProfile(profileRes.data);
-
-      const postsRes = await axios.get(`${API_URL}/api/posts/user/${targetId}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
       setUserPosts(postsRes.data);
-
-      const usersRes = await axios.get(`${API_URL}/api/user/all`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
       setSuggestedUsers(usersRes.data.slice(0, 5));
 
     } catch (err) {
@@ -135,15 +138,20 @@ const Profile = () => {
   };
 
   const handleUpdateIdentity = async () => {
+    // ভ্যালিডেশন চেক: নাম অবশ্যই থাকতে হবে
+    if (!editData.nickname.trim()) return alert("Nickname/Name is required for synchronization.");
+    
     setIsUpdating(true);
     try {
       const token = await getAccessTokenSilently();
       const formData = new FormData();
+      
+      // ব্যাকএন্ডে 'name' এবং 'nickname' উভয়ই পাঠানো হচ্ছে সেফটি হিসেবে
       formData.append("name", editData.nickname); 
       formData.append("nickname", editData.nickname);
       formData.append("bio", editData.bio);
       formData.append("location", editData.location);
-      formData.append("email", currentUser.email); 
+      if (currentUser?.email) formData.append("email", currentUser.email); 
       
       if (avatarFile) formData.append("avatar", avatarFile);
       if (coverFile) formData.append("cover", coverFile);
@@ -160,7 +168,7 @@ const Profile = () => {
       fetchProfileData(); 
     } catch (err) {
       console.error("Update Fail:", err.response?.data || err.message);
-      alert("Sync Failed: " + (err.response?.data?.error || "Neural interferences."));
+      alert("Sync Failed: " + (err.response?.data?.msg || "Neural interferences."));
     } finally {
       setIsUpdating(false);
     }
@@ -175,6 +183,10 @@ const Profile = () => {
       formData.append("text", content);
       formData.append("mediaType", postType === 'photo' ? 'image' : postType); 
       if (file) formData.append("media", file);
+      
+      // পোস্ট তৈরির সময় ইউজারের নাম পাঠানো হচ্ছে যাতে ৫-০-০ এরর না আসে
+      formData.append("authorName", userProfile?.name || userProfile?.nickname || "Drifter");
+      formData.append("authorAvatar", userProfile?.avatar || "");
 
       const res = await axios.post(`${API_URL}/api/posts/create`, formData, {
         headers: {
@@ -190,7 +202,7 @@ const Profile = () => {
       alert("Echo Transmitted!");
     } catch (err) {
       console.error("Transmission Error:", err.response?.data || err.message);
-      alert("Transmission Interrupted: " + (err.response?.data?.error || "Unknown Error"));
+      alert("Transmission Interrupted.");
     } finally {
       setIsTransmitting(false);
     }
@@ -231,12 +243,12 @@ const Profile = () => {
               {searchResults.length > 0 && (
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="absolute top-full left-0 right-0 mt-2 bg-[#0f172a] border border-white/10 rounded-2xl shadow-2xl p-2 max-h-80 overflow-y-auto">
                   {searchResults.map(u => (
-                    <div key={u._id} className="flex items-center justify-between p-3 hover:bg-white/5 rounded-xl cursor-pointer" onClick={() => {navigate(`/profile/${u._id}`); setSearchResults([]);}}>
+                    <div key={u._id} className="flex items-center justify-between p-3 hover:bg-white/5 rounded-xl cursor-pointer" onClick={() => {navigate(`/profile/${u.auth0Id || u._id}`); setSearchResults([]);}}>
                       <div className="flex items-center gap-3">
-                        <img src={u.avatar} className="w-8 h-8 rounded-full border border-cyan-400/30" />
+                        <img src={u.avatar} className="w-8 h-8 rounded-full border border-cyan-400/30" alt="" />
                         <span className="text-xs font-bold">{u.name || u.nickname}</span>
                       </div>
-                      <FaUserPlus className="text-cyan-400" onClick={(e) => {e.stopPropagation(); handleAddFriend(u._id);}} />
+                      <FaUserPlus className="text-cyan-400" onClick={(e) => {e.stopPropagation(); handleAddFriend(u.auth0Id || u._id);}} />
                     </div>
                   ))}
                 </motion.div>
@@ -251,13 +263,13 @@ const Profile = () => {
           <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500 mb-6">Neural Connects</h3>
           <div className="space-y-6">
             {suggestedUsers.map((u) => (
-              <div key={u._id} className="group flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 transition-all cursor-pointer">
-                <img src={u.avatar} className="w-10 h-10 rounded-xl object-cover grayscale group-hover:grayscale-0 transition-all" />
+              <div key={u._id} className="group flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 transition-all cursor-pointer" onClick={() => navigate(`/profile/${u.auth0Id || u._id}`)}>
+                <img src={u.avatar} className="w-10 h-10 rounded-xl object-cover grayscale group-hover:grayscale-0 transition-all" alt="" />
                 <div className="flex-1">
                   <p className="text-[11px] font-bold text-white truncate">{u.name || u.nickname}</p>
                   <p className="text-[9px] text-gray-600 uppercase">Verified Member</p>
                 </div>
-                <button onClick={() => handleAddFriend(u._id)} className="p-2 bg-cyan-500/10 text-cyan-400 rounded-lg opacity-0 group-hover:opacity-100 transition-all hover:bg-cyan-500 hover:text-white">
+                <button onClick={(e) => {e.stopPropagation(); handleAddFriend(u.auth0Id || u._id);}} className="p-2 bg-cyan-500/10 text-cyan-400 rounded-lg opacity-0 group-hover:opacity-100 transition-all hover:bg-cyan-500 hover:text-white">
                   <FaPlus size={10} />
                 </button>
               </div>
@@ -301,7 +313,7 @@ const Profile = () => {
                   </div>
                   <div className="text-center md:text-left">
                     <h1 className="text-2xl md:text-4xl font-black text-white italic tracking-tighter uppercase leading-none">
-                      {isGhostMode ? "STAY_HIDDEN" : (userProfile?.name || currentUser?.nickname)}
+                      {isGhostMode ? "STAY_HIDDEN" : (userProfile?.name || userProfile?.nickname || currentUser?.nickname)}
                     </h1>
                     <div className="flex items-center justify-center md:justify-start gap-2 mt-2">
                       <span className={`px-2 py-0.5 rounded-md text-[7px] md:text-[8px] font-black uppercase tracking-widest border transition-all duration-500 ${isGhostMode ? 'bg-white text-black border-white' : 'bg-cyan-400/10 border-cyan-400/20 text-cyan-400'}`}>
@@ -381,7 +393,7 @@ const Profile = () => {
                       <PostCard 
                         post={post} 
                         onAction={fetchProfileData} 
-                        onDelete={() => handleDeletePost(post._id)} // PASSING DELETE FUNCTION
+                        onDelete={() => handleDeletePost(post._id)} 
                       />
                     </motion.div>
                   )) : (
