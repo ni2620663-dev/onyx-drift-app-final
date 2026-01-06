@@ -11,7 +11,7 @@ import { useNavigate } from 'react-router-dom';
 import PostCard from "../components/PostCard"; 
 
 const PremiumHomeFeed = ({ searchQuery }) => {
-  const { user, getAccessTokenSilently } = useAuth0();
+  const { user, getAccessTokenSilently, isAuthenticated } = useAuth0();
   const navigate = useNavigate(); 
   const [postText, setPostText] = useState("");
   const [posts, setPosts] = useState([]);
@@ -24,7 +24,8 @@ const PremiumHomeFeed = ({ searchQuery }) => {
   const [mediaType, setMediaType] = useState(null); 
   const postFileInputRef = useRef(null);
 
-  const API_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:10000";
+  // ১. URL হ্যান্ডলিং - ট্রেইলিং স্ল্যাশ মুছে ফেলা হয়েছে
+  const API_URL = (import.meta.env.VITE_API_BASE_URL || "https://onyx-drift-api-server.onrender.com").replace(/\/$/, "");
 
   const handleMenuClick = (path) => {
     navigate(path);
@@ -34,6 +35,7 @@ const PremiumHomeFeed = ({ searchQuery }) => {
   const fetchPosts = async () => {
     try {
       setLoading(true);
+      // ক্যাশ এড়াতে টাইমস্ট্যাম্প ব্যবহার করা হয়েছে
       const response = await axios.get(`${API_URL}/api/posts?t=${Date.now()}`);
       setPosts(response.data);
     } catch (err) {
@@ -97,14 +99,10 @@ const PremiumHomeFeed = ({ searchQuery }) => {
     }
   };
 
-  /**
-   * পরিবর্তিত handlePostSubmit - ৪MD Error এবং Token Error ফিক্স করা হয়েছে
-   */
   const handlePostSubmit = async () => {
     if (!postText.trim() && !mediaFile) return;
     
     try {
-      // ১. FormData তৈরি - ব্যাকএন্ডের @RequestParam নামের সাথে মিল রাখা হয়েছে
       const formData = new FormData();
       formData.append("text", postText); 
       formData.append("authorName", user?.nickname || user?.name || "Anonymous");
@@ -117,30 +115,30 @@ const PremiumHomeFeed = ({ searchQuery }) => {
         formData.append("media", mediaFile); 
       }
 
-      // ২. অথ টোকেন হ্যান্ডলিং (এরর বাইপাস)
-      let headers = { "Content-Type": "multipart/form-data" };
-      try {
-        const token = await getAccessTokenSilently();
-        if (token) headers["Authorization"] = `Bearer ${token}`;
-      } catch (e) {
-        console.log("Proceeding without token for local dev.");
+      const headers = { "Content-Type": "multipart/form-data" };
+      
+      // ২. অথ টোকেন ম্যানেজমেন্ট - রিফ্রেশ টোকেন এরর হ্যান্ডলিং
+      if (isAuthenticated) {
+        try {
+          const token = await getAccessTokenSilently();
+          headers["Authorization"] = `Bearer ${token}`;
+        } catch (e) {
+          console.warn("Token acquisition failed, trying without token.");
+        }
       }
 
-      // ৩. রিকোয়েস্ট পাঠানো
       await axios.post(`${API_URL}/api/posts`, formData, { headers });
 
-      // ৪. স্টেট ক্লিয়ার ও রিফ্রেশ
       setPostText("");
       setSelectedPostMedia(null);
       setMediaFile(null);
       setMediaType(null);
       
-      // ব্যাকএন্ড আপডেট হওয়ার জন্য সামান্য সময় দিয়ে ফেচ করা
-      setTimeout(fetchPosts, 500);
+      setTimeout(fetchPosts, 800);
       
     } catch (err) {
       console.error("Post Error:", err.response?.data || err);
-      alert("Broadcast failed. Ensure Spring Boot is running on port 10000.");
+      alert("Broadcast failed. Check server connection or CORS settings.");
     }
   };
 
@@ -231,7 +229,7 @@ const PremiumHomeFeed = ({ searchQuery }) => {
             </div>
 
             <div 
-              onClick={() => handleMenuClick('/explore')}
+              onClick={() => handleMenuClick('/explorer')}
               className="flex items-center gap-4 p-4 text-gray-400 hover:bg-white/5 rounded-2xl transition-all cursor-pointer active:scale-95 group"
             >
               <FaImage size={16} />

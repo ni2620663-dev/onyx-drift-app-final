@@ -8,7 +8,7 @@ import { useAuth0 } from "@auth0/auth0-react";
 import axios from "axios";
 
 const PostCard = ({ post, onAction, onDelete }) => {
-  const { user, getAccessTokenSilently } = useAuth0();
+  const { user, getAccessTokenSilently, isAuthenticated } = useAuth0();
   const [isLiking, setIsLiking] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [commentText, setCommentText] = useState("");
@@ -18,11 +18,12 @@ const PostCard = ({ post, onAction, onDelete }) => {
 
   if (!post) return null;
 
-  // FIX: API URL অবশ্যই প্রোফাইল ফাইলের সাথে মিল থাকতে হবে
-  const API_URL = import.meta.env.VITE_API_URL || "https://onyx-drift-api-server.onrender.com";
+  // ১. API URL ফিক্স - ট্রেইলিং স্ল্যাশ হ্যান্ডলিং এবং সঠিক এনভায়রনমেন্ট ভেরিয়েবল
+  const API_URL = (import.meta.env.VITE_API_BASE_URL || "https://onyx-drift-api-server.onrender.com").replace(/\/$/, "");
   
   const likesArray = Array.isArray(post.likes) ? post.likes : [];
-  const isLiked = likesArray.includes(user?.sub);
+  // Auth0 sub ব্যবহার করে চেক করা হচ্ছে ইউজার অলরেডি লাইক করেছে কিনা
+  const isLiked = user && likesArray.includes(user.sub);
 
   const togglePlay = () => {
     if (videoRef.current) {
@@ -34,23 +35,21 @@ const PostCard = ({ post, onAction, onDelete }) => {
 
   const handleLike = async (e) => {
     e.stopPropagation();
-    if (!user) return alert("Please login to like");
+    if (!isAuthenticated) return alert("Please login to like this signal");
     if (isLiking) return;
     
     try {
       setIsLiking(true);
       const token = await getAccessTokenSilently();
       
-      // লাইক রিকোয়েস্ট
+      // ২. ডাইনামিক রুট - আপনার ব্যাকএন্ডের সাথে মিল রেখে
       await axios.put(`${API_URL}/api/posts/${post._id}/like`, {}, {
         headers: { Authorization: `Bearer ${token}` }
       });
       
-      // ডাটা রিফ্রেশ করা
       if (onAction) onAction();
     } catch (err) { 
       console.error("Like Error:", err.response?.data || err.message);
-      // যদি ৪-০-৪ আসে, তবে বুঝতে হবে ব্যাকএন্ডে এই রাউটটি নেই
     } finally { 
       setIsLiking(false); 
     }
@@ -124,7 +123,8 @@ const PostCard = ({ post, onAction, onDelete }) => {
           </div>
         </div>
 
-        {user?.sub === post.authorId && (
+        {/* ৩. ডিলিট বাটন লজিক ফিক্স - চেক করা হচ্ছে authorId অথবা ইমেল দিয়ে */}
+        {(user?.sub === post.authorId || user?.email === post.authorId) && (
           <button 
             onClick={(e) => {
               e.stopPropagation();
