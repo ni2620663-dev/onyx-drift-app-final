@@ -4,6 +4,8 @@ import { FaSearch, FaBell, FaCommentDots, FaUserPlus, FaCheckCircle, FaSignOutAl
 import { useNavigate } from 'react-router-dom';
 import { useAuth0 } from "@auth0/auth0-react";
 import axios from 'axios';
+// ১. সকেট সার্ভিস ইমপোর্ট করা হলো
+import webSocketService from "../services/WebSocketService"; 
 
 const Navbar = ({ user, setSearchQuery }) => {
   const navigate = useNavigate();
@@ -11,19 +13,32 @@ const Navbar = ({ user, setSearchQuery }) => {
   const [showNotifications, setShowNotifications] = useState(false);
   const [localSearch, setLocalSearch] = useState("");
   const [showResults, setShowResults] = useState(false);
-  const [searchResults, setSearchResults] = useState([]); // ব্যাকেন্ড থেকে আসা ডাটা
+  const [searchResults, setSearchResults] = useState([]);
   const [loading, setLoading] = useState(false);
+  
+  // ২. নোটিফিকেশন স্টেট
+  const [notifications, setNotifications] = useState([]);
+  const [hasNewNotification, setHasNewNotification] = useState(false);
 
   const API_URL = import.meta.env.VITE_API_URL || "http://localhost:10000";
 
-  // ব্যাকেন্ড থেকে ইউজার সার্চ করার ফাংশন (Debounced Search)
+  // ৩. সকেট লজিক: নোটিফিকেশন সাবস্ক্রাইব করা
+  useEffect(() => {
+    if (user?.sub) {
+      // রিয়েল-টাইম নোটিফিকেশন শোনার জন্য সাবস্ক্রিপশন
+      webSocketService.subscribe(`/topic/notifications/${user.sub}`, (data) => {
+        setNotifications((prev) => [data, ...prev]);
+        setHasNewNotification(true); // নতুন সিগন্যাল আসলে লাল ডট দেখাবে
+      });
+    }
+  }, [user]);
+
   useEffect(() => {
     const delayDebounceFn = setTimeout(async () => {
       if (localSearch.length > 0) {
         setLoading(true);
         try {
           const token = await getAccessTokenSilently();
-          // API Call to database
           const res = await axios.get(`${API_URL}/api/user/search?query=${localSearch}`, {
             headers: { Authorization: `Bearer ${token}` }
           });
@@ -38,7 +53,7 @@ const Navbar = ({ user, setSearchQuery }) => {
         setSearchResults([]);
         setShowResults(false);
       }
-    }, 300); // ৩০০ মিলি-সেকেন্ড বিরতি
+    }, 300);
 
     return () => clearTimeout(delayDebounceFn);
   }, [localSearch, getAccessTokenSilently, API_URL]);
@@ -50,13 +65,13 @@ const Navbar = ({ user, setSearchQuery }) => {
   };
 
   const handleLogout = () => {
+    webSocketService.disconnect(); // লগআউট করলে সকেট ডিসকানেক্ট হবে
     logout({ logoutParams: { returnTo: window.location.origin } });
   };
 
   return (
     <nav className="h-[75px] px-6 flex items-center justify-between bg-transparent w-full relative z-[200]">
       
-      {/* ১. লোগো সেকশন */}
       <div className="flex items-center gap-3 min-w-fit cursor-pointer" onClick={() => navigate('/feed')}>
         <motion.div
           whileTap={{ scale: 0.9 }}
@@ -67,7 +82,6 @@ const Navbar = ({ user, setSearchQuery }) => {
         <h1 className="hidden md:block text-xl font-black text-white italic tracking-tighter">ONYXDRIFT</h1>
       </div>
 
-      {/* ২. ইন্টারেক্টিভ সার্চ বার */}
       <div className="relative flex items-center bg-white/5 border border-white/10 rounded-2xl px-4 py-2 w-full max-w-md mx-8 focus-within:border-cyan-400/50 transition-all">
         <FaSearch className="text-gray-500 text-sm" />
         <input
@@ -137,12 +151,20 @@ const Navbar = ({ user, setSearchQuery }) => {
         </AnimatePresence>
       </div>
 
-      {/* ৩. ডান পাশ: নোটিফিকেশন ও প্রোফাইল */}
       <div className="flex items-center gap-5 min-w-fit">
         <div className="relative">
-          <button onClick={() => setShowNotifications(!showNotifications)} className="p-2 text-gray-400 hover:text-white transition-colors relative">
+          <button 
+            onClick={() => {
+                setShowNotifications(!showNotifications);
+                setHasNewNotification(false); // ক্লিক করলে ডট চলে যাবে
+            }} 
+            className="p-2 text-gray-400 hover:text-white transition-colors relative"
+          >
             <FaBell size={18} className={showNotifications ? "text-cyan-400" : ""} />
-            <span className="absolute top-2 right-2 w-2 h-2 bg-rose-500 rounded-full border-2 border-[#020617]"></span>
+            {/* ৪. রিয়েল-টাইম রেড ডট */}
+            {hasNewNotification && (
+                <span className="absolute top-2 right-2 w-2 h-2 bg-rose-500 rounded-full border-2 border-[#020617] shadow-[0_0_8px_rgba(244,63,94,0.8)]"></span>
+            )}
           </button>
           
           <AnimatePresence>
@@ -156,7 +178,19 @@ const Navbar = ({ user, setSearchQuery }) => {
                   className="absolute right-0 mt-4 w-64 bg-[#0f172a] border border-white/10 rounded-2xl p-5 shadow-2xl z-[120] backdrop-blur-xl"
                 >
                   <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-3">Neural Updates</p>
-                  <div className="text-xs text-gray-400 italic mb-4">No new signals detected...</div>
+                  
+                  {/* ৫. ডায়নামিক নোটিফিকেশন লিস্ট */}
+                  <div className="max-h-[200px] overflow-y-auto no-scrollbar space-y-3 mb-4">
+                    {notifications.length > 0 ? (
+                        notifications.map((notif, idx) => (
+                            <div key={idx} className="text-[10px] text-gray-300 bg-white/5 p-2 rounded-lg border border-white/5">
+                                {notif.message || "New signal received"}
+                            </div>
+                        ))
+                    ) : (
+                        <div className="text-xs text-gray-400 italic">No new signals detected...</div>
+                    )}
+                  </div>
                   
                   <button 
                     onClick={handleLogout}
@@ -187,7 +221,6 @@ const Navbar = ({ user, setSearchQuery }) => {
         </motion.div>
       </div>
       
-      {/* ড্রপডাউন বন্ধ করার জন্য ব্যাকড্রপ */}
       {showResults && <div className="fixed inset-0 z-[250]" onClick={() => setShowResults(false)}></div>}
     </nav>
   );

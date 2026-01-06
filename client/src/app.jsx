@@ -1,7 +1,9 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Routes, Route, useLocation, Navigate } from "react-router-dom";
 import { useAuth0, withAuthenticationRequired } from "@auth0/auth0-react";
-import { io } from "socket.io-client";
+// sockjs এবং stompjs ব্যবহার হচ্ছে
+import SockJS from 'sockjs-client';
+import { over } from 'stompjs';
 import { motion, AnimatePresence } from "framer-motion";
 import { FaMicrophone } from "react-icons/fa";
 import { BRAND_NAME, AI_NAME } from "./utils/constants";
@@ -18,7 +20,6 @@ import Explorer from "./pages/Explorer";
 import Profile from "./pages/Profile";
 import Settings from "./pages/Settings";
 
-// প্রোটেক্টড রাউট কন্টেইনার
 const ProtectedRoute = ({ component: Component, ...props }) => {
   const AuthenticatedComponent = withAuthenticationRequired(Component);
   return <AuthenticatedComponent {...props} />;
@@ -27,51 +28,58 @@ const ProtectedRoute = ({ component: Component, ...props }) => {
 export default function App() {
   const { isAuthenticated, isLoading, user, loginWithRedirect } = useAuth0();
   const location = useLocation();
-  const socket = useRef(null);
+  const stompClient = useRef(null); 
   const [searchQuery, setSearchQuery] = useState("");
 
-  // ০. অটো-লগইন রিডাইরেক্ট লজিক
   useEffect(() => {
-    // লোডিং শেষ হওয়ার পর যদি ইউজার অথেন্টিকেটেড না থাকে এবং হোম/ল্যান্ডিং পেজে থাকে
     if (!isLoading && !isAuthenticated && location.pathname === "/") {
       loginWithRedirect();
     }
   }, [isLoading, isAuthenticated, location.pathname, loginWithRedirect]);
 
-  // ১. সকেট কানেকশন লজিক (অপরিবর্তিত)
+  // সকেট কানেকশন লজিক (CORS এবং Reconnect হ্যান্ডলিং সহ)
   useEffect(() => {
+    let socketInstance = null;
+
     if (isAuthenticated && user?.sub) {
-      const socketUrl = window.location.hostname === "localhost"
-        ? "http://localhost:10000"
-        : "https://onyx-drift-app-final.onrender.com";
+      // API URL থেকে trailing slash সরিয়ে নিন
+      const socketUrl = (import.meta.env.VITE_API_BASE_URL || "https://onyx-drift-api-server.onrender.com").replace(/\/$/, "");
+      
+      try {
+        // SockJS ইনিশিয়ালাইজেশন
+        socketInstance = new SockJS(`${socketUrl}/ws`);
+        stompClient.current = over(socketInstance);
+        
+        // লগ বেশি হলে এটি ডিজেবল রাখতে পারেন
+        stompClient.current.debug = null; 
 
-      socket.current = io(socketUrl, {
-        transports: ["websocket", "polling"],
-        withCredentials: true,
-        reconnection: true,
-        reconnectionAttempts: 10,
-        reconnectionDelay: 2000,
-        timeout: 40000 
-      });
+        stompClient.current.connect({}, 
+          () => {
+            console.log("📡 Connected to OnyxDrift Neural Server (STOMP)");
+            
+            stompClient.current.subscribe('/topic/posts', (payload) => {
+              console.log("New broadcast received via Neural link");
+            });
 
-      socket.current.on("connect", () => {
-        console.log("📡 Connected to OnyxDrift Neural Server");
-        socket.current.emit("addNewUser", user.sub);
-      });
-
-      socket.current.on("connect_error", (err) => {
-        console.error("Socket Error Details:", err);
-      });
+            stompClient.current.send("/app/addNewUser", {}, JSON.stringify({ userId: user.sub }));
+          }, 
+          (err) => {
+            // সকেট কানেকশন ফেইল হলে কনসোলে ওয়ার্নিং দিবে
+            console.warn("Neural Link: Connection unstable. Retrying...");
+          }
+        );
+      } catch (err) {
+        console.error("Socket error:", err);
+      }
     }
 
     return () => {
-      if (socket.current) {
-        socket.current.disconnect();
+      if (stompClient.current && stompClient.current.connected) {
+        stompClient.current.disconnect();
       }
     };
   }, [isAuthenticated, user]);
 
-  // ২. গ্লোবাল লোডিং স্ক্রিন
   if (isLoading) return (
     <div className="h-screen flex items-center justify-center bg-[#020617]">
       <motion.div
@@ -87,7 +95,6 @@ export default function App() {
     </div>
   );
 
-  // ৩. লেআউট কন্ডিশনস
   const isMessenger = location.pathname === "/messenger";
   const isSettings = location.pathname === "/settings";
   const isExplorer = location.pathname === "/explorer";
@@ -96,18 +103,15 @@ export default function App() {
   return (
     <div className="min-h-screen bg-[#020617] text-gray-200 overflow-x-hidden selection:bg-cyan-500/30 font-sans">
       
-      {/* ৪. প্রিমিয়াম নেভবার */}
       {isAuthenticated && !isLanding && (
         <div className="fixed top-0 w-full z-[100] backdrop-blur-xl border-b border-white/5 bg-[#020617]/80">
-          <Navbar user={user} socket={socket} setSearchQuery={setSearchQuery} />
+          <Navbar user={user} socket={stompClient} setSearchQuery={setSearchQuery} />
         </div>
       )}
       
-      {/* ৫. মেইন কন্টেইনার */}
       <div className={`flex justify-center w-full ${isAuthenticated && !isLanding ? "pt-[100px]" : "pt-0"}`}>
         <div className="flex w-full max-w-[1440px] px-4 gap-6">
           
-          {/* ৬. লেফট সাইডবার (Menu) */}
           {isAuthenticated && !isMessenger && !isSettings && !isLanding && (
             <aside className="hidden lg:block w-[280px] sticky top-[100px] h-[calc(100vh-120px)]">
               <div className="bg-white/5 backdrop-blur-2xl border border-white/10 rounded-[2.5rem] p-4 h-full shadow-2xl overflow-y-auto no-scrollbar">
@@ -116,7 +120,6 @@ export default function App() {
             </aside>
           )}
           
-          {/* ৭. সেন্টার কন্টেন্ট (Feed/Routes) */}
           <main className={`flex-1 flex justify-center transition-all duration-500
             ${isMessenger || isExplorer || isSettings || isLanding ? "max-w-full" : "max-w-[720px] mx-auto"}`}>
             <div className="w-full">
@@ -135,12 +138,10 @@ export default function App() {
             </div>
           </main>
 
-          {/* ৮. রাইট সাইডবার (AI Insights & Friend List) */}
           {isAuthenticated && !isMessenger && !isSettings && !isLanding && (
             <aside className="hidden xl:block w-[320px] sticky top-[100px] h-[calc(100vh-120px)]">
               <div className="bg-white/5 backdrop-blur-2xl border border-white/10 rounded-[2.5rem] p-6 h-full space-y-8 overflow-y-auto no-scrollbar shadow-2xl">
                 
-                {/* AI Insight Section */}
                 <div className="space-y-4">
                   <h3 className="text-cyan-400 font-black text-[10px] uppercase tracking-[0.3em]">{AI_NAME} Insight</h3>
                   <div className="p-5 bg-gradient-to-br from-white/5 to-transparent rounded-[2rem] border border-white/5">
@@ -150,7 +151,6 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Friend List / Neural Connects */}
                 <div className="space-y-6">
                   <div className="flex justify-between items-center">
                     <h3 className="text-purple-400 font-black text-[10px] uppercase tracking-[0.3em]">Neural Connects</h3>
@@ -192,7 +192,6 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Onyx Pro Promo */}
                 <div className="pt-4 border-t border-white/5">
                   <div className="p-4 bg-gradient-to-tr from-purple-500/10 to-cyan-500/5 border border-white/5 rounded-2xl">
                     <p className="text-[9px] font-black text-cyan-400 uppercase mb-1 tracking-widest">Network Expansion</p>
@@ -207,7 +206,6 @@ export default function App() {
         </div>
       </div>
 
-      {/* ৯. মোবাইল এআই বাটন */}
       {isAuthenticated && !isLanding && (
         <div className="fixed bottom-6 right-6 z-[200] lg:hidden">
           <motion.button

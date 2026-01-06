@@ -1,37 +1,28 @@
-import axios from "axios";
+import axios from 'axios';
 
-// API Base URL (আপনার লাইভ Render ব্যাকএন্ড URL)
-// এটি সমস্ত API কলের জন্য শুরু বিন্দু হিসেবে কাজ করবে।
-const LIVE_BACKEND_URL = "https://onyxdrift-backend-13vz.onrender.com/api"; 
+const BASE_URL = "http://localhost:10000/api"; // আপনার ব্যাকএন্ড পোর্ট
 
-// Axios instance তৈরি করা হয়েছে
-const API = axios.create({
-  // baseURL এখন লাইভ Render URL এ সেট করা হয়েছে
-  baseURL: LIVE_BACKEND_URL, 
+const api = axios.create({
+    baseURL: BASE_URL,
 });
 
-// ================= POSTS =================
+// ১. পোস্ট করার জন্য (Point 7: Media Support)
+export const createPost = (formData) => api.post('/posts', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+});
 
-export const fetchPosts = () => API.get("/posts");
+// ২. টাইমলাইন দেখার জন্য (Point 8: Feed System)
+export const getTimeline = (username) => api.get(`/posts/timeline?username=${username}`);
 
-export const createPost = (formData, token) =>
-  API.post("/posts", formData, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+// ৩. ট্রেন্ডিং ট্যাগ দেখার জন্য (Point 3: Trends)
+export const getTrending = () => api.get('/posts/trending');
 
-// Personalized posts
-export const fetchPersonalizedPosts = (token) =>
-  API.get("/posts/personalized", {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+// ৪. ফলো করার জন্য
+export const followUser = (followingUser, currentUser) => 
+    api.post(`/follow/${followingUser}?currentUser=${currentUser}`);
 
-// ================= AUTH =================
+// ৫. লগইন ও রেজিস্ট্রেশন (Point 9: Auth)
+export const login = (data) => api.post('/auth/login', data);
+export const signup = (data) => api.post('/auth/signup', data);
 
-export const registerUser = (data) => API.post("/auth/register", data);
-
-export const loginUser = (data) => API.post("/auth/login", data);
-
-export const getCurrentUser = (token) =>
-  API.get("/auth/me", {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+export default api;

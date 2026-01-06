@@ -36,7 +36,6 @@ const Profile = () => {
   const [postType, setPostType] = useState("image"); 
   const [isTransmitting, setIsTransmitting] = useState(false);
 
-  // API URL logic
   const API_URL = import.meta.env.VITE_API_URL || "https://onyx-drift-api-server.onrender.com";
   const fileInputRef = useRef(null);
 
@@ -74,8 +73,6 @@ const Profile = () => {
       setLoading(true);
       const token = await getAccessTokenSilently();
       const rawId = userId || currentUser?.sub;
-      
-      // গুরুত্বপূর্ণ: আইডিটি এনকোড করা হয়েছে যাতে ব্যাকএন্ড ৪-০-৪ না দেয়
       const targetId = encodeURIComponent(rawId); 
       
       const [profileRes, postsRes, usersRes] = await Promise.all([
@@ -138,7 +135,6 @@ const Profile = () => {
   };
 
   const handleUpdateIdentity = async () => {
-    // ভ্যালিডেশন চেক: নাম অবশ্যই থাকতে হবে
     if (!editData.nickname.trim()) return alert("Nickname/Name is required for synchronization.");
     
     setIsUpdating(true);
@@ -146,7 +142,6 @@ const Profile = () => {
       const token = await getAccessTokenSilently();
       const formData = new FormData();
       
-      // ব্যাকএন্ডে 'name' এবং 'nickname' উভয়ই পাঠানো হচ্ছে সেফটি হিসেবে
       formData.append("name", editData.nickname); 
       formData.append("nickname", editData.nickname);
       formData.append("bio", editData.bio);
@@ -184,7 +179,6 @@ const Profile = () => {
       formData.append("mediaType", postType === 'photo' ? 'image' : postType); 
       if (file) formData.append("media", file);
       
-      // পোস্ট তৈরির সময় ইউজারের নাম পাঠানো হচ্ছে যাতে ৫-০-০ এরর না আসে
       formData.append("authorName", userProfile?.name || userProfile?.nickname || "Drifter");
       formData.append("authorAvatar", userProfile?.avatar || "");
 
@@ -375,7 +369,6 @@ const Profile = () => {
               </div>
             </motion.div>
 
-            {/* Tabs */}
             <div className="mt-12">
               <div className="flex items-center justify-center md:justify-start gap-6 md:gap-8 px-2 md:px-6 mb-8 border-b border-white/5">
                 {["Echoes", "Insights", "Media"].map((tab) => (

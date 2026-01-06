@@ -18,11 +18,11 @@ ReactDOM.createRoot(document.getElementById("root")).render(
       authorizationParams={{
         redirect_uri: window.location.origin,
         audience: API_AUDIENCE,
-        // নিচে এই স্কোপ লাইনটি অবশ্যই যোগ করুন
+        // scope-এ অবশ্যই offline_access থাকতে হবে রিফ্রেশ টোকেনের জন্য
         scope: "openid profile email offline_access"
       }}
-      useRefreshTokens={true}
-      cacheLocation="localstorage"
+      useRefreshTokens={true}       // এটি এনাবল করা আছে, যা ঠিক
+      cacheLocation="localstorage"  // এটিও ঠিক আছে
     >
       <AuthProvider>
         <BrowserRouter>
