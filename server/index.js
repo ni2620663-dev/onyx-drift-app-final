@@ -6,10 +6,8 @@ import dotenv from "dotenv";
 import mongoose from "mongoose"; 
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
-// ১. ডাটাবেস কনফিগারেশন
+// ১. ডাটাবেস ও রাউট ইমপোর্ট
 import connectDB from "./config/db.js"; 
-
-// ২. রাউট ইমপোর্ট
 import profileRoutes from "./src/routes/profile.js"; 
 import postRoutes from "./routes/posts.js";
 import usersRoutes from './routes/users.js'; 
@@ -20,10 +18,10 @@ dotenv.config();
 const app = express();
 const server = http.createServer(app);
 
-// ৩. AI কনফিগারেশন
+// ২. AI কনফিগারেশন
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-// ৪. মিডলওয়্যার (CORS & JSON)
+// ৩. মিডলওয়্যার ও CORS ফিক্স
 const allowedOrigins = [
     "http://localhost:5173", 
     "http://127.0.0.1:5173", 
@@ -37,7 +35,7 @@ app.use(cors({
         if (!origin || allowedOrigins.indexOf(origin) !== -1) {
             callback(null, true);
         } else {
-            callback(new Error("Not allowed by CORS"));
+            callback(new Error("CORS Access Denied"));
         }
     },
     credentials: true,
@@ -47,33 +45,42 @@ app.use(cors({
 
 app.use(express.json());
 
-// ৫. সকেট কনফিগারেশন
+// ৪. সকেট কনফিগারেশন (404 এরর ফিক্স করার জন্য)
 const io = new Server(server, {
   cors: {
     origin: allowedOrigins,
     methods: ["GET", "POST"],
     credentials: true
   },
-  transports: ['websocket', 'polling']
+  // SockJS এরর এড়াতে standard websocket আগে দেওয়া হয়েছে
+  transports: ['websocket', 'polling'],
+  allowEIO3: true // পুরোনো ক্লায়েন্ট সাপোর্ট করার জন্য
 });
 
-// ৬. ডাটাবেস কানেকশন
+// ৫. ডাটাবেস কানেকশন ও ক্লিনআপ
 connectDB();
 
-// ডাটাবেস কানেক্ট হওয়ার পর ডুপ্লিকেট ইনডেক্স ডিলিট করার লজিক
 mongoose.connection.once('open', async () => {
   try {
     const adminDb = mongoose.connection.db;
-    // এটি 'email_1' নামক পুরোনো ইনডেক্সটি ডিলিট করবে যা ৫০০ এরর দিচ্ছিল
-    await adminDb.collection('users').dropIndex('email_1');
-    console.log('✅ System: Old email index dropped successfully!');
+    const collections = await adminDb.listCollections({ name: 'users' }).toArray();
+    
+    if (collections.length > 0) {
+      const indexes = await adminDb.collection('users').listIndexes().toArray();
+      const hasEmailIndex = indexes.some(idx => idx.name === 'email_1');
+      
+      if (hasEmailIndex) {
+        await adminDb.collection('users').dropIndex('email_1');
+        console.log('✅ System: Old index dropped.');
+      }
+    }
+    console.log('📡 System: Database Synced.');
   } catch (err) {
-    // যদি ইনডেক্স না থাকে বা আগে থেকেই ডিলিট করা থাকে
-    console.log('ℹ️ System: Database is clean and ready.');
+    console.log('ℹ️ System: Database is clean.');
   }
 });
 
-// ৭. এপিআই এন্ডপয়েন্টস মাউন্টিং
+// ৬. এপিআই এন্ডপয়েন্টস
 app.use("/api/profile", profileRoutes);
 app.use("/api/user", usersRoutes); 
 app.use("/api/posts", postRoutes); 
@@ -82,36 +89,29 @@ if (messageRoutes) {
     app.use("/api/messages", messageRoutes);
 }
 
-// --- AI Enhance Route ---
+// AI Enhance Route
 app.post("/api/ai/enhance", async (req, res) => {
   try {
     const { prompt } = req.body;
-    if (!prompt) return res.status(400).json({ error: "No text provided" });
+    if (!prompt) return res.status(400).json({ error: "No signal detected." });
 
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-    const fullPrompt = `You are the AI of a futuristic social media platform called OnyxDrift. 
-    Rewrite the following user post to be more engaging, professional yet cool, and aesthetic. 
-    Keep it concise (maximum 2-3 sentences) and add 2 relevant hashtags. 
-    Original text: "${prompt}"`;
+    const fullPrompt = `You are the AI of OnyxDrift. Rewrite this post to be aesthetic and cool. Max 2 sentences + 2 hashtags. Text: "${prompt}"`;
 
     const result = await model.generateContent(fullPrompt);
-    const enhancedText = result.response.text();
-    
-    res.json({ enhancedText });
+    res.json({ enhancedText: result.response.text() });
   } catch (error) {
-    console.error("Gemini Error:", error);
-    res.status(500).json({ error: "AI processing failed" });
+    res.status(500).json({ error: "AI Transmission Interrupted" });
   }
 });
 
-// সার্ভার স্ট্যাটাস চেক
-app.get("/", (req, res) => res.send("✅ OnyxDrift Neural Server is online..."));
+app.get("/", (req, res) => res.send("✅ OnyxDrift Neural Server Online"));
 
-// ৮. সকেট লজিক
+// ৭. সকেট লজিক (Real-time Drift)
 let onlineUsers = []; 
 
 io.on("connection", (socket) => {
-  console.log(`📡 New Drift Connection: ${socket.id}`);
+  console.log(`📡 New Drift Node: ${socket.id}`);
 
   socket.on("addNewUser", (userId) => {
     if (userId && !onlineUsers.some(u => u.userId === userId)) {
@@ -130,8 +130,8 @@ io.on("connection", (socket) => {
   });
 });
 
-// ৯. সার্ভার লিসেন
+// ৮. পোর্ট কনফিগারেশন
 const PORT = process.env.PORT || 10000;
 server.listen(PORT, () => {
-  console.log(`🚀 OnyxDrift Server Live on Port: ${PORT}`);
+  console.log(`🚀 System Active on Port: ${PORT}`);
 });
