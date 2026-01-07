@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { FaImage, FaMicrophone, FaPaperPlane, FaMagic, FaTimes } from 'react-icons/fa';
 import axios from 'axios';
 import { useAuth0 } from '@auth0/auth0-react';
@@ -15,10 +15,9 @@ const PostBox = ({ user, onPostCreated }) => {
   const fileInputRef = useRef(null);
   const { getAccessTokenSilently } = useAuth0();
 
-  // ১. এপিআই ইউআরএল কনফিগ
-  const API_URL = import.meta.env.VITE_API_URL || "https://onyx-drift-api-server.onrender.com";
+  // API URL স্ল্যাশ হ্যান্ডলিং ফিক্স
+  const BASE_URL = (import.meta.env.VITE_API_URL || "https://onyx-drift-api-server.onrender.com").replace(/\/$/, "");
 
-  // --- মিডিয়া সিলেক্ট হ্যান্ডলার ---
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (file) {
@@ -27,31 +26,25 @@ const PostBox = ({ user, onPostCreated }) => {
     }
   };
 
-  // --- AI Magic Function ---
   const handleAIEnhance = async () => {
-    if (!text.trim()) return alert("Write something first for the magic to work!");
-    
+    if (!text.trim()) return alert("Write something first!");
     setIsEnhancing(true);
     try {
       const token = await getAccessTokenSilently();
       const response = await axios.post(
-        `${API_URL}/api/ai/enhance`, 
+        `${BASE_URL}/api/ai/enhance`, 
         { prompt: text },
         { headers: { Authorization: `Bearer ${token}` } }
       );
-
-      if (response.data.enhancedText) {
-        setText(response.data.enhancedText);
-      }
+      if (response.data.enhancedText) setText(response.data.enhancedText);
     } catch (error) {
       console.error("AI Magic Error:", error);
-      alert("The AI cosmos is busy. Try again in a moment!");
+      alert("AI cosmos is busy!");
     } finally {
       setIsEnhancing(false);
     }
   };
 
-  // --- পোস্ট সাবমিট ফাংশন (Enterprise logic) ---
   const handlePost = async () => {
     if (!text.trim() && !selectedFile) return;
     
@@ -59,9 +52,9 @@ const PostBox = ({ user, onPostCreated }) => {
     try {
       const token = await getAccessTokenSilently();
       
-      // FormData ব্যবহার করা হয়েছে যাতে ইমেজ এবং টেক্সট একসাথে যায় (৪০০ এরর ফিক্স করবে)
       const formData = new FormData();
-      formData.append("desc", text);
+      // এরর ফিক্স: 'desc' এর বদলে 'text' ব্যবহার করা হয়েছে ব্যাকএন্ডের সাথে মিল রাখতে
+      formData.append("text", text); 
       formData.append("authorName", user?.nickname || user?.name || "Anonymous");
       formData.append("authorAvatar", user?.picture || "");
       
@@ -70,7 +63,7 @@ const PostBox = ({ user, onPostCreated }) => {
       }
 
       const response = await axios.post(
-        `${API_URL}/api/posts`,
+        `${BASE_URL}/api/posts`,
         formData,
         { 
           headers: { 
@@ -87,7 +80,7 @@ const PostBox = ({ user, onPostCreated }) => {
         if (onPostCreated) onPostCreated();
       }
     } catch (error) {
-      console.error("Error creating post:", error.response?.data || error.message);
+      console.error("Post Error:", error.response?.data || error.message);
       alert("Transmission failed. The core rejected the signal.");
     } finally {
       setIsPosting(false);
@@ -114,7 +107,6 @@ const PostBox = ({ user, onPostCreated }) => {
             className={`w-full bg-transparent border-none outline-none text-white text-sm placeholder:text-gray-600 resize-none h-20 pt-2 font-light tracking-wide transition-all ${isEnhancing ? 'opacity-50 blur-[1px]' : 'opacity-100'}`}
           />
 
-          {/* ইমেজ প্রিভিউ এরিয়া */}
           <AnimatePresence>
             {previewUrl && (
               <motion.div 
@@ -138,23 +130,21 @@ const PostBox = ({ user, onPostCreated }) => {
 
       <div className="flex items-center justify-between mt-4 pt-4 border-t border-white/5">
         <div className="flex gap-4">
-          {/* মিডিয়া বাটন */}
           <input type="file" hidden ref={fileInputRef} onChange={handleFileChange} accept="image/*,video/*" />
           <motion.button 
             onClick={() => fileInputRef.current.click()}
             whileTap={{ scale: 0.9 }}
-            className="flex items-center gap-2 text-gray-400 hover:text-cyan-neon transition-colors text-xs font-bold uppercase tracking-widest"
+            className="flex items-center gap-2 text-gray-400 hover:text-cyan-400 transition-colors text-xs font-bold uppercase tracking-widest"
           >
             <FaImage className="text-lg" />
             <span className="hidden sm:block">Media</span>
           </motion.button>
 
-          {/* AI Magic Button */}
           <motion.button 
             onClick={handleAIEnhance}
             disabled={isEnhancing || !text.trim()}
             whileTap={{ scale: 0.9 }}
-            className={`flex items-center gap-2 transition-all text-xs font-bold uppercase tracking-widest ${isEnhancing ? 'text-purple-neon animate-pulse' : 'text-gray-400 hover:text-purple-neon'}`}
+            className={`flex items-center gap-2 transition-all text-xs font-bold uppercase tracking-widest ${isEnhancing ? 'text-purple-400 animate-pulse' : 'text-gray-400 hover:text-purple-400'}`}
           >
             <FaMagic className="text-lg" />
             <span className="hidden sm:block">{isEnhancing ? 'Enhancing...' : `${BRAND_NAME} Magic`}</span>
@@ -164,7 +154,7 @@ const PostBox = ({ user, onPostCreated }) => {
         <div className="flex gap-3">
           <motion.button 
             whileTap={{ scale: 0.9 }}
-            className="bg-white/5 p-3 rounded-2xl text-cyan-neon border border-white/5 hover:bg-white/10"
+            className="bg-white/5 p-3 rounded-2xl text-cyan-400 border border-white/5 hover:bg-white/10"
           >
             <FaMicrophone />
           </motion.button>
@@ -175,7 +165,7 @@ const PostBox = ({ user, onPostCreated }) => {
             disabled={(text.length === 0 && !selectedFile) || isPosting || isEnhancing}
             className={`px-6 py-3 rounded-2xl flex items-center gap-2 font-black text-[10px] uppercase tracking-[0.2em] transition-all
               ${(text.length > 0 || selectedFile) && !isPosting
-                ? 'bg-gradient-to-r from-cyan-neon to-purple-neon text-black shadow-neon-blue' 
+                ? 'bg-gradient-to-r from-cyan-400 to-purple-500 text-black shadow-lg shadow-cyan-500/20' 
                 : 'bg-white/5 text-gray-600 cursor-not-allowed border border-white/5'}`}
           >
             {isPosting ? 'Broadcasting...' : 'Broadcast Signal'} <FaPaperPlane />

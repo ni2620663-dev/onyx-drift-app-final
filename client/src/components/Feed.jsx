@@ -6,14 +6,12 @@ import { useAuth0 } from '@auth0/auth0-react';
 import { 
   FaMicrophone, FaPlus, FaSearch, FaHeart, 
   FaComment, FaShare, FaWaveSquare, FaCheckCircle,
-  FaHome, FaRocket, FaUserAlt, FaCog, FaChartLine
+  FaHome, FaRocket, FaUserAlt, FaCog, FaChartLine, FaUserPlus
 } from 'react-icons/fa';
 import { HiChevronLeft, HiChevronRight } from 'react-icons/hi2';
 
-// API Endpoint Logic
-const API_BASE_URL = window.location.hostname === "localhost" 
-  ? "http://localhost:10000" 
-  : "https://onyx-drift-app-final.onrender.com";
+// API Endpoint Logic - Cleaned for Production
+const API_BASE_URL = (import.meta.env.VITE_API_URL || "https://onyx-drift-api-server.onrender.com").replace(/\/$/, "");
 
 const PremiumHomeFeed = () => {
   const navigate = useNavigate();
@@ -25,9 +23,38 @@ const PremiumHomeFeed = () => {
   const [showPostSuccess, setShowPostSuccess] = useState(false);
   const [leftOpen, setLeftOpen] = useState(false);
   const [rightOpen, setRightOpen] = useState(false);
-  const [posts, setPosts] = useState([]);
+  const [posts, setPosts] = useState([]); // রিয়েল পোস্ট স্টোর করার জন্য
 
-  // ১. ভয়েস কমান্ড ফাংশন
+  // ১. ডাটাবেস থেকে পোস্ট নিয়ে আসার ফাংশন
+  const fetchPosts = async () => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/api/posts`);
+      setPosts(response.data);
+    } catch (error) {
+      console.error("Neural Fetch Error:", error);
+    }
+  };
+
+  useEffect(() => {
+    fetchPosts();
+    // অটো রিফ্রেশ (প্রতি ১০ সেকেন্ডে)
+    const interval = setInterval(fetchPosts, 10000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // ২. ফলো/কানেক্ট হ্যান্ডলার
+  const handleFollow = async (targetUserId) => {
+    try {
+      console.log(`Connecting to: ${targetUserId}`);
+      setActiveDrift(`Linking: ${targetUserId}`);
+      // এখানে আপনার ব্যাকএন্ড ফলো এপিআই কল করতে পারেন
+      setTimeout(() => setActiveDrift(null), 2000);
+    } catch (e) {
+      setActiveDrift("Link Failed");
+    }
+  };
+
+  // ভয়েস কমান্ড ফাংশন
   const startVoiceCommand = () => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
@@ -52,15 +79,39 @@ const PremiumHomeFeed = () => {
   const handleNeuralAction = async (cmd) => {
     if (cmd.includes("post") || cmd.includes("create")) {
       const content = cmd.replace(/create post|make post|new post|post/g, "").trim();
-      if (!content) { setActiveDrift("Empty Content"); return; }
+      if (!content) { 
+        setActiveDrift("Empty Content"); 
+        setTimeout(() => setActiveDrift(null), 2000);
+        return; 
+      }
+      
       try {
         setActiveDrift("Transmitting...");
-        const postData = { userId: user.sub, userName: user.nickname, desc: content };
-        await axios.post(`${API_BASE_URL}/api/posts`, postData);
+        const token = await getAccessTokenSilently();
+        
+        const formData = new FormData();
+        formData.append("text", content);
+        formData.append("authorName", user?.nickname || user?.name || "Anonymous");
+        formData.append("authorAvatar", user?.picture || "");
+
+        await axios.post(`${API_BASE_URL}/api/posts`, formData, {
+          headers: { 
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "multipart/form-data" 
+          }
+        });
+
         setActiveDrift("Post Live!");
         setShowPostSuccess(true);
-        setTimeout(() => {setActiveDrift(null); setShowPostSuccess(false);}, 3000);
-      } catch (e) { setActiveDrift("Sync Failed"); }
+        fetchPosts(); // নতুন পোস্ট আসার পর লিস্ট আপডেট
+        setTimeout(() => {
+          setActiveDrift(null); 
+          setShowPostSuccess(false);
+        }, 3000);
+      } catch (e) { 
+        setActiveDrift("Sync Failed"); 
+        setTimeout(() => setActiveDrift(null), 2000);
+      }
     } 
     else if (cmd.includes("search")) {
       const q = cmd.replace("search", "").trim();
@@ -73,7 +124,7 @@ const PremiumHomeFeed = () => {
   return (
     <div className="flex w-full h-screen bg-[#050508] text-white overflow-hidden font-sans">
       
-      {/* --- ২. বাম সাইডবার (মোবাইলে স্লাইড হবে) --- */}
+      {/* --- ২. বাম সাইডবার --- */}
       <motion.aside
         initial={false}
         animate={{ x: leftOpen ? 0 : (window.innerWidth < 768 ? -320 : 0) }}
@@ -100,10 +151,9 @@ const PremiumHomeFeed = () => {
         </nav>
       </motion.aside>
 
-      {/* --- ৩. মেইন ফিড (মাঝখানের অংশ) --- */}
+      {/* --- ৩. মেইন ফিড --- */}
       <main className="flex-1 h-full overflow-y-auto no-scrollbar relative">
         
-        {/* মোবাইল বাটনসমূহ */}
         <div className="md:hidden fixed top-1/2 -translate-y-1/2 w-full flex justify-between px-2 z-[200] pointer-events-none">
           <button 
             onClick={() => {setLeftOpen(!leftOpen); setRightOpen(false);}}
@@ -137,22 +187,36 @@ const PremiumHomeFeed = () => {
             ))}
           </div>
 
-          {/* পোস্ট কার্ডস */}
+          {/* পোস্ট কার্ডস (রিয়েল ডাটা কানেক্টেড) */}
           <div className="space-y-6">
-            {[1,2,3].map(p => (
-              <motion.div key={p} className={`${glassStyle} rounded-[2.5rem] p-6`}>
+            {posts.map((p, index) => (
+              <motion.div key={p.id || index} initial={{ opacity: 0 }} animate={{ opacity: 1 }} className={`${glassStyle} rounded-[2.5rem] p-6`}>
                 <div className="flex justify-between items-center mb-4">
                   <div className="flex items-center gap-3">
-                    <img src={`https://i.pravatar.cc/150?u=${p+10}`} className="w-10 h-10 rounded-xl border border-white/10" alt=""/>
+                    <img src={p.authorAvatar || `https://i.pravatar.cc/150?u=${index}`} className="w-10 h-10 rounded-xl border border-white/10" alt=""/>
                     <div>
-                      <h4 className="text-[12px] font-black uppercase italic tracking-tighter">Nexus_Drifter_{p}</h4>
-                      <p className="text-[8px] text-cyan-500 font-bold uppercase tracking-widest">Verified Neural</p>
+                      <h4 className="text-[12px] font-black uppercase italic tracking-tighter">{p.authorName || "Anonymous_Drifter"}</h4>
+                      {/* ইউজার আইডি বার */}
+                      <p className="text-[7px] text-gray-500 font-mono tracking-tighter">SIGNAL_ID: {p.id || 'SYNCING...'}</p>
                     </div>
                   </div>
+                  <button onClick={() => handleFollow(p.authorName)} className="text-cyan-500 hover:text-white p-2">
+                    <FaUserPlus size={14} />
+                  </button>
                 </div>
-                <div className="aspect-video bg-white/5 rounded-[2rem] mb-4 overflow-hidden border border-white/5">
-                    <img src={`https://picsum.photos/600/400?random=${p}`} className="w-full h-full object-cover opacity-80" alt=""/>
-                </div>
+
+                {/* পোস্টের টেক্সট কন্টেন্ট */}
+                <p className="text-sm font-light text-gray-200 mb-4 leading-relaxed">
+                  {p.content || p.desc}
+                </p>
+
+                {/* পোস্টের মিডিয়া */}
+                {(p.mediaUrl || p.imageUrl) && (
+                  <div className="aspect-video bg-white/5 rounded-[2rem] mb-4 overflow-hidden border border-white/5">
+                      <img src={p.mediaUrl ? `${API_BASE_URL}${p.mediaUrl}` : p.imageUrl} className="w-full h-full object-cover opacity-90" alt=""/>
+                  </div>
+                )}
+
                 <div className="flex gap-6 px-2">
                   <FaHeart className="text-gray-500 hover:text-rose-500 transition-colors cursor-pointer" />
                   <FaComment className="text-gray-500 hover:text-cyan-400 cursor-pointer" />
@@ -212,15 +276,15 @@ const PremiumHomeFeed = () => {
               </div>
               <div className="flex-1">
                 <p className="text-[11px] font-black uppercase italic tracking-tighter">Drifter_Alpha_{i}</p>
-                <p className="text-[7px] text-gray-500 font-bold uppercase">Online</p>
+                {/* আইডি ডিসপ্লে বার */}
+                <p className="text-[7px] text-gray-500 font-bold uppercase">ID: OX-LINK-{i}99</p>
               </div>
-              <button className="text-[8px] font-black px-3 py-1.5 border border-cyan-500/30 text-cyan-400 rounded-lg group-hover:bg-cyan-500 group-hover:text-black transition-all">CONNECT</button>
+              <button onClick={() => handleFollow(`OX-LINK-${i}99`)} className="text-[8px] font-black px-3 py-1.5 border border-cyan-500/30 text-cyan-400 rounded-lg group-hover:bg-cyan-500 group-hover:text-black transition-all">CONNECT</button>
             </div>
           ))}
         </div>
       </motion.aside>
 
-      {/* মোবাইল মাস্ক/ব্যাকড্রপ */}
       {(leftOpen || rightOpen) && (
         <div onClick={() => {setLeftOpen(false); setRightOpen(false);}} className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[140] md:hidden" />
       )}

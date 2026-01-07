@@ -2,8 +2,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   FaPlus, FaTimes, FaMusic, FaMagic,
-  FaCloudUploadAlt, FaImage, FaVideo, FaRegSmile, FaEllipsisH, FaPaperPlane
-} from 'react-icons/fa';
+  FaCloudUploadAlt, FaImage, FaVideo, FaRegSmile, FaEllipsisH, FaPaperPlane, FaUserPlus
+} from 'react-icons/fa'; // FaUserPlus যোগ করা হয়েছে যদি ভবিষ্যতে লাগে
 import { HiMenuAlt3 } from 'react-icons/hi'; 
 import { useAuth0 } from "@auth0/auth0-react";
 import axios from "axios";
@@ -24,7 +24,7 @@ const PremiumHomeFeed = ({ searchQuery }) => {
   const [mediaType, setMediaType] = useState(null); 
   const postFileInputRef = useRef(null);
 
-  // ১. URL হ্যান্ডলিং - ট্রেইলিং স্ল্যাশ মুছে ফেলা হয়েছে
+  // ১. API URL - স্ল্যাশ হ্যান্ডলিং
   const API_URL = (import.meta.env.VITE_API_BASE_URL || "https://onyx-drift-api-server.onrender.com").replace(/\/$/, "");
 
   const handleMenuClick = (path) => {
@@ -35,7 +35,6 @@ const PremiumHomeFeed = ({ searchQuery }) => {
   const fetchPosts = async () => {
     try {
       setLoading(true);
-      // ক্যাশ এড়াতে টাইমস্ট্যাম্প ব্যবহার করা হয়েছে
       const response = await axios.get(`${API_URL}/api/posts?t=${Date.now()}`);
       setPosts(response.data);
     } catch (err) {
@@ -63,6 +62,7 @@ const PremiumHomeFeed = ({ searchQuery }) => {
     }
   };
 
+  // স্টোরি স্টেট
   const [stories, setStories] = useState(() => {
     const savedStories = localStorage.getItem('user_stories');
     const currentTime = Date.now();
@@ -117,28 +117,30 @@ const PremiumHomeFeed = ({ searchQuery }) => {
 
       const headers = { "Content-Type": "multipart/form-data" };
       
-      // ২. অথ টোকেন ম্যানেজমেন্ট - রিফ্রেশ টোকেন এরর হ্যান্ডলিং
+      // অথেনটিকেশন চেক এবং টোকেন ম্যানেজমেন্ট
       if (isAuthenticated) {
         try {
           const token = await getAccessTokenSilently();
           headers["Authorization"] = `Bearer ${token}`;
         } catch (e) {
-          console.warn("Token acquisition failed, trying without token.");
+          console.warn("Token acquisition failed.");
         }
       }
 
       await axios.post(`${API_URL}/api/posts`, formData, { headers });
 
+      // স্টেট ক্লিয়ার করা
       setPostText("");
       setSelectedPostMedia(null);
       setMediaFile(null);
       setMediaType(null);
       
-      setTimeout(fetchPosts, 800);
+      // পোস্ট হওয়ার পর ফিড রিফ্রেশ
+      setTimeout(fetchPosts, 1000);
       
     } catch (err) {
       console.error("Post Error:", err.response?.data || err);
-      alert("Broadcast failed. Check server connection or CORS settings.");
+      alert("Broadcast failed. Check server connection.");
     }
   };
 
@@ -169,6 +171,7 @@ const PremiumHomeFeed = ({ searchQuery }) => {
   return (
     <div className="w-full min-h-screen bg-transparent space-y-4 md:space-y-6 pb-24 overflow-x-hidden relative">
       
+      {/* মোবাইল হেডার */}
       <div className="md:hidden flex justify-between items-center px-4 pt-4">
         <h1 className="text-xl font-black text-white italic tracking-tighter">ONYX<span className="text-cyan-400">DRIFT</span></h1>
         <button 
@@ -179,6 +182,7 @@ const PremiumHomeFeed = ({ searchQuery }) => {
         </button>
       </div>
 
+      {/* মোবাইল সাইডবার ওভারলে */}
       <AnimatePresence>
         {isSidebarOpen && (
           <motion.div 
@@ -191,6 +195,7 @@ const PremiumHomeFeed = ({ searchQuery }) => {
         )}
       </AnimatePresence>
 
+      {/* মোবাইল সাইডবার ড্রয়ার */}
       <aside className={`
         fixed top-0 left-0 h-full w-[290px] bg-[#020617] border-r border-white/10 z-[1001]
         transform transition-transform duration-300 ease-in-out flex flex-col
@@ -204,66 +209,28 @@ const PremiumHomeFeed = ({ searchQuery }) => {
         
         <div className="flex-1 overflow-y-auto p-4 space-y-2 no-scrollbar">
           <nav className="space-y-1">
-            <div 
-              onClick={() => handleMenuClick('/')}
-              className="flex items-center gap-4 p-4 bg-cyan-500/10 text-cyan-400 rounded-2xl border border-cyan-500/20 cursor-pointer active:scale-95 transition-all"
-            >
+            <div onClick={() => handleMenuClick('/')} className="flex items-center gap-4 p-4 bg-cyan-500/10 text-cyan-400 rounded-2xl border border-cyan-500/20 cursor-pointer">
               <FaPlus size={14} />
               <span className="font-bold uppercase text-[11px] tracking-widest">Feed</span>
             </div>
-
-            <div 
-              onClick={() => handleMenuClick('/analytics')}
-              className="flex items-center gap-4 p-4 text-gray-400 hover:bg-white/5 rounded-2xl transition-all cursor-pointer active:scale-95 group"
-            >
+            {/* অন্য মেনু আইটেম */}
+            <div onClick={() => handleMenuClick('/analytics')} className="flex items-center gap-4 p-4 text-gray-400 hover:bg-white/5 rounded-2xl transition-all cursor-pointer">
               <FaMagic size={16} />
               <span className="font-bold uppercase text-[11px] tracking-widest">Analytics</span>
             </div>
-
-            <div 
-              onClick={() => handleMenuClick('/messenger')}
-              className="flex items-center gap-4 p-4 text-gray-400 hover:bg-white/5 rounded-2xl transition-all cursor-pointer active:scale-95 group"
-            >
+            <div onClick={() => handleMenuClick('/messenger')} className="flex items-center gap-4 p-4 text-gray-400 hover:bg-white/5 rounded-2xl transition-all cursor-pointer">
               <FaPaperPlane size={16} />
               <span className="font-bold uppercase text-[11px] tracking-widest">Messages</span>
             </div>
-
-            <div 
-              onClick={() => handleMenuClick('/explorer')}
-              className="flex items-center gap-4 p-4 text-gray-400 hover:bg-white/5 rounded-2xl transition-all cursor-pointer active:scale-95 group"
-            >
-              <FaImage size={16} />
-              <span className="font-bold uppercase text-[11px] tracking-widest">Explore</span>
-            </div>
-
-            <div 
-              onClick={() => handleMenuClick('/settings')}
-              className="flex items-center gap-4 p-4 text-gray-400 hover:bg-white/5 rounded-2xl transition-all cursor-pointer active:scale-95 group"
-            >
-              <FaEllipsisH size={16} />
-              <span className="font-bold uppercase text-[11px] tracking-widest">Settings</span>
-            </div>
           </nav>
-
-          <div className="mt-8 p-5 bg-gradient-to-br from-cyan-500/20 to-purple-500/10 rounded-[2rem] border border-white/10 relative overflow-hidden group">
-            <div className="relative z-10">
-              <span className="text-[10px] font-black text-cyan-400 uppercase tracking-tighter">Onyx Pro</span>
-              <p className="text-[11px] text-gray-400 mt-1 leading-relaxed">Level up your neural experience today.</p>
-              <button 
-                onClick={() => handleMenuClick('/upgrade')}
-                className="mt-4 w-full py-3 bg-white/5 border border-white/10 rounded-xl text-[9px] font-black uppercase tracking-widest active:bg-cyan-500 active:text-black transition-all"
-              >
-                Upgrade System
-              </button>
-            </div>
-          </div>
         </div>
       </aside>
 
+      {/* স্টোরি সেকশন */}
       <section className="px-3 md:px-4 pt-2 md:pt-4">
         <div className="flex gap-4 md:gap-5 overflow-x-auto pb-4 no-scrollbar items-center">
           <div onClick={() => setIsModalOpen(true)} className="flex-shrink-0 flex flex-col items-center gap-2 cursor-pointer">
-            <div className="w-14 h-14 md:w-16 md:h-16 rounded-full border-2 border-dashed border-cyan-500/50 flex items-center justify-center bg-cyan-500/5 hover:bg-cyan-500/20 transition-all">
+            <div className="w-14 h-14 md:w-16 md:h-16 rounded-full border-2 border-dashed border-cyan-500/50 flex items-center justify-center bg-cyan-500/5 hover:bg-cyan-500/20">
               <FaPlus className="text-cyan-400 text-lg md:text-xl" />
             </div>
             <span className="text-[10px] font-bold uppercase text-cyan-400 mt-1">Story</span>
@@ -282,6 +249,7 @@ const PremiumHomeFeed = ({ searchQuery }) => {
         </div>
       </section>
 
+      {/* পোস্ট ইনপুট বক্স */}
       <section className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-[1.5rem] md:rounded-[2rem] p-4 md:p-5 mx-3 md:mx-4">
         <div className="flex items-start gap-3 md:gap-4 mb-4">
           <div className="w-10 h-10 md:w-12 md:h-12 rounded-xl md:rounded-2xl overflow-hidden border border-white/10 shrink-0">
@@ -325,6 +293,7 @@ const PremiumHomeFeed = ({ searchQuery }) => {
         </div>
       </section>
 
+      {/* পোস্ট ফিড */}
       <section className="space-y-4 md:space-y-6 px-3 md:px-4">
         <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-cyan-400 px-2">Neural Feed</h2>
         {loading ? (
@@ -342,16 +311,17 @@ const PremiumHomeFeed = ({ searchQuery }) => {
         )}
       </section>
 
+      {/* স্টোরি আপলোড মোডাল */}
       <AnimatePresence>
         {isModalOpen && (
           <div className="fixed inset-0 z-[1500] flex items-center justify-center bg-black/95 backdrop-blur-2xl p-4">
               <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} 
-                className="relative w-full max-sm:max-w-[90%] max-w-sm aspect-[9/16] bg-[#0b1120] rounded-[2.5rem] overflow-hidden border border-white/10 flex flex-col shadow-2xl">
-              <div className="relative flex-1 bg-black flex items-center justify-center overflow-hidden">
+                className="relative w-full max-sm:max-w-[90%] max-w-sm aspect-[9/16] bg-[#0b1120] rounded-[2.5rem] overflow-hidden border border-white/10 flex flex-col">
+              <div className="relative flex-1 bg-black flex items-center justify-center">
                 {selectedImage ? (
                   <>
                     <img src={selectedImage} className={`w-full h-full object-cover ${filters.find(f => f.name === activeFilter).class}`} alt="" />
-                    <div className="absolute right-4 top-1/2 -translate-y-1/2 flex flex-col gap-4 z-50 bg-black/20 p-3 rounded-full border border-white/5 backdrop-blur-md">
+                    <div className="absolute right-4 top-1/2 -translate-y-1/2 flex flex-col gap-4 z-50 bg-black/20 p-3 rounded-full border border-white/5">
                       <button onClick={() => {
                         const nextIdx = (filters.findIndex(f => f.name === activeFilter) + 1) % filters.length;
                         setActiveFilter(filters[nextIdx].name);
@@ -375,6 +345,7 @@ const PremiumHomeFeed = ({ searchQuery }) => {
         )}
       </AnimatePresence>
 
+      {/* স্টোরি ভিউয়ার */}
       <AnimatePresence>
         {viewingStory && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[2000] bg-black flex flex-col items-center justify-center">
