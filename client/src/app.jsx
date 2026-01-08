@@ -9,13 +9,15 @@ import { BRAND_NAME } from "./utils/constants";
 import Navbar from "./components/Navbar";
 import Sidebar from "./components/Sidebar";
 import Home from "./pages/Home";
-import Landing from "./pages/Landing"; // আপনার লগইন বাটন বা বার এখানে আছে
+import Landing from "./pages/Landing"; 
 import Messenger from "./pages/Messenger";
 import PremiumHomeFeed from "./pages/PremiumHomeFeed";
 import Analytics from "./pages/Analytics";
 import Explorer from "./pages/Explorer";
 import Profile from "./pages/Profile";
 import Settings from "./pages/Settings";
+// ১. এখানে FollowingPage ইমপোর্ট করা হলো (অবশ্যই এই পাথে ফাইলটি থাকতে হবে)
+import FollowingPage from "./pages/FollowingPage"; 
 
 // Protected Route Component
 const ProtectedRoute = ({ component: Component, ...props }) => {
@@ -30,7 +32,7 @@ const ProtectedRoute = ({ component: Component, ...props }) => {
 };
 
 export default function App() {
-  const { isAuthenticated, isLoading, user, loginWithRedirect } = useAuth0();
+  const { isAuthenticated, isLoading, user } = useAuth0();
   const location = useLocation();
   const socket = useRef(null); 
   const [searchQuery, setSearchQuery] = useState("");
@@ -41,7 +43,7 @@ export default function App() {
       const socketUrl = "https://onyx-drift-app-final.onrender.com";
       
       socket.current = io(socketUrl, {
-        transports: ["websocket", "polling"],
+        transports: ["polling", "websocket"], // Polling আগে রাখা ভালো কানেকশন এরর এড়াতে
         path: "/socket.io/",
         withCredentials: true,
       });
@@ -57,7 +59,7 @@ export default function App() {
     }
   }, [isAuthenticated, user?.sub]);
 
-  // ২. লোডিং স্টেট (Neural Spin)
+  // ২. লোডিং স্টেট
   if (isLoading) return (
     <div className="h-screen flex items-center justify-center bg-[#020617]">
       <motion.div
@@ -75,7 +77,6 @@ export default function App() {
 
   const isLanding = location.pathname === "/";
 
-  // ৩. মূল গেটওয়ে লজিক: লগইন না থাকলে শুধু ল্যান্ডিং পেজ দেখাবে
   if (!isAuthenticated && !isLanding) {
     return <Navigate to="/" />;
   }
@@ -83,7 +84,6 @@ export default function App() {
   return (
     <div className="min-h-screen bg-[#020617] text-gray-200 overflow-x-hidden selection:bg-cyan-500/30">
       
-      {/* নেভবার শুধু লগইন করা অবস্থায় দেখাবে */}
       {isAuthenticated && (
         <div className="fixed top-0 w-full z-[100] backdrop-blur-xl border-b border-white/5 bg-[#020617]/80">
           <Navbar user={user} socket={socket} setSearchQuery={setSearchQuery} />
@@ -93,7 +93,7 @@ export default function App() {
       <div className={`flex justify-center w-full ${isAuthenticated ? "pt-[100px]" : "pt-0"}`}>
         <div className="flex w-full max-w-[1440px] px-4 gap-6">
           
-          {/* সাইডবার শুধু ফিড বা প্রোফাইলে দেখাবে */}
+          {/* সাইডবার লজিক: ম্যেসেঞ্জার এবং সেটিংস বাদে সব জায়গায় দেখাবে */}
           {isAuthenticated && !["/messenger", "/settings", "/"].includes(location.pathname) && (
             <aside className="hidden lg:block w-[280px] sticky top-[100px] h-[calc(100vh-120px)]">
               <div className="bg-white/5 backdrop-blur-2xl border border-white/10 rounded-[2.5rem] p-4 h-full shadow-2xl">
@@ -106,7 +106,6 @@ export default function App() {
             <div className="w-full">
               <AnimatePresence mode="wait">
                 <Routes location={location} key={location.pathname}>
-                  {/* ল্যান্ডিং পেজ: এখানে আপনার লগইন বাটন আছে */}
                   <Route path="/" element={isAuthenticated ? <Navigate to="/feed" /> : <Landing />} />
                   
                   {/* প্রটেক্টেড রুটস */}
@@ -116,7 +115,9 @@ export default function App() {
                   <Route path="/analytics" element={<ProtectedRoute component={Analytics} />} />
                   <Route path="/explorer" element={<ProtectedRoute component={Explorer} />} />
                   <Route path="/settings" element={<ProtectedRoute component={Settings} />} />
-                  <Route path="/following" element={<FollowingPage />} />
+                  
+                  {/* ২. Following Page রাউটটি প্রটেক্টেড করা হলো */}
+                  <Route path="/following" element={<ProtectedRoute component={FollowingPage} />} />
                   
                   <Route path="*" element={<Navigate to="/" />} />
                 </Routes>
