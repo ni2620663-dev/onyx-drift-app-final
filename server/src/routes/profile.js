@@ -1,17 +1,31 @@
 import express from "express";
 import multer from "multer";
-import mongoose from "mongoose"; // [FIX] mongoose ইম্পোর্ট করা হয়েছে ভ্যালিডেশনের জন্য
+import mongoose from "mongoose"; 
 import { v2 as cloudinary } from "cloudinary";
 import auth from "../../middleware/auth.js";
 import User from "../../models/User.js";
 
 const router = express.Router();
 
-// ১. Multer Setup (টেম্পোরারি ফাইল স্টোরেজ)
+// ১. Multer Setup (Temporary File Storage)
 const upload = multer({ dest: 'uploads/' });
 
 /* ==========================================================
-    ২. GET PROFILE BY ID
+    ২. GET ALL USERS (Fixes 404 for /api/user/all)
+    Route: GET /api/profile/all (or /api/user/all based on server.js)
+========================================================== */
+router.get("/all", auth, async (req, res) => {
+  try {
+    const users = await User.find().select("name nickname avatar auth0Id isVerified bio");
+    res.json(users);
+  } catch (err) {
+    console.error("Fetch All Users Error:", err);
+    res.status(500).json({ msg: "Failed to fetch neural network users" });
+  }
+});
+
+/* ==========================================================
+    ৩. GET PROFILE BY ID
     Route: GET /api/profile/:userId
 ========================================================== */
 router.get("/:userId", async (req, res) => {
@@ -35,7 +49,7 @@ router.get("/:userId", async (req, res) => {
 });
 
 /* ==========================================================
-    ৩. UPDATE PROFILE (With Image Support)
+    ৪. UPDATE PROFILE (With Image Support)
     Route: PUT /api/profile/update-profile
 ========================================================== */
 router.put('/update-profile', auth, upload.fields([{ name: 'avatar' }, { name: 'cover' }]), async (req, res) => {
@@ -74,7 +88,7 @@ router.put('/update-profile', auth, upload.fields([{ name: 'avatar' }, { name: '
 });
 
 /* ==========================================================
-    ৪. FOLLOW / UNFOLLOW SYSTEM
+    ৫. FOLLOW / UNFOLLOW SYSTEM
     Route: POST /api/profile/follow/:targetId
 ========================================================== */
 router.post("/follow/:targetId", auth, async (req, res) => {
@@ -93,14 +107,14 @@ router.post("/follow/:targetId", auth, async (req, res) => {
     const isFollowing = currentUser.following.includes(targetId);
 
     if (isFollowing) {
-      // Unfollow - Atomic Update (উভয় প্রোফাইল থেকে ডাটা রিমুভ)
+      // Unfollow - Atomic Update
       await Promise.all([
         User.findOneAndUpdate({ auth0Id: myAuth0Id }, { $pull: { following: targetId } }),
         User.findOneAndUpdate({ auth0Id: targetId }, { $pull: { followers: myAuth0Id } })
       ]);
       res.json({ msg: "Unfollowed successfully", isFollowing: false });
     } else {
-      // Follow - Atomic Update (উভয় প্রোফাইলে ডাটা অ্যাড)
+      // Follow - Atomic Update
       await Promise.all([
         User.findOneAndUpdate({ auth0Id: myAuth0Id }, { $addToSet: { following: targetId } }),
         User.findOneAndUpdate({ auth0Id: targetId }, { $addToSet: { followers: myAuth0Id } })
