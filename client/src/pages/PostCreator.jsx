@@ -13,7 +13,7 @@ const PostCreator = () => {
     if (!content) return;
     setLoading(true);
     try {
-      const res = await axios.post('http://localhost:10000/api/ai/enhance', { prompt: content });
+      const res = await axios.post('https://onyx-drift-app-final.onrender.com/api/ai/enhance', { prompt: content });
       setContent(res.data.enhancedText);
     } catch (err) { console.error("AI Error", err); }
     finally { setLoading(false); }
@@ -32,10 +32,10 @@ const PostCreator = () => {
         const base64Data = reader.result;
 
         // ব্যাকেন্ডে পাঠানো (Cloudinary আপলোড হবে)
-        const uploadRes = await axios.post('http://localhost:10000/api/upload', { image: base64Data });
+        const uploadRes = await axios.post('https://onyx-drift-app-final.onrender.com/api/upload', { image: base64Data });
         
         // ফাইনাল পোস্ট সেভ
-        await axios.post('http://localhost:10000/api/posts', {
+        await axios.post('https://onyx-drift-app-final.onrender.com/api/posts', {
           content,
           image: uploadRes.data.url,
           type: postType

@@ -17,7 +17,7 @@ const Home = ({ user, searchQuery = "" }) => {
   const [isCached, setIsCached] = useState(false);
 
   // ১. এপিআই ইউআরএল ফিক্স (এনভায়রনমেন্ট ভেরিয়েবল সাপোর্টসহ)
-  const BASE = (import.meta.env.VITE_API_BASE_URL || "https://onyx-drift-api-server.onrender.com").replace(/\/$/, "");
+  const BASE = (import.meta.env.VITE_API_BASE_URL || "https://onyx-drift-app-final.onrender.com").replace(/\/$/, "");
   const API_BASE_URL = `${BASE}/api`;
 
   // ২. মেমোইজড ফেচ ফাংশন

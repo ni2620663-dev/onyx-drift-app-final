@@ -10,7 +10,7 @@ const NewsFeed = () => {
     const fetchFeed = async () => {
       try {
         // ১০০ মিলিয়ন ইউজারের জন্য ক্যাশ-ফার্স্ট রিকোয়েস্ট
-        const res = await axios.get('http://localhost:10000/api/feed/current-user');
+        const res = await axios.get('https://onyx-drift-app-final.onrender.com/api/feed/current-user');
         setPosts(res.data);
       } catch (err) {
         console.error("Feed Transmission Interrupted");

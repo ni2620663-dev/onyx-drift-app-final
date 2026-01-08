@@ -8,7 +8,7 @@ import { HiMenuAlt3 } from 'react-icons/hi';
 import { useAuth0 } from "@auth0/auth0-react";
 import axios from "axios";
 import { useNavigate } from 'react-router-dom'; 
-import { io } from "socket.io-client"; // সকেট ইমপোর্ট
+import { io } from "socket.io-client"; 
 import PostCard from "../components/PostCard"; 
 
 const PremiumHomeFeed = ({ searchQuery }) => {
@@ -24,16 +24,17 @@ const PremiumHomeFeed = ({ searchQuery }) => {
   const [mediaFile, setMediaFile] = useState(null); 
   const [mediaType, setMediaType] = useState(null); 
   const postFileInputRef = useRef(null);
-  const socketRef = useRef(null); // সকেট রেফারেন্স
+  const socketRef = useRef(null); 
 
-  // ১. API URL - স্ল্যাশ হ্যান্ডলিং
-  const API_URL = (import.meta.env.VITE_API_BASE_URL || "https://onyx-drift-api-server.onrender.com").replace(/\/$/, "");
+  // ১. এপিআই ইউআরএল ফিক্স - পুরনো লিঙ্ক বদলে নতুন লিঙ্ক দেওয়া হয়েছে
+  const API_URL = (import.meta.env.VITE_API_BASE_URL || "https://onyx-drift-app-final.onrender.com").replace(/\/$/, "");
 
   // রিয়েল-টাইম সকেট লজিক
   useEffect(() => {
     if (isAuthenticated) {
       socketRef.current = io(API_URL, {
-        transports: ["polling", "websocket"],
+        transports: ["websocket", "polling"], // রেন্ডারের জন্য সিকোয়েন্স জরুরি
+        path: "/socket.io/",
         withCredentials: true
       });
 
@@ -55,6 +56,7 @@ const PremiumHomeFeed = ({ searchQuery }) => {
   const fetchPosts = async () => {
     try {
       setLoading(true);
+      // সঠিক এপিআই এন্ডপয়েন্টে রিকোয়েস্ট পাঠানো
       const response = await axios.get(`${API_URL}/api/posts?t=${Date.now()}`);
       setPosts(response.data);
     } catch (err) {
@@ -152,6 +154,7 @@ const PremiumHomeFeed = ({ searchQuery }) => {
       setSelectedPostMedia(null);
       setMediaFile(null);
       setMediaType(null);
+      fetchPosts(); // পোস্ট করার পর লিস্ট রিফ্রেশ করা
       
     } catch (err) {
       console.error("Post Error:", err.response?.data || err);

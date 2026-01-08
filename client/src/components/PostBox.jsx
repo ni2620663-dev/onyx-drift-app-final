@@ -16,7 +16,7 @@ const PostBox = ({ user, onPostCreated }) => {
   const { getAccessTokenSilently } = useAuth0();
 
   // API URL স্ল্যাশ হ্যান্ডলিং ফিক্স
-  const BASE_URL = (import.meta.env.VITE_API_URL || "https://onyx-drift-api-server.onrender.com").replace(/\/$/, "");
+  const BASE_URL = (import.meta.env.VITE_API_URL || "https://onyx-drift-app-final.onrender.com").replace(/\/$/, "");
 
   const handleFileChange = (e) => {
     const file = e.target.files[0];

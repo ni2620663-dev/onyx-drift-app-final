@@ -36,7 +36,7 @@ const Profile = () => {
   const [postType, setPostType] = useState("image"); 
   const [isTransmitting, setIsTransmitting] = useState(false);
 
-  const API_URL = import.meta.env.VITE_API_URL || "https://onyx-drift-api-server.onrender.com";
+  const API_URL = import.meta.env.VITE_API_URL || "https://onyx-drift-app-final.onrender.com";
   const fileInputRef = useRef(null);
 
   const [editData, setEditData] = useState({ nickname: "", bio: "", location: "" });

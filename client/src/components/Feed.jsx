@@ -11,7 +11,7 @@ import {
 import { HiChevronLeft, HiChevronRight } from 'react-icons/hi2';
 
 // API Endpoint Logic - Cleaned for Production
-const API_BASE_URL = (import.meta.env.VITE_API_URL || "https://onyx-drift-api-server.onrender.com").replace(/\/$/, "");
+const API_BASE_URL = (import.meta.env.VITE_API_URL || "https://onyx-drift-app-final.onrender.com").replace(/\/$/, "");
 
 const PremiumHomeFeed = () => {
   const navigate = useNavigate();

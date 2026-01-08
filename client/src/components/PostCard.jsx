@@ -19,7 +19,8 @@ const PostCard = ({ post, onAction, onDelete }) => {
   if (!post) return null;
 
   // ১. API URL ফিক্স - ট্রেইলিং স্ল্যাশ হ্যান্ডলিং এবং সঠিক এনভায়রনমেন্ট ভেরিয়েবল
-  const API_URL = (import.meta.env.VITE_API_BASE_URL || "https://onyx-drift-api-server.onrender.com").replace(/\/$/, "");
+  const API_URL = (import.meta.env.VITE_API_BASE_URL || "https://onyx-drift-app-final.onrender.com").replace(/\/$/, "");
+
   
   const likesArray = Array.isArray(post.likes) ? post.likes : [];
   // Auth0 sub ব্যবহার করে চেক করা হচ্ছে ইউজার অলরেডি লাইক করেছে কিনা

@@ -15,11 +15,15 @@ const Watch = () => {
   const [uploadData, setUploadData] = useState({ title: "", file: null });
   const fileInputRef = useRef();
 
-  // ১. ডাটাবেস থেকে ভিডিও নিয়ে আসা
+  // ১. এপিআই ইউআরএল সেটআপ
+  const BASE_URL = "https://onyx-drift-app-final.onrender.com";
+
+  // ২. ডাটাবেস থেকে ভিডিও নিয়ে আসা
   useEffect(() => {
     const fetchVideos = async () => {
       try {
-        const res = await axios.get("http://localhost:10000/api/watch");
+        // এখানে ফিক্স করা হয়েছে: ডাইরেক্ট এন্ডপয়েন্ট কল
+        const res = await axios.get(`${BASE_URL}/api/watch`);
         setVideos(res.data);
       } catch (err) {
         console.error("Fetch failed", err);
@@ -28,14 +32,14 @@ const Watch = () => {
     fetchVideos();
   }, []);
 
-  // ২. ভিডিও আপলোড হ্যান্ডলার (Cloudinary + MongoDB)
+  // ৩. ভিডিও আপলোড হ্যান্ডলার (Cloudinary + MongoDB)
   const handleUpload = async () => {
     if (!uploadData.title || !uploadData.file) return alert("Title and Video required!");
     
     setLoading(true);
     const formData = new FormData();
     formData.append("file", uploadData.file);
-    formData.append("upload_preset", "onyx_upload"); // আপনার Cloudinary প্রিসেট
+    formData.append("upload_preset", "onyx_upload"); 
 
     try {
       // Cloudinary তে ভিডিও আপলোড
@@ -51,8 +55,8 @@ const Watch = () => {
         userImg: user?.picture
       };
 
-      // আপনার সার্ভারে সেভ করা
-      const res = await axios.post("http://localhost:10000/api/watch/upload", videoPayload);
+      // আপনার সার্ভারে সেভ করা (localhost বদলে BASE_URL ব্যবহার করা হয়েছে)
+      const res = await axios.post(`${BASE_URL}/api/watch/upload`, videoPayload);
       setVideos([res.data, ...videos]);
       setIsUploading(false);
       setUploadData({ title: "", file: null });
@@ -70,7 +74,7 @@ const Watch = () => {
   return (
     <div className="flex bg-[#050505] min-h-screen">
       
-      {/* বাম পাশের ফেসবুক ওয়াচ মেনু */}
+      {/* বাম পাশের মেনু */}
       <div className="hidden xl:flex w-[350px] sticky top-[80px] h-[calc(100vh-80px)] flex-col p-4 border-r border-white/5">
         <h1 className="text-2xl font-black text-white px-4 mb-6">Watch</h1>
         <div className="space-y-1">
@@ -84,7 +88,7 @@ const Watch = () => {
       {/* মেইন ভিডিও ফিড */}
       <div className="flex-1 max-w-[700px] mx-auto p-4 space-y-6">
         
-        {/* উপরের আপলোড বার (Facebook Style) */}
+        {/* উপরের আপলোড বার */}
         <div className="bg-[#1c1c1c] rounded-2xl p-4 border border-white/5 flex items-center gap-4">
           <img src={user?.picture} className="w-10 h-10 rounded-full" alt="" />
           <button 
@@ -179,7 +183,7 @@ const Watch = () => {
   );
 };
 
-// ছোট হেল্পার কম্পোনেন্ট
+// হেল্পার কম্পোনেন্ট
 const WatchMenuItem = ({ icon, title, active }) => (
   <div className={`flex items-center gap-4 p-3 rounded-xl cursor-pointer font-bold transition ${active ? "bg-blue-500/10 text-blue-500" : "text-gray-400 hover:bg-white/5"}`}>
     <div className="text-lg">{icon}</div>

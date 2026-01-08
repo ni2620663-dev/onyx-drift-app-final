@@ -1,29 +1,28 @@
 import React from 'react';
 import { signInWithPopup } from 'firebase/auth';
-import { auth, googleProvider } from '../firebaseConfig'; // আপনার কনফিগ ফাইল
+import { auth, googleProvider } from '../firebaseConfig'; // আপনার কনফিগ ফাইল নিশ্চিত করুন
 
-const BACKEND_LOGIN_URL = 'http://localhost:5000/api/auth/firebase-login'; // আপনার Express রুট
+// ১. ইউআরএল কোটেশন ঠিক করা হয়েছে
+const BACKEND_LOGIN_URL = 'https://onyx-drift-app-final.onrender.com/api/auth/firebase-login';
 
 const GoogleLoginButton: React.FC = () => {
     
-    // 1. Google Sign-In প্রক্রিয়া শুরু
+    // Google Sign-In প্রক্রিয়া শুরু
     const handleGoogleLogin = async () => {
         try {
             const result = await signInWithPopup(auth, googleProvider);
-            // The signed-in user info.
             const user = result.user;
             
-            // 2. idToken তৈরি (এটিই আপনার গোপন চাবি)
+            // idToken তৈরি (এটিই আপনার ব্যাকএন্ডে ইউজার ভেরিফাই করার চাবি)
             const idToken = await user.getIdToken();
-            console.log("Firebase ID Token:", idToken);
+            console.log("Firebase ID Token generated.");
 
-            // 3. idToken-কে ব্যাকএন্ডে POST রিকোয়েস্টের মাধ্যমে পাঠানো
+            // idToken-কে ব্যাকএন্ডে পাঠানো
             await sendTokenToBackend(idToken);
             
-            alert('লগইন সফল এবং টোকেন ব্যাকএন্ডে পাঠানো হয়েছে!');
+            alert('লগইন সফল এবং ডাটাবেসে সিঙ্ক করা হয়েছে!');
             
         } catch (error: any) {
-            // Handle Errors here.
             console.error("Login Error:", error.code, error.message);
             alert(`লগইন ব্যর্থ হয়েছে: ${error.message}`);
         }
@@ -35,12 +34,10 @@ const GoogleLoginButton: React.FC = () => {
             const response = await fetch(BACKEND_LOGIN_URL, {
                 method: 'POST',
                 headers: {
-                    // idToken সাধারণত Authorization header-এ Bearer Scheme-এর মাধ্যমে পাঠানো হয়
+                    // Authorization header-এ Bearer Scheme ব্যবহার করা সবচেয়ে নিরাপদ
                     'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json' 
-                },
-                // আপনি চাইলে JSON বডিতেও টোকেন পাঠাতে পারেন, তবে Authorization Header সেরা
-                // body: JSON.stringify({ idToken: token }) 
+                }
             });
 
             if (!response.ok) {
@@ -49,22 +46,27 @@ const GoogleLoginButton: React.FC = () => {
             }
 
             const data = await response.json();
-            console.log("ব্যাকএন্ড থেকে সাড়া:", data);
+            console.log("Backend Response:", data);
             
-            // এইখানে আপনি ব্যাকএন্ড থেকে পাওয়া ইউজার ডাটা (যেমন: সেশন কুকি, ইউজার অবজেক্ট) সংরক্ষণ করতে পারেন।
+            // এখানে আপনি টোকেন বা ইউজার ডাটা localStorage/Context এ সেভ করতে পারেন
 
         } catch (error) {
-            console.error("ব্যাকএন্ডে পাঠানোর সমস্যা:", error);
-            throw error; // যাতে মূল handleGoogleLogin ফাংশন এটিকে ধরে ফেলতে পারে
+            console.error("Backend Error:", error);
+            throw error; 
         }
     };
 
     return (
         <button 
             onClick={handleGoogleLogin} 
-            style={{ padding: '10px 20px', fontSize: '16px', cursor: 'pointer' }}
+            className="flex items-center gap-3 bg-white text-black px-6 py-3 rounded-full font-bold shadow-lg hover:bg-gray-100 transition-all active:scale-95"
         >
-            🚀 Login with Google (Frontend Test)
+            <img 
+                src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/041210_google_standard_color_64dp.png" 
+                alt="Google" 
+                className="w-5 h-5"
+            />
+            Login with Google
         </button>
     );
 };

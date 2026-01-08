@@ -19,7 +19,7 @@ const Navbar = ({ user, setSearchQuery }) => {
   const [hasNewNotification, setHasNewNotification] = useState(false);
 
   // ১. ইউআরএল হ্যান্ডলিং (আগের ফাইলগুলোর সাথে সামঞ্জস্য রেখে)
-  const BASE = (import.meta.env.VITE_API_BASE_URL || "https://onyx-drift-api-server.onrender.com").replace(/\/$/, "");
+  const BASE = (import.meta.env.VITE_API_BASE_URL || "https://onyx-drift-app-final.onrender.com").replace(/\/$/, "");
   const API_URL = `${BASE}/api`;
 
   // ২. সকেট সাবস্ক্রিপশন এবং ক্লিনআপ
