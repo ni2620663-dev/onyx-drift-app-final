@@ -76,10 +76,10 @@ app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 // ৭. ডাটাবেস কানেক্ট এবং রাউট সেটআপ
 connectDB();
 
-// রাউটগুলো সরাসরি রেজিস্টার করুন (কোনো কন্ডিশন ছাড়া)
+// [IMPORTANT FIX]: ৪MD৪ এরর দূর করতে পাথের সামঞ্জস্য করা হলো
 app.use("/api/profile", profileRoutes);
-app.use("/api/user", usersRoutes);     // Follow system এর জন্য
-app.use("/api/messages", messageRoutes); // Messenger এর জন্য
+app.use("/api/user", profileRoutes);   // এখানে profileRoutes যোগ করা হয়েছে যাতে /api/user/follow কাজ করে
+app.use("/api/messages", messageRoutes); 
 app.use("/api/posts", postRoutes); 
 app.use("/api/upload", uploadRoutes); 
 
