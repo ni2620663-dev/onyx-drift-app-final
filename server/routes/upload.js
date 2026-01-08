@@ -1,40 +1,48 @@
 import express from 'express';
 import multer from 'multer';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
+import { v2 as cloudinary } from 'cloudinary';
+import { CloudinaryStorage } from 'multer-storage-cloudinary';
 
 const router = express.Router();
 
-// __dirname fix for ES Modules
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+// ১. Cloudinary কনফিগারেশন (আপনার .env থেকে ডাটা নেবে)
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
+});
 
-// Multer setup for file uploads
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, path.join(__dirname, '../uploads')); // uploads folder
+// ২. Cloudinary স্টোরেজ সেটআপ (রেন্ডারের জন্য এটিই সেরা)
+const storage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'onyx_drift_uploads', // ফোল্ডারের নাম
+    allowed_formats: ['jpg', 'png', 'jpeg', 'gif', 'mp4', 'pdf'], // অনুমোদিত ফরম্যাট
+    resource_type: 'auto', // ভিডিও বা ইমেজ অটো ডিটেক্ট করবে
   },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    const ext = path.extname(file.originalname);
-    cb(null, file.fieldname + '-' + uniqueSuffix + ext);
-  }
 });
 
 const upload = multer({ storage });
 
-// Single file upload route
+/* =========================
+   Single file upload route
+   Endpoint: POST /api/upload
+========================= */
 router.post('/', upload.single('file'), (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ msg: 'No file uploaded' });
     }
-    const filePath = `/uploads/${req.file.filename}`;
-    res.json({ msg: 'File uploaded', filePath });
+
+    // Cloudinary থেকে আসা সরাসরি ইউআরএল (path) পাঠানো হচ্ছে
+    res.json({ 
+      msg: 'File uploaded successfully to Neural Cloud', 
+      filePath: req.file.path, // এটি একটি https লিংক হবে
+      public_id: req.file.filename 
+    });
   } catch (err) {
-    console.error('upload.error:', err);
-    res.status(500).json({ msg: 'Server error', error: err.message });
+    console.error('Upload Error:', err);
+    res.status(500).json({ msg: 'Neural Upload Failed', error: err.message });
   }
 });
 

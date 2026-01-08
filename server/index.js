@@ -11,12 +11,13 @@ import { v2 as cloudinary } from 'cloudinary';
 // ১. কনফিগারেশন লোড
 dotenv.config();
 
-// ২. ডাটাবেস ও রাউট ইম্পোর্ট
+// ২. ডাটাবেস কানেকশন ও রাউট ইম্পোর্ট
 import connectDB from "./config/db.js"; 
 import profileRoutes from "./src/routes/profile.js"; 
 import postRoutes from "./routes/posts.js";
 import usersRoutes from './routes/users.js'; 
 import messageRoutes from "./routes/messages.js";   
+import uploadRoutes from './routes/upload.js';
 
 const app = express();
 const server = http.createServer(app);
@@ -50,19 +51,18 @@ redisSub.on("connect", () => console.log("🔥 System: Redis Subscriber Connecte
 // ৫. AI কনফিগারেশন
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-// ৬. CORS কনফিগারেশন (আপনার ডোমেইন সহ পূর্ণাঙ্গ লিস্ট)
+// ৬. Middleware ও CORS কনফিগারেশন
 const allowedOrigins = [
     "http://localhost:5173", 
     "http://127.0.0.1:5173", 
     "https://onyx-drift-app-final.onrender.com",
     "https://onyxdrift.onrender.com",
-    "https://www.onyx-drift.com", // প্রধান ডোমেইন
-    "https://onyx-drift.com"      // নন-ডব্লিউডব্লিউডব্লিউ ভার্সন
+    "https://www.onyx-drift.com",
+    "https://onyx-drift.com"
 ];
 
 app.use(cors({
     origin: function (origin, callback) {
-        // origin না থাকলে (যেমন মোবাইল অ্যাপ/পোস্টম্যান) অথবা লিস্টে থাকলে এলাউ করবে
         if (!origin || allowedOrigins.includes(origin)) {
             callback(null, true);
         } else {
@@ -72,17 +72,23 @@ app.use(cors({
     },
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"] // টোকেন ভেরিফিকেশনের জন্য এটি বাধ্যতামূলক
+    allowedHeaders: ["Content-Type", "Authorization"]
 }));
 
 app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
-// ৭. এপিআই এন্ডপয়েন্টস
+// ৭. এপিআই এন্ডপয়েন্টস (connectDB এর পরে রাউটগুলো রেজিস্টার করা হয়েছে)
 connectDB();
+
 app.use("/api/profile", profileRoutes);
 app.use("/api/user", usersRoutes); 
 app.use("/api/posts", postRoutes); 
-if (messageRoutes) app.use("/api/messages", messageRoutes);
+app.use("/api/upload", uploadRoutes); // আপলোড রাউট এখানে যোগ করা হয়েছে
+
+if (messageRoutes) {
+    app.use("/api/messages", messageRoutes);
+}
 
 // AI Enhance Route
 app.post("/api/ai/enhance", async (req, res) => {
@@ -98,7 +104,7 @@ app.post("/api/ai/enhance", async (req, res) => {
 
 app.get("/", (req, res) => res.send("✅ OnyxDrift Neural Server Online"));
 
-// ৮. সকেট ও রিয়েল-টাইম লজিক (CORS Fix)
+// ৮. সকেট ও রিয়েল-টাইম লজিক (Socket.io)
 const io = new Server(server, {
   cors: { 
     origin: allowedOrigins,
@@ -109,6 +115,8 @@ const io = new Server(server, {
   allowEIO3: true,
   path: "/socket.io/"
 });
+
+
 
 // Redis Pub/Sub Logic
 redisSub.subscribe("tweet-channel", (err, count) => {

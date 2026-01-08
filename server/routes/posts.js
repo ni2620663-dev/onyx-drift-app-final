@@ -9,7 +9,7 @@ import { CloudinaryStorage } from "multer-storage-cloudinary";
 const router = express.Router();
 
 /* =========================
-   Cloudinary Storage
+   Cloudinary Storage Configuration
 ========================= */
 const storage = new CloudinaryStorage({
   cloudinary,
@@ -24,36 +24,63 @@ const upload = multer({ storage });
 
 /* =========================
    1️⃣ Get All Posts (Global Feed)
+   Endpoint: GET /api/posts
 ========================= */
 router.get("/", async (req, res) => {
   try {
     const posts = await Post.find()
       .sort({ createdAt: -1 })
-      .limit(30); // ইউজার এক্সপেরিয়েন্স বাড়াতে লিমিট বাড়ানো হয়েছে
+      .limit(30);
     res.json(posts);
-  } catch {
-    res.status(500).json({ msg: "Server error" });
+  } catch (err) {
+    res.status(500).json({ msg: "Server error", error: err.message });
   }
 });
 
 /* =========================
-   2️⃣ Get User Posts (FIXED 404)
+   2️⃣ Create Post (FIXED ROUTE)
+   Endpoint: POST /api/posts
+========================= */
+// এখানে "/create" এর বদলে শুধু "/" দেওয়া হয়েছে যাতে ফ্রন্টএন্ড থেকে সরাসরি /api/posts এ হিট করা যায়
+router.post("/", auth, upload.single("media"), async (req, res) => {
+  try {
+    const { text, mediaType, authorName, authorAvatar } = req.body;
+
+    const post = await Post.create({
+      text,
+      media: req.file?.path || null,
+      mediaType: mediaType || (req.file?.mimetype?.includes("video") ? "video" : "image"),
+      authorName: authorName || "Unknown Drifter",
+      authorAvatar: authorAvatar || "",
+      author: req.user.id, // Auth middleware থেকে আসা আইডি
+    });
+
+    res.status(201).json(post);
+  } catch (err) {
+    console.error("Post Creation Error:", err);
+    res.status(500).json({ msg: "Transmission failed", error: err.message });
+  }
+});
+
+/* =========================
+   3️⃣ Get User Specific Posts
+   Endpoint: GET /api/posts/user/:userId
 ========================= */
 router.get("/user/:userId", auth, async (req, res) => {
   try {
-    // URL-এর আইডি ডিকোড করা google-oauth2|... এর জন্য
     const decodedId = decodeURIComponent(req.params.userId);
     const posts = await Post.find({ author: decodedId })
       .sort({ createdAt: -1 });
 
     res.json(posts || []);
-  } catch {
+  } catch (err) {
     res.status(500).json({ msg: "Failed to fetch user posts" });
   }
 });
 
 /* =========================
-   3️⃣ Like / Unlike (Fastest Logic)
+   4️⃣ Like / Unlike Logic
+   Endpoint: PUT /api/posts/:id/like
 ========================= */
 router.put("/:id/like", auth, async (req, res) => {
   try {
@@ -61,7 +88,6 @@ router.put("/:id/like", auth, async (req, res) => {
     const post = await Post.findById(req.params.id);
     if (!post) return res.status(404).json({ msg: "Post not found" });
 
-    // লাইক আছে কি নেই তা চেক করে এক কোয়েরিতে আপডেট
     const isLiked = post.likes.includes(userId);
     const update = isLiked ? { $pull: { likes: userId } } : { $addToSet: { likes: userId } };
 
@@ -73,7 +99,27 @@ router.put("/:id/like", auth, async (req, res) => {
 });
 
 /* =========================
-   4️⃣ Send Friend Request (ID Fixed)
+   5️⃣ Delete Post
+   Endpoint: DELETE /api/posts/:id
+========================= */
+router.delete("/:id", auth, async (req, res) => {
+  try {
+    const post = await Post.findById(req.params.id);
+    if (!post) return res.status(404).json({ msg: "Post not found" });
+
+    // চেক করা হচ্ছে যে ডিলিট করছে সে-ই পোস্টের মালিক কি না
+    if (post.author !== req.user.id)
+      return res.status(401).json({ msg: "Unauthorized" });
+
+    await post.deleteOne();
+    res.json({ msg: "Post terminated", postId: req.params.id });
+  } catch (err) {
+    res.status(500).json({ msg: "Delete failed" });
+  }
+});
+
+/* =========================
+   6️⃣ Friend Requests Logic (Signals)
 ========================= */
 router.post("/friend-request/:targetUserId", auth, async (req, res) => {
   const senderId = req.user.id;
@@ -82,7 +128,6 @@ router.post("/friend-request/:targetUserId", auth, async (req, res) => {
   if (senderId === targetUserId)
     return res.status(400).json({ msg: "Cannot add yourself" });
 
-  // auth0Id ব্যবহার করা হয়েছে যাতে রেন্ডার সার্ভারের এরর না আসে
   await User.updateOne(
     { auth0Id: targetUserId }, 
     { $addToSet: { friendRequests: senderId } }
@@ -91,14 +136,10 @@ router.post("/friend-request/:targetUserId", auth, async (req, res) => {
   res.json({ msg: "Signal sent successfully" });
 });
 
-/* =========================
-   5️⃣ Accept Friend Request (Parallel)
-========================= */
 router.post("/friend-accept/:senderId", auth, async (req, res) => {
   const receiverId = req.user.id;
   const senderId = req.params.senderId;
 
-  // Promise.all ব্যবহার করে সময় বাঁচানো হয়েছে
   await Promise.all([
     User.updateOne(
       { auth0Id: receiverId },
@@ -111,45 +152,6 @@ router.post("/friend-accept/:senderId", auth, async (req, res) => {
   ]);
 
   res.json({ msg: "Neural Link Established!" });
-});
-
-/* =========================
-   6️⃣ Create Post (Validation Fixed)
-========================= */
-router.post("/create", auth, upload.single("media"), async (req, res) => {
-  try {
-    const { text, mediaType, authorName, authorAvatar } = req.body;
-
-    // authorName ছাড়া ডাটাবেস এরর দেবে, তাই ডিফল্ট হ্যান্ডলিং
-    const post = await Post.create({
-      text,
-      media: req.file?.path || null,
-      mediaType: mediaType || (req.file?.mimetype.includes("video") ? "video" : "image"),
-      authorName: authorName || "Unknown Drifter",
-      authorAvatar: authorAvatar || "",
-      author: req.user.id,
-    });
-
-    res.status(201).json(post);
-  } catch (err) {
-    res.status(500).json({ msg: "Transmission failed", error: err.message });
-  }
-});
-
-/* =========================
-   7️⃣ Delete Post
-========================= */
-router.delete("/:id", auth, async (req, res) => {
-  try {
-    const post = await Post.findById(req.params.id);
-    if (!post || post.author !== req.user.id)
-      return res.status(401).json({ msg: "Unauthorized" });
-
-    await post.deleteOne();
-    res.json({ msg: "Post terminated", postId: req.params.id });
-  } catch {
-    res.status(500).json({ msg: "Delete failed" });
-  }
 });
 
 export default router;
