@@ -17,16 +17,16 @@ const FollowingPage = () => {
 
   const API_URL = "https://onyx-drift-app-final.onrender.com";
 
-  // ১. ফিড থেকে আসা userId হ্যান্ডেল করা
+  // ১. ফিড থেকে আসা userId হ্যান্ডেল করা (URL প্যারামিটার থেকে)
   useEffect(() => {
     const queryParams = new URLSearchParams(location.search);
     const userIdFromFeed = queryParams.get("userId");
     if (userIdFromFeed) {
-      setSearchTerm(userIdFromFeed); // ফিড থেকে আসা আইডিটি সার্চ বারে সেট করবে
+      setSearchTerm(userIdFromFeed);
     }
   }, [location.search]);
 
-  // ২. সব ইউজারদের ডাটা নিয়ে আসা
+  // ২. সব ইউজারদের ডাটা নিয়ে আসা
   const fetchUsers = async () => {
     try {
       const token = await getAccessTokenSilently();
@@ -41,6 +41,10 @@ const FollowingPage = () => {
     }
   };
 
+  useEffect(() => {
+    fetchUsers();
+  }, []);
+
   // ৩. ফলো/আনফলো করার লজিক
   const handleFollow = async (targetId) => {
     try {
@@ -54,19 +58,18 @@ const FollowingPage = () => {
     }
   };
 
-  useEffect(() => {
-    fetchUsers();
-  }, []);
-
   // ৪. ফিল্টারিং লজিক ফিক্স (আইডি, নাম এবং ডাকনামের সমন্বয়)
   const filteredUsers = users.filter(user => {
+    if (!searchTerm) return true; // সার্চ টার্ম না থাকলে সব ইউজার দেখাবে
+    
     const searchLower = searchTerm.toLowerCase();
     
-    // আইডির ক্ষেত্রে হুবহু মিল এবং নাম/ডাকনামের ক্ষেত্রে আংশিক মিল চেক করা হচ্ছে
+    // Auth0 ID সাধারণত হুবহু ম্যাচ করতে হয়, তাই এখানে আংশিক এবং হুবহু দুইটাই চেক করা হচ্ছে
     return (
-      user.auth0Id === searchTerm || 
+      user.auth0Id?.toLowerCase().includes(searchLower) || 
       user.name?.toLowerCase().includes(searchLower) || 
-      user.nickname?.toLowerCase().includes(searchLower)
+      user.nickname?.toLowerCase().includes(searchLower) ||
+      user.auth0Id === searchTerm
     );
   });
 
@@ -121,7 +124,7 @@ const FollowingPage = () => {
                 <div className="flex flex-col items-center text-center relative z-10">
                   <div className="relative">
                     <img 
-                      src={user.avatar || 'https://via.placeholder.com/150'} 
+                      src={user.avatar || `https://ui-avatars.com/api/?name=${user.name || 'User'}&background=random`} 
                       alt={user.name} 
                       className="w-24 h-24 rounded-[2rem] object-cover border-4 border-white/5 group-hover:border-cyan-500/50 transition-all duration-500 rotate-3 group-hover:rotate-0 shadow-2xl"
                     />

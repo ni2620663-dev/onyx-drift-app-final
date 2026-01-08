@@ -8,7 +8,7 @@ import {
   HiOutlineInformationCircle, HiOutlinePaperAirplane, HiOutlinePlusCircle,
   HiOutlineMagnifyingGlass, HiOutlineFaceSmile, HiOutlinePhoto, HiOutlineUserGroup
 } from "react-icons/hi2";
-import { useNavigate, useLocation } from "react-router-dom"; // useLocation যোগ করা হয়েছে
+import { useNavigate, useLocation } from "react-router-dom";
 
 const Messenger = () => {
   const { user } = useAuth0();
@@ -29,40 +29,37 @@ const Messenger = () => {
   const socket = useRef();
   const scrollRef = useRef();
   const navigate = useNavigate();
-  const location = useLocation(); // URL লোকেশন ধরার জন্য
+  const location = useLocation();
 
   const API_URL = "https://onyx-drift-app-final.onrender.com";
   const glassPanel = "bg-white/5 backdrop-blur-3xl border border-white/10 shadow-2xl overflow-hidden";
 
-  // --- নতুন ফিচার: URL থেকে userId থাকলে অটোমেটিক চ্যাট শুরু করা ---
+  // --- ১. অটোমেটিক চ্যাট হ্যান্ডলার (Fix: Prevent Self Chat & Data Update) ---
   useEffect(() => {
     const handleDirectChat = async () => {
       const queryParams = new URLSearchParams(location.search);
       const targetUserId = queryParams.get("userId");
 
-      if (targetUserId && user?.sub) {
+      if (targetUserId && user?.sub && targetUserId !== user.sub) {
         try {
-          // ১. ব্যাকএন্ডে এই দুইজনের কনভারসেশন আছে কি না দেখা বা তৈরি করা
           const res = await axios.post(`${API_URL}/api/messages/conversation`, {
             senderId: user.sub,
             receiverId: targetUserId
           });
           
-          // ২. কারেন্ট চ্যাট হিসেবে সেট করা
           setCurrentChat(res.data);
 
-          // ৩. যদি এটি নতুন কনভারসেশন হয়, তবে লিস্টে আপডেট করা
           setConversations((prev) => {
             const exists = prev.find(c => c._id === res.data._id);
             if (!exists) return [res.data, ...prev];
             return prev;
           });
         } catch (err) {
-          console.error("Direct Chat Error:", err);
+          console.error("Direct Chat API Error:", err);
         }
       }
     };
-    handleDirectChat();
+    if (user?.sub) handleDirectChat();
   }, [location.search, user?.sub, API_URL]);
 
   const startChat = (person) => {
@@ -82,8 +79,6 @@ const Messenger = () => {
     socket.current = io(API_URL, {
       transports: ["websocket", "polling"],
       withCredentials: true,
-      reconnectionAttempts: 10,
-      timeout: 60000,
     });
 
     socket.current.on("getMessage", (data) => {
@@ -102,7 +97,7 @@ const Messenger = () => {
   }, [API_URL]);
 
   useEffect(() => {
-    if (arrivalMessage && currentChat?.members.includes(arrivalMessage.senderId)) {
+    if (arrivalMessage && currentChat?.members?.includes(arrivalMessage.senderId)) {
       setMessages((prev) => [...prev, arrivalMessage]);
     }
   }, [arrivalMessage, currentChat]);
@@ -117,7 +112,7 @@ const Messenger = () => {
     const getConversations = async () => {
       try {
         const res = await axios.get(`${API_URL}/api/messages/conversation/${user?.sub}`);
-        setConversations(res.data);
+        setConversations(res.data || []);
       } catch (err) { console.error("Conversation Fetch Error:", err); }
     };
     if (user?.sub) getConversations();
@@ -128,7 +123,7 @@ const Messenger = () => {
       if (!currentChat || currentChat?.isTest) return; 
       try {
         const res = await axios.get(`${API_URL}/api/messages/message/${currentChat?._id}`);
-        setMessages(res.data);
+        setMessages(res.data || []);
       } catch (err) { console.error("Message Fetch Error:", err); }
     };
     getMessages();
@@ -137,7 +132,7 @@ const Messenger = () => {
   const handleSubmit = async () => {
     if (!newMessage.trim() || !currentChat) return;
     
-    const receiverId = currentChat.members.find((member) => member !== user.sub);
+    const receiverId = currentChat.members?.find((member) => member !== user.sub);
     const messageObj = { 
       senderId: user.sub, 
       text: newMessage, 
@@ -164,7 +159,7 @@ const Messenger = () => {
   };
 
   const isOnline = (members) => {
-    const otherMemberId = members.find(m => m !== user?.sub);
+    const otherMemberId = members?.find(m => m !== user?.sub);
     return onlineUsers.some((u) => u.userId === otherMemberId);
   };
 
@@ -205,7 +200,7 @@ const Messenger = () => {
                 onClick={() => setCurrentChat(c)}
                 className={`p-4 rounded-[2rem] flex items-center gap-4 cursor-pointer transition-all mb-2 ${currentChat?._id === c._id ? 'bg-cyan-500/10 border border-cyan-500/20 shadow-lg' : 'hover:bg-white/5'}`}
               >
-                <img src={`https://i.pravatar.cc/150?u=${c._id}`} className="w-11 h-11 rounded-2xl object-cover" alt="" />
+                <img src={`https://ui-avatars.com/api/?name=User&background=random`} className="w-11 h-11 rounded-2xl object-cover" alt="" />
                 <div className="flex-1 min-w-0">
                   <h4 className="font-bold text-sm truncate uppercase italic text-white/90">User {c._id.slice(-4)}</h4>
                   <p className="text-[10px] truncate text-gray-500">
@@ -246,7 +241,7 @@ const Messenger = () => {
             <div className="px-6 py-4 border-b border-white/5 flex justify-between items-center bg-white/[0.02]">
               <div className="flex items-center gap-4">
                 <button className="md:hidden text-gray-400" onClick={() => setCurrentChat(null)}><HiOutlineChevronLeft size={24} /></button>
-                <img src={currentChat.img || `https://i.pravatar.cc/150?u=${currentChat._id}`} className="w-10 h-10 rounded-xl object-cover" alt="" />
+                <img src={currentChat.img || `https://ui-avatars.com/api/?name=User&background=random`} className="w-10 h-10 rounded-xl object-cover" alt="" />
                 <div>
                   <h3 className="font-black text-sm tracking-widest uppercase italic text-white/90">
                     {currentChat.name || `Channel ${currentChat._id.slice(-4)}`}
@@ -262,7 +257,7 @@ const Messenger = () => {
 
             <div className="flex-1 overflow-y-auto p-8 space-y-6 no-scrollbar">
               {messages.map((m, index) => {
-                const isMe = m.senderId === user.sub;
+                const isMe = m.senderId === user?.sub;
                 return (
                   <div key={index} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
                     <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
