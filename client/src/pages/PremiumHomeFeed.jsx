@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  FaPlus, FaTimes, FaMusic, FaMagic,
-  FaCloudUploadAlt, FaImage, FaVideo, FaRegSmile, FaEllipsisH, FaPaperPlane, FaUserPlus
+  FaPlus, FaTimes, FaMagic,
+  FaCloudUploadAlt, FaImage, FaVideo, FaRegSmile, FaPaperPlane
 } from 'react-icons/fa'; 
 import { HiMenuAlt3 } from 'react-icons/hi'; 
 import { useAuth0 } from "@auth0/auth0-react";
@@ -26,14 +26,14 @@ const PremiumHomeFeed = ({ searchQuery }) => {
   const postFileInputRef = useRef(null);
   const socketRef = useRef(null); 
 
-  // ১. এপিআই ইউআরএল ফিক্স - পুরনো লিঙ্ক বদলে নতুন লিঙ্ক দেওয়া হয়েছে
+  // এপিআই ইউআরএল
   const API_URL = (import.meta.env.VITE_API_BASE_URL || "https://onyx-drift-app-final.onrender.com").replace(/\/$/, "");
 
   // রিয়েল-টাইম সকেট লজিক
   useEffect(() => {
     if (isAuthenticated) {
       socketRef.current = io(API_URL, {
-        transports: ["websocket", "polling"], // রেন্ডারের জন্য সিকোয়েন্স জরুরি
+        transports: ["websocket", "polling"],
         path: "/socket.io/",
         withCredentials: true
       });
@@ -56,7 +56,6 @@ const PremiumHomeFeed = ({ searchQuery }) => {
   const fetchPosts = async () => {
     try {
       setLoading(true);
-      // সঠিক এপিআই এন্ডপয়েন্টে রিকোয়েস্ট পাঠানো
       const response = await axios.get(`${API_URL}/api/posts?t=${Date.now()}`);
       setPosts(response.data);
     } catch (err) {
@@ -121,44 +120,39 @@ const PremiumHomeFeed = ({ searchQuery }) => {
     }
   };
 
+  // সংশোধিত পোস্ট সাবমিট লজিক
   const handlePostSubmit = async () => {
     if (!postText.trim() && !mediaFile) return;
     
     try {
-      const formData = new FormData();
-      formData.append("text", postText); 
-      formData.append("authorName", user?.nickname || user?.name || "Anonymous");
+      const token = await getAccessTokenSilently();
       
-      if (user?.picture) {
-        formData.append("authorAvatar", user.picture);
-      }
-      
-      if (mediaFile) {
-        formData.append("media", mediaFile); 
-      }
+      // আপনার ব্যাকএন্ড এখন FormData এবং JSON উভয়ই নিতে পারে, তবে Identity Check এর জন্য ডাটা ঠিকভাবে পাঠানো জরুরি
+      const postData = {
+        text: postText,
+        authorName: user?.nickname || user?.name || "Anonymous",
+        authorAvatar: user?.picture || "",
+        authorId: user?.sub, // এটিই ব্যাকএন্ডে req.user.id এর সাথে ম্যাচ করবে
+        media: selectedPostMedia, // যদি ইমেজ Base64 এ পাঠাতে চান
+        mediaType: mediaType
+      };
 
-      const headers = { "Content-Type": "multipart/form-data" };
-      
-      if (isAuthenticated) {
-        try {
-          const token = await getAccessTokenSilently();
-          headers["Authorization"] = `Bearer ${token}`;
-        } catch (e) {
-          console.warn("Token acquisition failed.");
+      await axios.post(`${API_URL}/api/posts`, postData, {
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
         }
-      }
-
-      await axios.post(`${API_URL}/api/posts`, formData, { headers });
+      });
 
       setPostText("");
       setSelectedPostMedia(null);
       setMediaFile(null);
       setMediaType(null);
-      fetchPosts(); // পোস্ট করার পর লিস্ট রিফ্রেশ করা
+      fetchPosts(); 
       
     } catch (err) {
       console.error("Post Error:", err.response?.data || err);
-      alert("Broadcast failed. Check server connection.");
+      alert("Broadcast failed: " + (err.response?.data?.message || "Check connection"));
     }
   };
 
