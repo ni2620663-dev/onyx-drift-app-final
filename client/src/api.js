@@ -1,6 +1,7 @@
 import axios from 'axios';
 
-const BASE_URL = "http://localhost:10000/api"; // আপনার ব্যাকএন্ড পোর্ট
+// পরিবর্তন: লোকালহোস্ট বদলে আপনার রেন্ডার সার্ভার লিঙ্ক দেওয়া হয়েছে
+const BASE_URL = "https://onyx-drift-app-final.onrender.com/api"; 
 
 const api = axios.create({
     baseURL: BASE_URL,
