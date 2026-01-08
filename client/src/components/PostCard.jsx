@@ -7,7 +7,6 @@ import {
 import { useAuth0 } from "@auth0/auth0-react";
 import axios from "axios";
 
-// ১. এখানে onUserClick প্রপসটি রিসিভ করা হচ্ছে
 const PostCard = ({ post, onAction, onDelete, onUserClick }) => {
   const { user, getAccessTokenSilently, isAuthenticated } = useAuth0();
   const [isLiking, setIsLiking] = useState(false);
@@ -23,6 +22,15 @@ const PostCard = ({ post, onAction, onDelete, onUserClick }) => {
 
   const likesArray = Array.isArray(post.likes) ? post.likes : [];
   const isLiked = user && likesArray.includes(user.sub);
+
+  // ক্লিক হ্যান্ডলার ফাংশন যা ইউজার আইডি পাস করবে
+  const handleProfileClick = (e) => {
+    e.stopPropagation();
+    // এখানে post.authorId ব্যবহার করা হচ্ছে কারণ ব্যাকএন্ড থেকে এটিই ইউনিক আইডি
+    if (onUserClick && post.authorId) {
+      onUserClick(post.authorId);
+    }
+  };
 
   const togglePlay = () => {
     if (videoRef.current) {
@@ -66,11 +74,11 @@ const PostCard = ({ post, onAction, onDelete, onUserClick }) => {
             src={post.media}
             loop
             muted={isMuted}
-            className="w-full h-full object-cover"
+            className="w-full h-full object-cover cursor-pointer"
             onClick={togglePlay}
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-6">
-            <div className="flex items-center justify-between">
+          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-6 pointer-events-none">
+            <div className="flex items-center justify-between pointer-events-auto">
               <button onClick={(e) => { e.stopPropagation(); togglePlay(); }} className="p-3 bg-cyan-400/20 backdrop-blur-md rounded-full text-cyan-400">
                 {isPlaying ? <FaPause /> : <FaPlay />}
               </button>
@@ -106,9 +114,8 @@ const PostCard = ({ post, onAction, onDelete, onUserClick }) => {
     >
       <div className="p-6 flex items-center justify-between">
         <div className="flex items-center gap-4">
-          {/* প্রোফাইল পিকচারে ক্লিক করলে ওই ইউজারের ডিসকভারি কার্ডে নিয়ে যাবে */}
           <div 
-            onClick={() => onUserClick && onUserClick(post.authorId)}
+            onClick={handleProfileClick}
             className="p-[2px] rounded-2xl bg-gradient-to-tr from-cyan-400 to-purple-600 cursor-pointer active:scale-90 transition-transform"
           >
             <img 
@@ -117,7 +124,7 @@ const PostCard = ({ post, onAction, onDelete, onUserClick }) => {
               alt="author" 
             />
           </div>
-          <div className="cursor-pointer" onClick={() => onUserClick && onUserClick(post.authorId)}>
+          <div className="cursor-pointer" onClick={handleProfileClick}>
             <h4 className="font-black text-white text-xs tracking-tighter uppercase italic hover:text-cyan-400 transition-colors">
               {post.authorName || 'Anonymous'}
             </h4>

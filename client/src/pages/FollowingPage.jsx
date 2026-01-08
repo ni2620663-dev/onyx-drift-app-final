@@ -5,7 +5,7 @@ import {
   FaUserPlus, FaEnvelope, FaPhoneAlt, FaCheckCircle, 
   FaRocket, FaUserCheck, FaSearch 
 } from 'react-icons/fa';
-import { useNavigate, useLocation } from 'react-router-dom'; // useLocation যোগ করা হয়েছে
+import { useNavigate, useLocation } from 'react-router-dom';
 
 const FollowingPage = () => {
   const [users, setUsers] = useState([]);
@@ -13,7 +13,7 @@ const FollowingPage = () => {
   const [searchTerm, setSearchTerm] = useState(""); 
   const { getAccessTokenSilently, user: currentUser } = useAuth0();
   const navigate = useNavigate();
-  const location = useLocation(); // URL চেক করার জন্য
+  const location = useLocation();
 
   const API_URL = "https://onyx-drift-app-final.onrender.com";
 
@@ -22,11 +22,11 @@ const FollowingPage = () => {
     const queryParams = new URLSearchParams(location.search);
     const userIdFromFeed = queryParams.get("userId");
     if (userIdFromFeed) {
-      setSearchTerm(userIdFromFeed); // ফিড থেকে আসা আইডিটি সার্চ বারে সেট করে দিবে
+      setSearchTerm(userIdFromFeed); // ফিড থেকে আসা আইডিটি সার্চ বারে সেট করবে
     }
   }, [location.search]);
 
-  // ২. সব ইউজারদের ডাটা নিয়ে আসা
+  // ২. সব ইউজারদের ডাটা নিয়ে আসা
   const fetchUsers = async () => {
     try {
       const token = await getAccessTokenSilently();
@@ -58,12 +58,17 @@ const FollowingPage = () => {
     fetchUsers();
   }, []);
 
-  // ৪. ফিল্টারিং লজিক (নাম, ডাকনাম বা হুবহু আইডি ম্যাচিং)
-  const filteredUsers = users.filter(user => 
-    user.name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    user.nickname?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    user.auth0Id === searchTerm // আইডি হুবহু মিললে দেখাবে
-  );
+  // ৪. ফিল্টারিং লজিক ফিক্স (আইডি, নাম এবং ডাকনামের সমন্বয়)
+  const filteredUsers = users.filter(user => {
+    const searchLower = searchTerm.toLowerCase();
+    
+    // আইডির ক্ষেত্রে হুবহু মিল এবং নাম/ডাকনামের ক্ষেত্রে আংশিক মিল চেক করা হচ্ছে
+    return (
+      user.auth0Id === searchTerm || 
+      user.name?.toLowerCase().includes(searchLower) || 
+      user.nickname?.toLowerCase().includes(searchLower)
+    );
+  });
 
   if (loading) return (
     <div className="p-10 text-cyan-400 animate-pulse font-black italic flex justify-center items-center h-screen uppercase tracking-widest">
