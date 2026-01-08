@@ -28,11 +28,9 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET 
 });
 
-// ৪. Redis কানেকশন (Protocol Prefix নিশ্চিত করা হয়েছে)
-// আপনার দেওয়া URL টি সরাসরি ব্যবহার করা হয়েছে, তবে এটি env থেকে আসাই ভালো
+// ৪. Redis কানেকশন
 let REDIS_URL = process.env.REDIS_URL || "redis://default:vrf4EFLABBRLQ65e02TISHLbzC3kGiCH@redis-16125.c10.us-east-1-4.ec2.cloud.redislabs.com:16125";
 
-// যদি URL-এ প্রোটোকল না থাকে তবে যোগ করে দেওয়া
 if (!REDIS_URL.startsWith("redis://") && !REDIS_URL.startsWith("rediss://")) {
     REDIS_URL = `redis://${REDIS_URL}`;
 }
@@ -40,7 +38,6 @@ if (!REDIS_URL.startsWith("redis://") && !REDIS_URL.startsWith("rediss://")) {
 const redisOptions = {
     maxRetriesPerRequest: null,
     enableReadyCheck: false,
-    // ক্লাউড রেডিসের জন্য নিচের লাইনটি প্রয়োজন হতে পারে
     retryStrategy: (times) => Math.min(times * 50, 2000),
 };
 
@@ -48,32 +45,31 @@ const redis = new Redis(REDIS_URL, redisOptions);
 const redisSub = new Redis(REDIS_URL, redisOptions); 
 
 redis.on("connect", () => console.log("🚀 System: Redis Main Client Connected."));
-redis.on("error", (err) => console.error("❌ Redis Main Error:", err.message));
-
 redisSub.on("connect", () => console.log("🔥 System: Redis Subscriber Connected."));
-redisSub.on("error", (err) => console.error("❌ Redis Sub Error:", err.message));
 
 // ৫. AI কনফিগারেশন
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-// ৬. CORS কনফিগারেশন
+// ৬. CORS কনফিগারেশন (সংশোধিত)
 const allowedOrigins = [
     "http://localhost:5173", 
     "http://127.0.0.1:5173", 
     "https://onyx-drift-app-final.onrender.com",
-    "https://onyx-drift.com",
-    "https://onyx-drift.vercel.app"
+    "https://onyxdrift.onrender.com" // আপনার আগের ডোমেইনটি যোগ করে দেওয়া ভালো
 ];
 
 app.use(cors({
-    origin: (origin, callback) => {
+    origin: function (origin, callback) {
+        // origin না থাকলে (যেমন Postman) বা লিস্টে থাকলে allow করবে
         if (!origin || allowedOrigins.includes(origin)) {
             callback(null, true);
         } else {
+            console.log("Blocked Origin:", origin); // কোন ইউআরএল ব্লক হচ্ছে তা লগে দেখাবে
             callback(new Error("CORS Access Denied"));
         }
     },
-    credentials: true
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
 }));
 
 app.use(express.json({ limit: "50mb" }));
@@ -84,21 +80,6 @@ app.use("/api/profile", profileRoutes);
 app.use("/api/user", usersRoutes); 
 app.use("/api/posts", postRoutes); 
 if (messageRoutes) app.use("/api/messages", messageRoutes);
-
-// Media Upload Logic
-app.post("/api/upload", async (req, res) => {
-    try {
-        const { image } = req.body;
-        if (!image) return res.status(400).json({ error: "No image provided" });
-        const uploadResponse = await cloudinary.uploader.upload(image, {
-            folder: "onyx_drift_posts",
-            resource_type: "auto"
-        });
-        res.json({ url: uploadResponse.secure_url, public_id: uploadResponse.public_id });
-    } catch (error) {
-        res.status(500).json({ error: "Upload failed" });
-    }
-});
 
 // AI Enhance Route
 app.post("/api/ai/enhance", async (req, res) => {
@@ -114,23 +95,21 @@ app.post("/api/ai/enhance", async (req, res) => {
 
 app.get("/", (req, res) => res.send("✅ OnyxDrift Neural Server Online"));
 
-// ৮. সকেট ও রিয়েল-টাইম লজিক
+// ৮. সকেট ও রিয়েল-টাইম লজিক (CORS Fix)
 const io = new Server(server, {
   cors: { 
-    origin: allowedOrigins,
+    origin: allowedOrigins, // সরাসরি অ্যারেটি ব্যবহার করা হলো
+    methods: ["GET", "POST"],
     credentials: true
   },
-  transports: ['polling', 'websocket'],
-  allowEIO3: true
+  transports: ['websocket', 'polling'], // websocket অগ্রাধিকার দেওয়া হয়েছে
+  allowEIO3: true,
+  path: "/socket.io/" // নিশ্চিত করা হলো
 });
 
-// Redis Pub/Sub Logic
+// Redis Pub/Sub Logic (Java integration)
 redisSub.subscribe("tweet-channel", (err, count) => {
-    if (err) {
-        console.error("❌ Redis Sub Subscription Error:", err.message);
-    } else {
-        console.log(`📡 Subscribed to ${count} channels. Listening for Java signals...`);
-    }
+    if (!err) console.log(`📡 Subscribed to ${count} channels. Listening for Java signals...`);
 });
 
 redisSub.on("message", (channel, message) => {
@@ -180,4 +159,6 @@ io.on("connection", (socket) => {
 
 // ৯. সার্ভার স্টার্ট
 const PORT = process.env.PORT || 10000;
-server.listen(PORT, () => console.log(`🚀 System Active on Port: ${PORT}`));
+server.listen(PORT, '0.0.0.0', () => {
+    console.log(`🚀 System Active on Port: ${PORT}`);
+});
