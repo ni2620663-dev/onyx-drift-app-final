@@ -1,7 +1,0 @@
-<?xml version='1.0' encoding='utf-8'?>
-<resources>
-    <string name="app_name">OnyxDrift</string>
-    <string name="title_activity_main">OnyxDrift</string>
-    <string name="package_name">com.OnyxDrift.app</string>
-    <string name="custom_url_scheme">com.OnyxDrift.app</string>
-</resources>

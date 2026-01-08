@@ -1,7 +1,9 @@
-import express from "express";
+    import express from "express";
 const router = express.Router();
-import Conversation from "../models/Conversation.js"; // আপনার মডেল পাথ অনুযায়ী চেক করুন
-import Message from "../models/Message.js";           // আপনার মডেল পাথ অনুযায়ী চেক করুন
+
+// নামের অক্ষর (Case) এবং .js এক্সটেনশন খেয়াল করুন
+import Conversation from "../models/Conversation.js"; 
+import Message from "../models/Message.js";     
 
 /* ==========================================================
    1️⃣ CREATE OR GET CONVERSATION (Direct Chat)
