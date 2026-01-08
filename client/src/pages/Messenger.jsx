@@ -8,7 +8,7 @@ import {
   HiOutlineInformationCircle, HiOutlinePaperAirplane, HiOutlinePlusCircle,
   HiOutlineMagnifyingGlass, HiOutlineFaceSmile, HiOutlinePhoto, HiOutlineUserGroup
 } from "react-icons/hi2";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom"; // useLocation যোগ করা হয়েছে
 
 const Messenger = () => {
   const { user } = useAuth0();
@@ -20,7 +20,6 @@ const Messenger = () => {
   const [onlineUsers, setOnlineUsers] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   
-  // --- টেস্ট করার জন্য ডামি পিপল লিস্ট ---
   const staticPeople = [
     { _id: "test_user_1", name: "Alpha Drifter", img: "https://i.pravatar.cc/150?u=alpha", status: "Online" },
     { _id: "test_user_2", name: "Cyber Onyx", img: "https://i.pravatar.cc/150?u=onyx", status: "Away" },
@@ -30,12 +29,42 @@ const Messenger = () => {
   const socket = useRef();
   const scrollRef = useRef();
   const navigate = useNavigate();
+  const location = useLocation(); // URL লোকেশন ধরার জন্য
 
-  // URL এবং টাইমআউট আপডেট করা হয়েছে স্ট্যাবিলিটির জন্য
   const API_URL = "https://onyx-drift-app-final.onrender.com";
   const glassPanel = "bg-white/5 backdrop-blur-3xl border border-white/10 shadow-2xl overflow-hidden";
 
-  // চ্যাট শুরু করার ফাংশন
+  // --- নতুন ফিচার: URL থেকে userId থাকলে অটোমেটিক চ্যাট শুরু করা ---
+  useEffect(() => {
+    const handleDirectChat = async () => {
+      const queryParams = new URLSearchParams(location.search);
+      const targetUserId = queryParams.get("userId");
+
+      if (targetUserId && user?.sub) {
+        try {
+          // ১. ব্যাকএন্ডে এই দুইজনের কনভারসেশন আছে কি না দেখা বা তৈরি করা
+          const res = await axios.post(`${API_URL}/api/messages/conversation`, {
+            senderId: user.sub,
+            receiverId: targetUserId
+          });
+          
+          // ২. কারেন্ট চ্যাট হিসেবে সেট করা
+          setCurrentChat(res.data);
+
+          // ৩. যদি এটি নতুন কনভারসেশন হয়, তবে লিস্টে আপডেট করা
+          setConversations((prev) => {
+            const exists = prev.find(c => c._id === res.data._id);
+            if (!exists) return [res.data, ...prev];
+            return prev;
+          });
+        } catch (err) {
+          console.error("Direct Chat Error:", err);
+        }
+      }
+    };
+    handleDirectChat();
+  }, [location.search, user?.sub, API_URL]);
+
   const startChat = (person) => {
     setCurrentChat({
       _id: person._id,
@@ -49,13 +78,12 @@ const Messenger = () => {
     ]);
   };
 
-  // ১. সকেট কানেকশন লজিক (আপডেটেড)
   useEffect(() => {
     socket.current = io(API_URL, {
       transports: ["websocket", "polling"],
       withCredentials: true,
       reconnectionAttempts: 10,
-      timeout: 60000, // Render সার্ভারের জন্য ১ মিনিট টাইমআউট
+      timeout: 60000,
     });
 
     socket.current.on("getMessage", (data) => {
@@ -73,21 +101,18 @@ const Messenger = () => {
     };
   }, [API_URL]);
 
-  // ২. ইনকামিং মেসেজ হ্যান্ডেল করা
   useEffect(() => {
     if (arrivalMessage && currentChat?.members.includes(arrivalMessage.senderId)) {
       setMessages((prev) => [...prev, arrivalMessage]);
     }
   }, [arrivalMessage, currentChat]);
 
-  // ৩. অনলাইন স্ট্যাটাস আপডেট
   useEffect(() => {
     if (user?.sub && socket.current) {
       socket.current.emit("addNewUser", user.sub);
     }
   }, [user]);
 
-  // ৪. কনভারসেশন লিস্ট আনা
   useEffect(() => {
     const getConversations = async () => {
       try {
@@ -98,7 +123,6 @@ const Messenger = () => {
     if (user?.sub) getConversations();
   }, [user?.sub, API_URL]);
 
-  // ৫. মেসেজ হিস্ট্রি আনা
   useEffect(() => {
     const getMessages = async () => {
       if (!currentChat || currentChat?.isTest) return; 
@@ -110,7 +134,6 @@ const Messenger = () => {
     getMessages();
   }, [currentChat, API_URL]);
 
-  // ৬. মেসেজ পাঠানোর ফাংশন (রিয়েল-টাইম + এপিআই)
   const handleSubmit = async () => {
     if (!newMessage.trim() || !currentChat) return;
     
@@ -121,14 +144,12 @@ const Messenger = () => {
       conversationId: currentChat._id 
     };
     
-    // সকেটে পাঠানো
     socket.current.emit("sendMessage", { 
       senderId: user.sub, 
       receiverId, 
       text: newMessage 
     });
 
-    // টেস্ট চ্যাট হলে শুধু লোকাল স্টেটে আপডেট
     if (currentChat.isTest) {
         setMessages((prev) => [...prev, { ...messageObj, createdAt: Date.now() }]);
         setNewMessage("");
@@ -142,13 +163,11 @@ const Messenger = () => {
     } catch (err) { console.error("Send Error:", err); }
   };
 
-  // অনলাইন চেক ফাংশন
   const isOnline = (members) => {
     const otherMemberId = members.find(m => m !== user?.sub);
     return onlineUsers.some((u) => u.userId === otherMemberId);
   };
 
-  // স্ক্রল অটোমেশন
   useEffect(() => { 
     scrollRef.current?.scrollIntoView({ behavior: "smooth" }); 
   }, [messages]);
@@ -177,7 +196,6 @@ const Messenger = () => {
         </div>
         
         <div className="flex-1 overflow-y-auto no-scrollbar px-3 space-y-6 pb-6">
-          {/* Active Conversations */}
           <div>
             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500 mb-3 ml-4">Active Channels</p>
             {conversations.map((c) => (
@@ -198,7 +216,6 @@ const Messenger = () => {
             ))}
           </div>
 
-          {/* Test People Section */}
           <div>
             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-cyan-400/60 mb-3 ml-4">Neural Contacts (Test)</p>
             {staticPeople.map((person) => (
