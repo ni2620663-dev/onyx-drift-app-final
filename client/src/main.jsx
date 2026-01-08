@@ -9,10 +9,11 @@ import "./index.css";
 // কনফিগারেশন
 const AUTH0_DOMAIN = "dev-6d0nxccsaycctfl1.us.auth0.com";
 const AUTH0_CLIENT_ID = "tcfTAHv3K8KC1VwtZQrqIbqsZRN2PJFr";
-const API_URL = "https://onyx-drift-app-final.onrender.com";
 
-// এই লাইনটি আগে ছিল না, তাই এরর দিচ্ছিল
-const API_AUDIENCE = `https://${AUTH0_DOMAIN}/api/v2/`; 
+/* ❌ ভুল ছিল: https://${AUTH0_DOMAIN}/api/v2/
+  ✅ সঠিক (স্ক্রিনশট অনুযায়ী): আপনার কাস্টম এপিআই আইডেন্টিফায়ার
+*/
+const API_AUDIENCE = "https://onyx-drift-api.com"; 
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
@@ -21,7 +22,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
       clientId={AUTH0_CLIENT_ID}
       authorizationParams={{
         redirect_uri: window.location.origin,
-        audience: API_AUDIENCE, // এখন এটি কাজ করবে
+        audience: API_AUDIENCE, // এখন এটি আপনার কাস্টম এপিআইকে পয়েন্ট করবে
         scope: "openid profile email offline_access"
       }}
       useRefreshTokens={true}
