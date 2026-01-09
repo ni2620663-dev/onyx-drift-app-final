@@ -5,8 +5,8 @@ import { io } from "socket.io-client";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   HiOutlineChevronLeft, HiOutlinePhone, HiOutlineVideoCamera, 
-  HiOutlineInformationCircle, HiOutlinePaperAirplane, HiOutlinePlusCircle,
-  HiOutlineMagnifyingGlass, HiOutlineFaceSmile, HiOutlinePhoto, HiOutlineUserGroup
+  HiOutlinePaperAirplane, HiOutlineMagnifyingGlass, 
+  HiOutlineFaceSmile, HiOutlineUserGroup
 } from "react-icons/hi2";
 import { useNavigate, useLocation } from "react-router-dom";
 
@@ -20,12 +20,6 @@ const Messenger = () => {
   const [onlineUsers, setOnlineUsers] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   
-  const staticPeople = [
-    { _id: "test_user_1", name: "Alpha Drifter", img: "https://i.pravatar.cc/150?u=alpha", status: "Online" },
-    { _id: "test_user_2", name: "Cyber Onyx", img: "https://i.pravatar.cc/150?u=onyx", status: "Away" },
-    { _id: "test_user_3", name: "Neural Queen", img: "https://i.pravatar.cc/150?u=queen", status: "Online" },
-  ];
-
   const socket = useRef();
   const scrollRef = useRef();
   const navigate = useNavigate();
@@ -34,50 +28,10 @@ const Messenger = () => {
   const API_URL = "https://onyx-drift-app-final.onrender.com";
   const glassPanel = "bg-white/5 backdrop-blur-3xl border border-white/10 shadow-2xl overflow-hidden";
 
-  // --- ১. অটোমেটিক চ্যাট হ্যান্ডলার (Fix: Prevent Self Chat & Data Update) ---
-  useEffect(() => {
-    const handleDirectChat = async () => {
-      const queryParams = new URLSearchParams(location.search);
-      const targetUserId = queryParams.get("userId");
-
-      if (targetUserId && user?.sub && targetUserId !== user.sub) {
-        try {
-          const res = await axios.post(`${API_URL}/api/messages/conversation`, {
-            senderId: user.sub,
-            receiverId: targetUserId
-          });
-          
-          setCurrentChat(res.data);
-
-          setConversations((prev) => {
-            const exists = prev.find(c => c._id === res.data._id);
-            if (!exists) return [res.data, ...prev];
-            return prev;
-          });
-        } catch (err) {
-          console.error("Direct Chat API Error:", err);
-        }
-      }
-    };
-    if (user?.sub) handleDirectChat();
-  }, [location.search, user?.sub, API_URL]);
-
-  const startChat = (person) => {
-    setCurrentChat({
-      _id: person._id,
-      members: [user?.sub, person._id],
-      isTest: true,
-      name: person.name,
-      img: person.img
-    });
-    setMessages([
-      { senderId: person._id, text: `Hello! This is ${person.name}. Signal is clear.`, createdAt: Date.now() }
-    ]);
-  };
-
+  // --- ১. সকেট কানেকশন এবং হ্যান্ডলিং ---
   useEffect(() => {
     socket.current = io(API_URL, {
-      transports: ["websocket", "polling"],
+      transports: ["websocket"],
       withCredentials: true,
     });
 
@@ -97,17 +51,19 @@ const Messenger = () => {
   }, [API_URL]);
 
   useEffect(() => {
-    if (arrivalMessage && currentChat?.members?.includes(arrivalMessage.senderId)) {
-      setMessages((prev) => [...prev, arrivalMessage]);
-    }
-  }, [arrivalMessage, currentChat]);
-
-  useEffect(() => {
     if (user?.sub && socket.current) {
       socket.current.emit("addNewUser", user.sub);
     }
   }, [user]);
 
+  // নতুন মেসেজ আসলে তা চ্যাটে যোগ করা
+  useEffect(() => {
+    if (arrivalMessage && currentChat?.members?.includes(arrivalMessage.senderId)) {
+      setMessages((prev) => [...prev, arrivalMessage]);
+    }
+  }, [arrivalMessage, currentChat]);
+
+  // --- ২. কনভারসেশন লোড করা ---
   useEffect(() => {
     const getConversations = async () => {
       try {
@@ -118,6 +74,7 @@ const Messenger = () => {
     if (user?.sub) getConversations();
   }, [user?.sub, API_URL]);
 
+  // নির্দিষ্ট চ্যাটের মেসেজ লোড করা
   useEffect(() => {
     const getMessages = async () => {
       if (!currentChat || currentChat?.isTest) return; 
@@ -129,6 +86,7 @@ const Messenger = () => {
     getMessages();
   }, [currentChat, API_URL]);
 
+  // --- ৩. মেসেজ পাঠানো ---
   const handleSubmit = async () => {
     if (!newMessage.trim() || !currentChat) return;
     
@@ -139,23 +97,26 @@ const Messenger = () => {
       conversationId: currentChat._id 
     };
     
+    // সকেটের মাধ্যমে রিয়েল টাইম পাঠানো
     socket.current.emit("sendMessage", { 
       senderId: user.sub, 
       receiverId, 
       text: newMessage 
     });
 
-    if (currentChat.isTest) {
-        setMessages((prev) => [...prev, { ...messageObj, createdAt: Date.now() }]);
-        setNewMessage("");
-        return;
-    }
-
     try {
       const res = await axios.post(`${API_URL}/api/messages/message`, messageObj);
       setMessages((prev) => [...prev, res.data]);
       setNewMessage("");
     } catch (err) { console.error("Send Error:", err); }
+  };
+
+  // কল হ্যান্ডলার
+  const handleCall = (type) => {
+    if (!currentChat) return;
+    const remoteId = currentChat.members?.find(m => m !== user.sub);
+    // কল পেজে নিয়ে যাবে (userId এবং টাইপ সহ)
+    navigate(`/call/${remoteId}?type=${type}`);
   };
 
   const isOnline = (members) => {
@@ -170,7 +131,7 @@ const Messenger = () => {
   return (
     <div className="flex h-[calc(100vh-100px)] bg-transparent text-white overflow-hidden font-sans gap-4 p-2">
       
-      {/* ১. লেফট সাইডবার */}
+      {/* বাম পাশের লিস্ট (Sidebar) */}
       <div className={`w-full md:w-[380px] ${glassPanel} rounded-[2.5rem] flex flex-col ${currentChat ? 'hidden md:flex' : 'flex'}`}>
         <div className="p-6 space-y-4">
           <div className="flex justify-between items-center">
@@ -190,77 +151,61 @@ const Messenger = () => {
           </div>
         </div>
         
-        <div className="flex-1 overflow-y-auto no-scrollbar px-3 space-y-6 pb-6">
-          <div>
+        <div className="flex-1 overflow-y-auto no-scrollbar px-3 space-y-2 pb-6">
             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500 mb-3 ml-4">Active Channels</p>
             {conversations.map((c) => (
               <motion.div 
                 key={c._id}
                 whileTap={{ scale: 0.97 }}
                 onClick={() => setCurrentChat(c)}
-                className={`p-4 rounded-[2rem] flex items-center gap-4 cursor-pointer transition-all mb-2 ${currentChat?._id === c._id ? 'bg-cyan-500/10 border border-cyan-500/20 shadow-lg' : 'hover:bg-white/5'}`}
+                className={`p-4 rounded-[2rem] flex items-center gap-4 cursor-pointer transition-all ${currentChat?._id === c._id ? 'bg-cyan-500/10 border border-cyan-500/20 shadow-lg' : 'hover:bg-white/5'}`}
               >
-                <img src={`https://ui-avatars.com/api/?name=User&background=random`} className="w-11 h-11 rounded-2xl object-cover" alt="" />
+                <div className="relative">
+                    <img src={`https://ui-avatars.com/api/?name=User&background=random`} className="w-11 h-11 rounded-2xl object-cover" alt="" />
+                    {isOnline(c.members) && <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-cyan-400 border-2 border-[#020617] rounded-full"></div>}
+                </div>
                 <div className="flex-1 min-w-0">
-                  <h4 className="font-bold text-sm truncate uppercase italic text-white/90">User {c._id.slice(-4)}</h4>
+                  <h4 className="font-bold text-sm truncate uppercase italic text-white/90">Channel {c._id.slice(-4)}</h4>
                   <p className="text-[10px] truncate text-gray-500">
-                    {isOnline(c.members) ? "● Online" : "Connected..."}
+                    {isOnline(c.members) ? "Active Signal" : "Offline"}
                   </p>
                 </div>
               </motion.div>
             ))}
-          </div>
-
-          <div>
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-cyan-400/60 mb-3 ml-4">Neural Contacts (Test)</p>
-            {staticPeople.map((person) => (
-              <motion.div 
-                key={person._id}
-                whileTap={{ scale: 0.97 }}
-                onClick={() => startChat(person)}
-                className={`p-4 rounded-[2rem] flex items-center gap-4 cursor-pointer transition-all mb-2 border border-transparent ${currentChat?._id === person._id ? 'bg-purple-500/10 border-purple-500/20' : 'hover:bg-white/5'}`}
-              >
-                <div className="relative">
-                  <img src={person.img} className="w-11 h-11 rounded-2xl object-cover border border-white/10" alt="" />
-                  <div className={`absolute -bottom-1 -right-1 w-3.5 h-3.5 border-4 border-[#020617] rounded-full ${person.status === 'Online' ? 'bg-cyan-400' : 'bg-gray-600'}`}></div>
-                </div>
-                <div className="flex-1">
-                  <h4 className="font-bold text-sm text-white/90 uppercase italic">{person.name}</h4>
-                  <p className="text-[9px] text-gray-500 font-black uppercase tracking-tighter">{person.status}</p>
-                </div>
-              </motion.div>
-            ))}
-          </div>
         </div>
       </div>
 
-      {/* ২. রাইট সাইড: চ্যাট উইন্ডো */}
+      {/* ডান পাশের চ্যাট উইন্ডো (Chat Window) */}
       <div className={`flex-1 ${glassPanel} rounded-[2.5rem] flex flex-col relative ${!currentChat ? 'hidden md:flex items-center justify-center' : 'flex'}`}>
         {currentChat ? (
           <>
+            {/* চ্যাট হেডার */}
             <div className="px-6 py-4 border-b border-white/5 flex justify-between items-center bg-white/[0.02]">
               <div className="flex items-center gap-4">
                 <button className="md:hidden text-gray-400" onClick={() => setCurrentChat(null)}><HiOutlineChevronLeft size={24} /></button>
-                <img src={currentChat.img || `https://ui-avatars.com/api/?name=User&background=random`} className="w-10 h-10 rounded-xl object-cover" alt="" />
+                <img src={`https://ui-avatars.com/api/?name=User&background=random`} className="w-10 h-10 rounded-xl object-cover" alt="" />
                 <div>
                   <h3 className="font-black text-sm tracking-widest uppercase italic text-white/90">
-                    {currentChat.name || `Channel ${currentChat._id.slice(-4)}`}
+                    Channel {currentChat._id.slice(-4)}
                   </h3>
-                  <p className="text-[9px] text-cyan-400 font-black uppercase tracking-widest animate-pulse">Encrypted Connection</p>
+                  <p className="text-[9px] text-cyan-400 font-black uppercase tracking-widest animate-pulse">
+                    {isOnline(currentChat.members) ? "Secure Link Active" : "Waiting for peer..."}
+                  </p>
                 </div>
               </div>
               <div className="flex gap-2">
-                <button onClick={() => alert("Starting Voice Call...")} className="p-3 text-gray-500 hover:text-cyan-400 transition-colors"><HiOutlinePhone size={20} /></button>
-                <button onClick={() => navigate(`/call/${currentChat._id}`)} className="p-3 text-gray-500 hover:text-purple-400 transition-colors"><HiOutlineVideoCamera size={20} /></button>
+                <button onClick={() => handleCall('voice')} className="p-3 text-gray-400 hover:text-cyan-400 hover:bg-white/5 rounded-xl transition-all"><HiOutlinePhone size={20} /></button>
+                <button onClick={() => handleCall('video')} className="p-3 text-gray-400 hover:text-purple-400 hover:bg-white/5 rounded-xl transition-all"><HiOutlineVideoCamera size={20} /></button>
               </div>
             </div>
 
+            {/* মেসেজ লিস্ট */}
             <div className="flex-1 overflow-y-auto p-8 space-y-6 no-scrollbar">
               {messages.map((m, index) => {
                 const isMe = m.senderId === user?.sub;
                 return (
                   <div key={index} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
-                    <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
+                    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
                       className={`max-w-[75%] px-5 py-3 rounded-3xl text-[13px] font-light shadow-xl ${isMe ? 'bg-gradient-to-tr from-cyan-600 to-purple-600 text-white rounded-br-none' : 'bg-white/5 border border-white/10 text-gray-200 rounded-bl-none'}`}
                     >
                       {m.text}
@@ -271,6 +216,7 @@ const Messenger = () => {
               <div ref={scrollRef} />
             </div>
 
+            {/* ইনপুট এরিয়া */}
             <div className="p-6 bg-white/[0.02] border-t border-white/5">
               <div className="flex items-center gap-3 bg-white/5 p-2 rounded-3xl border border-white/10 max-w-4xl mx-auto">
                 <button className="p-2 text-gray-500 hover:text-cyan-400"><HiOutlineFaceSmile size={22} /></button>

@@ -16,7 +16,8 @@ import Analytics from "./pages/Analytics";
 import Explorer from "./pages/Explorer";
 import Profile from "./pages/Profile";
 import Settings from "./pages/Settings";
-import FollowingPage from "./pages/FollowingPage"; // ✅ এটি ঠিক আছে
+import FollowingPage from "./pages/FollowingPage";
+import Call from "./pages/Call"; // ✅ ১. কল পেজটি ইম্পোর্ট করুন
 
 // Protected Route Component
 const ProtectedRoute = ({ component: Component, ...props }) => {
@@ -36,7 +37,7 @@ export default function App() {
   const socket = useRef(null); 
   const [searchQuery, setSearchQuery] = useState("");
 
-  // ১. সকেট কানেকশন লজিক
+  // সকেট কানেকশন লজিক
   useEffect(() => {
     if (isAuthenticated && user?.sub) {
       const socketUrl = "https://onyx-drift-app-final.onrender.com";
@@ -58,7 +59,6 @@ export default function App() {
     }
   }, [isAuthenticated, user?.sub]);
 
-  // ২. লোডিং স্টেট
   if (isLoading) return (
     <div className="h-screen flex items-center justify-center bg-[#020617]">
       <motion.div
@@ -74,12 +74,12 @@ export default function App() {
     </div>
   );
 
-  const isLanding = location.pathname === "/";
+  // চ্যাট বা কল পেজে থাকলে সাইডবার হাইড করার লজিক
+  const hideSidebar = ["/messenger", "/settings", "/"].includes(location.pathname) || location.pathname.startsWith("/call/");
 
   return (
     <div className="min-h-screen bg-[#020617] text-gray-200 overflow-x-hidden selection:bg-cyan-500/30 font-sans">
       
-      {/* Navbar show logic */}
       {isAuthenticated && (
         <div className="fixed top-0 w-full z-[100] backdrop-blur-xl border-b border-white/5 bg-[#020617]/80">
           <Navbar user={user} socket={socket} setSearchQuery={setSearchQuery} />
@@ -89,8 +89,7 @@ export default function App() {
       <div className={`flex justify-center w-full ${isAuthenticated ? "pt-[100px]" : "pt-0"}`}>
         <div className="flex w-full max-w-[1440px] px-4 gap-6">
           
-          {/* Sidebar logic */}
-          {isAuthenticated && !["/messenger", "/settings", "/"].includes(location.pathname) && (
+          {isAuthenticated && !hideSidebar && (
             <aside className="hidden lg:block w-[280px] sticky top-[100px] h-[calc(100vh-120px)]">
               <div className="bg-white/5 backdrop-blur-2xl border border-white/10 rounded-[2.5rem] p-4 h-full shadow-2xl">
                 <Sidebar />
@@ -102,21 +101,19 @@ export default function App() {
             <div className="w-full">
               <AnimatePresence mode="wait">
                 <Routes location={location} key={location.pathname}>
-                  {/* Landing & Auth Redirect */}
                   <Route path="/" element={isAuthenticated ? <Navigate to="/feed" /> : <Landing />} />
                   
-                  {/* Neural Routes */}
                   <Route path="/feed" element={<ProtectedRoute component={() => <PremiumHomeFeed searchQuery={searchQuery} />} />} />
                   <Route path="/profile/:userId" element={<ProtectedRoute component={Profile} />} />
                   <Route path="/messenger" element={<ProtectedRoute component={Messenger} />} />
                   <Route path="/analytics" element={<ProtectedRoute component={Analytics} />} />
                   <Route path="/explorer" element={<ProtectedRoute component={Explorer} />} />
                   <Route path="/settings" element={<ProtectedRoute component={Settings} />} />
-                  
-                  {/* Discovery / Following Route */}
                   <Route path="/following" element={<ProtectedRoute component={FollowingPage} />} />
                   
-                  {/* Fallback */}
+                  {/* ✅ ২. কল রাউট যোগ করা হলো (roomId প্যারামিটার সহ) */}
+                  <Route path="/call/:roomId" element={<ProtectedRoute component={Call} />} />
+                  
                   <Route path="*" element={<Navigate to="/" />} />
                 </Routes>
               </AnimatePresence>

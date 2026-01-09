@@ -32,10 +32,13 @@ const Call = () => {
   };
 
   return (
-    <div className="w-screen h-screen bg-gray-900 flex items-center justify-center">
-      <div ref={myMeeting} className="w-full h-full" />
+  <div className="w-screen h-screen bg-[#020617] flex items-center justify-center relative">
+    {/* ব্যাকগ্রাউন্ডে একটি লোডিং টেক্সট থাকবে যা Zego UI লোড হলে ঢাকা পড়ে যাবে */}
+    <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <div className="w-16 h-16 border-4 border-cyan-500/20 border-t-cyan-500 rounded-full animate-spin mb-4"></div>
+        <p className="text-cyan-400 font-black uppercase tracking-widest text-xs">Establishing Secure Link...</p>
     </div>
-  );
-};
-
-export default Call;
+    
+    <div ref={myMeeting} className="w-full h-full z-10" />
+  </div>
+);
