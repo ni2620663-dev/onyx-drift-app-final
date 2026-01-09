@@ -16,14 +16,13 @@ import Analytics from "./pages/Analytics";
 import Explorer from "./pages/Explorer";
 import Profile from "./pages/Profile";
 import Settings from "./pages/Settings";
-// ১. এখানে FollowingPage ইমপোর্ট করা হলো (অবশ্যই এই পাথে ফাইলটি থাকতে হবে)
-import FollowingPage from "./pages/FollowingPage"; 
+import FollowingPage from "./pages/FollowingPage"; // ✅ এটি ঠিক আছে
 
 // Protected Route Component
 const ProtectedRoute = ({ component: Component, ...props }) => {
   const AuthenticatedComponent = withAuthenticationRequired(Component, {
     onRedirecting: () => (
-      <div className="h-screen flex items-center justify-center bg-[#020617] text-cyan-500">
+      <div className="h-screen flex items-center justify-center bg-[#020617] text-cyan-500 font-mono italic">
         Initializing Neural Link...
       </div>
     ),
@@ -43,7 +42,7 @@ export default function App() {
       const socketUrl = "https://onyx-drift-app-final.onrender.com";
       
       socket.current = io(socketUrl, {
-        transports: ["polling", "websocket"], // Polling আগে রাখা ভালো কানেকশন এরর এড়াতে
+        transports: ["polling", "websocket"],
         path: "/socket.io/",
         withCredentials: true,
       });
@@ -77,13 +76,10 @@ export default function App() {
 
   const isLanding = location.pathname === "/";
 
-  if (!isAuthenticated && !isLanding) {
-    return <Navigate to="/" />;
-  }
-
   return (
-    <div className="min-h-screen bg-[#020617] text-gray-200 overflow-x-hidden selection:bg-cyan-500/30">
+    <div className="min-h-screen bg-[#020617] text-gray-200 overflow-x-hidden selection:bg-cyan-500/30 font-sans">
       
+      {/* Navbar show logic */}
       {isAuthenticated && (
         <div className="fixed top-0 w-full z-[100] backdrop-blur-xl border-b border-white/5 bg-[#020617]/80">
           <Navbar user={user} socket={socket} setSearchQuery={setSearchQuery} />
@@ -93,7 +89,7 @@ export default function App() {
       <div className={`flex justify-center w-full ${isAuthenticated ? "pt-[100px]" : "pt-0"}`}>
         <div className="flex w-full max-w-[1440px] px-4 gap-6">
           
-          {/* সাইডবার লজিক: ম্যেসেঞ্জার এবং সেটিংস বাদে সব জায়গায় দেখাবে */}
+          {/* Sidebar logic */}
           {isAuthenticated && !["/messenger", "/settings", "/"].includes(location.pathname) && (
             <aside className="hidden lg:block w-[280px] sticky top-[100px] h-[calc(100vh-120px)]">
               <div className="bg-white/5 backdrop-blur-2xl border border-white/10 rounded-[2.5rem] p-4 h-full shadow-2xl">
@@ -106,9 +102,10 @@ export default function App() {
             <div className="w-full">
               <AnimatePresence mode="wait">
                 <Routes location={location} key={location.pathname}>
+                  {/* Landing & Auth Redirect */}
                   <Route path="/" element={isAuthenticated ? <Navigate to="/feed" /> : <Landing />} />
                   
-                  {/* প্রটেক্টেড রুটস */}
+                  {/* Neural Routes */}
                   <Route path="/feed" element={<ProtectedRoute component={() => <PremiumHomeFeed searchQuery={searchQuery} />} />} />
                   <Route path="/profile/:userId" element={<ProtectedRoute component={Profile} />} />
                   <Route path="/messenger" element={<ProtectedRoute component={Messenger} />} />
@@ -116,9 +113,10 @@ export default function App() {
                   <Route path="/explorer" element={<ProtectedRoute component={Explorer} />} />
                   <Route path="/settings" element={<ProtectedRoute component={Settings} />} />
                   
-                  {/* ২. Following Page রাউটটি প্রটেক্টেড করা হলো */}
+                  {/* Discovery / Following Route */}
                   <Route path="/following" element={<ProtectedRoute component={FollowingPage} />} />
                   
+                  {/* Fallback */}
                   <Route path="*" element={<Navigate to="/" />} />
                 </Routes>
               </AnimatePresence>

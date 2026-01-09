@@ -29,6 +29,13 @@ const PremiumHomeFeed = ({ searchQuery }) => {
   // এপিআই ইউআরএল
   const API_URL = (import.meta.env.VITE_API_BASE_URL || "https://onyx-drift-app-final.onrender.com").replace(/\/$/, "");
 
+  // ১. প্রোফাইল ক্লিক হ্যান্ডলার (এটি PostCard-এ পাস করা হবে)
+  const handleUserClick = (userId) => {
+    if (userId) {
+      navigate(`/following?userId=${userId}`);
+    }
+  };
+
   // রিয়েল-টাইম সকেট লজিক
   useEffect(() => {
     if (isAuthenticated) {
@@ -120,20 +127,16 @@ const PremiumHomeFeed = ({ searchQuery }) => {
     }
   };
 
-  // সংশোধিত পোস্ট সাবমিট লজিক
   const handlePostSubmit = async () => {
     if (!postText.trim() && !mediaFile) return;
-    
     try {
       const token = await getAccessTokenSilently();
-      
-      // আপনার ব্যাকএন্ড এখন FormData এবং JSON উভয়ই নিতে পারে, তবে Identity Check এর জন্য ডাটা ঠিকভাবে পাঠানো জরুরি
       const postData = {
         text: postText,
         authorName: user?.nickname || user?.name || "Anonymous",
         authorAvatar: user?.picture || "",
-        authorId: user?.sub, // এটিই ব্যাকএন্ডে req.user.id এর সাথে ম্যাচ করবে
-        media: selectedPostMedia, // যদি ইমেজ Base64 এ পাঠাতে চান
+        authorId: user?.sub,
+        media: selectedPostMedia,
         mediaType: mediaType
       };
 
@@ -149,7 +152,6 @@ const PremiumHomeFeed = ({ searchQuery }) => {
       setMediaFile(null);
       setMediaType(null);
       fetchPosts(); 
-      
     } catch (err) {
       console.error("Post Error:", err.response?.data || err);
       alert("Broadcast failed: " + (err.response?.data?.message || "Check connection"));
@@ -317,6 +319,7 @@ const PremiumHomeFeed = ({ searchQuery }) => {
               onDelete={() => handleDeletePost(post._id || post.id)}
               currentUserId={user?.sub} 
               onAction={fetchPosts} 
+              onUserClick={handleUserClick} // এই লাইনটি ক্লিক ফিচার চালু করবে
             />
           ))
         )}
