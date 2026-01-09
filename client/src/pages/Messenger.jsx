@@ -4,31 +4,29 @@ import axios from "axios";
 import { io } from "socket.io-client";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
-  HiOutlineChevronLeft, HiOutlinePhone, HiOutlineVideoCamera, 
-  HiOutlinePaperAirplane, HiOutlineMagnifyingGlass, 
-  HiOutlineFaceSmile, HiOutlineEllipsisVertical, HiCheck,
-  HiChatBubbleLeftRight, HiOutlineUserCircle, HiArrowPathRoundedSquare,
-  HiOutlinePaperClip, HiOutlineCamera, HiOutlinePhoto
+  HiOutlinePhone, HiOutlineVideoCamera, HiOutlinePaperAirplane, 
+  HiOutlineFaceSmile, HiOutlineUser, HiOutlinePowerDel,
+  HiOutlineCamera, HiOutlineChatBubbleBottomCenterText, HiOutlineMicrophone
 } from "react-icons/hi2";
 import { useNavigate } from "react-router-dom";
 
 const Messenger = () => {
   const { user } = useAuth0();
-  const [activeTab, setActiveTab] = useState("chats");
   const [conversations, setConversations] = useState([]);
   const [currentChat, setCurrentChat] = useState(null);
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState("");
   const [onlineUsers, setOnlineUsers] = useState([]);
-  const [isUploading, setIsUploading] = useState(false); // আপলোডিং স্টেট
-
+  
   const socket = useRef();
   const scrollRef = useRef();
-  const fileInputRef = useRef();
   const navigate = useNavigate();
   const API_URL = "https://onyx-drift-app-final.onrender.com";
 
-  // --- Socket Logic ---
+  // Glassmorphism Styles
+  const glassBg = "bg-opacity-10 bg-clip-padding backdrop-filter backdrop-blur-xl bg-white border border-white/10";
+  const neonGlow = "shadow-[0_0_15px_rgba(34,211,238,0.2)]";
+
   useEffect(() => {
     socket.current = io(API_URL, { transports: ["websocket"] });
     socket.current.on("getMessage", (data) => {
@@ -44,7 +42,6 @@ const Messenger = () => {
     if (user?.sub) socket.current.emit("addNewUser", user.sub);
   }, [user]);
 
-  // --- Fetch Data ---
   useEffect(() => {
     const fetch = async () => {
       const res = await axios.get(`${API_URL}/api/messages/conversation/${user?.sub}`);
@@ -63,173 +60,124 @@ const Messenger = () => {
     }
   }, [currentChat]);
 
-  // --- মেসেজ এবং ফাইল হ্যান্ডলিং ---
-  const handleSend = async (text, fileUrl = null) => {
-    if (!text.trim() && !fileUrl) return;
+  const handleSend = async () => {
+    if (!newMessage.trim()) return;
     const receiverId = currentChat.members.find(m => m !== user.sub);
-    
-    const messageBody = {
-      conversationId: currentChat._id,
-      senderId: user.sub,
-      text: fileUrl || text, // যদি ইমেজ হয় তবে URL যাবে
-      isImage: !!fileUrl // ব্যাকএন্ডে ইমেজ কিনা চেক করার জন্য
-    };
-
-    socket.current.emit("sendMessage", { senderId: user.sub, receiverId, text: fileUrl || text });
-
-    try {
-      const res = await axios.post(`${API_URL}/api/messages/message`, messageBody);
-      setMessages((prev) => [...prev, res.data]);
-      setNewMessage("");
-    } catch (err) { console.error(err); }
-  };
-
-  // ফাইল আপলোড ফাংশন
-  const handleFileUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    setIsUploading(true);
-    const formData = new FormData();
-    formData.append("file", file);
-
-    try {
-      // আপনার /api/upload রাউটে ফাইল পাঠানো
-      const res = await axios.post(`${API_URL}/api/upload`, formData, {
-        headers: { "Content-Type": "multipart/form-data" }
-      });
-      
-      const uploadedUrl = res.data.url; // নিশ্চিত করুন আপনার ব্যাকএন্ড {url: "..."} রিটার্ন করে
-      handleSend("", uploadedUrl); 
-    } catch (err) {
-      console.error("Upload failed", err);
-      alert("Upload failed, please try again.");
-    } finally {
-      setIsUploading(false);
-    }
+    socket.current.emit("sendMessage", { senderId: user.sub, receiverId, text: newMessage });
+    const res = await axios.post(`${API_URL}/api/messages/message`, {
+      conversationId: currentChat._id, senderId: user.sub, text: newMessage
+    });
+    setMessages([...messages, res.data]);
+    setNewMessage("");
   };
 
   useEffect(() => { scrollRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
   return (
-    <div className="flex h-screen bg-[#0b141a] text-[#e9edef] overflow-hidden font-sans">
+    <div className="flex h-screen bg-[#020617] text-cyan-50 p-4 gap-4 font-sans overflow-hidden">
       
-      {/* বাম সাইডবার - নেভিগেশন আইকন */}
-      <div className="w-[60px] bg-[#202c33] border-r border-[#222d34] flex flex-col items-center py-4 justify-between">
-        <div className="flex flex-col gap-6">
-          <button onClick={() => setActiveTab("chats")} className={`p-2 rounded-full ${activeTab === "chats" ? "bg-[#374248] text-[#00a884]" : "text-[#aebac1]"}`}>
-            <HiChatBubbleLeftRight size={26} />
-          </button>
-          <button onClick={() => setActiveTab("status")} className={`p-2 rounded-full ${activeTab === "status" ? "bg-[#374248] text-[#00a884]" : "text-[#aebac1]"}`}>
-            <HiArrowPathRoundedSquare size={26} />
-          </button>
+      {/* ১. লেফট সাইড নেভিগেশন (আইকন বার) */}
+      <div className={`w-16 ${glassBg} rounded-3xl flex flex-col items-center py-8 gap-10 border-cyan-500/20`}>
+        <div className="w-10 h-10 rounded-full bg-cyan-500/20 flex items-center justify-center animate-pulse shadow-[0_0_15px_cyan]">
+          <HiOutlineMicrophone size={20} className="text-cyan-400" />
         </div>
-        <button onClick={() => setActiveTab("profile")}>
-          <img src={user?.picture} className="w-8 h-8 rounded-full border border-[#aebac1]" alt="" />
-        </button>
+        <HiOutlineChatBubbleBottomCenterText size={24} className="text-gray-500 hover:text-cyan-400 cursor-pointer transition-all" />
+        <HiOutlineUser size={24} className="text-gray-500 hover:text-cyan-400 cursor-pointer transition-all" />
+        <div className="mt-auto">
+          <img src={user?.picture} className="w-10 h-10 rounded-2xl border border-cyan-500/50" alt="" />
+        </div>
       </div>
 
-      {/* চ্যাট লিস্ট */}
-      <div className={`w-full md:w-[400px] border-r border-[#222d34] flex flex-col ${currentChat ? 'hidden md:flex' : 'flex'}`}>
-        <header className="bg-[#202c33] p-4 flex flex-col gap-4">
-          <div className="flex justify-between items-center text-xl font-bold">
-            <h1>Chats</h1>
-            <div className="flex gap-4 text-[#aebac1]">
-               <HiOutlineCamera size={22} />
-               <HiOutlineEllipsisVertical size={22} />
-            </div>
+      {/* ২. চ্যাট লিস্ট (Channels) */}
+      <div className={`w-full md:w-[350px] ${glassBg} rounded-[2.5rem] flex flex-col overflow-hidden border-cyan-500/10 ${currentChat ? 'hidden md:flex' : 'flex'}`}>
+        <div className="p-6">
+          <h2 className="text-2xl font-black tracking-tighter uppercase italic text-cyan-400">Neonus Channels</h2>
+          <div className="mt-4 bg-white/5 p-2 rounded-2xl border border-white/5 flex items-center">
+            <input placeholder="Search Frequency..." className="bg-transparent border-none outline-none text-xs w-full px-2" />
           </div>
-          <div className="bg-[#111b21] flex items-center px-3 py-1.5 rounded-lg">
-            <HiOutlineMagnifyingGlass className="text-[#8696a0]" />
-            <input placeholder="Search or start new chat" className="bg-transparent border-none outline-none text-sm ml-4 w-full" />
-          </div>
-        </header>
+        </div>
 
-        <div className="flex-1 overflow-y-auto bg-[#111b21] custom-scrollbar">
+        <div className="flex-1 overflow-y-auto px-4 space-y-3 custom-scrollbar">
           {conversations.map((c) => (
-            <div key={c._id} onClick={() => setCurrentChat(c)} className={`flex items-center p-3 cursor-pointer hover:bg-[#202c33] ${currentChat?._id === c._id ? 'bg-[#2a3942]' : ''}`}>
-              <img src={`https://ui-avatars.com/api/?name=${c._id}`} className="w-12 h-12 rounded-full" />
-              <div className="flex-1 ml-4 border-b border-[#222d34] pb-3">
-                <div className="flex justify-between font-medium">
-                  <span>User_{c._id.slice(-4)}</span>
-                  <span className="text-xs text-[#8696a0]">10:00 AM</span>
-                </div>
-                <p className="text-sm text-[#8696a0] truncate">Connected</p>
+            <motion.div 
+              key={c._id} whileHover={{ x: 5 }} onClick={() => setCurrentChat(c)}
+              className={`p-4 rounded-[2rem] flex items-center gap-4 cursor-pointer transition-all ${currentChat?._id === c._id ? 'bg-cyan-500/20 border border-cyan-500/30 shadow-lg' : 'hover:bg-white/5'}`}
+            >
+              <div className="relative">
+                <img src={`https://ui-avatars.com/api/?name=${c._id}&background=random`} className="w-12 h-12 rounded-2xl rotate-3" alt="" />
+                {onlineUsers.some(u => c.members.includes(u.userId) && u.userId !== user.sub) && 
+                  <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-cyan-400 rounded-full shadow-[0_0_10px_cyan]"></div>
+                }
               </div>
-            </div>
+              <div>
+                <h4 className="font-bold text-sm uppercase italic">Channel_{c._id.slice(-4)}</h4>
+                <p className="text-[10px] text-cyan-400/60 font-mono tracking-widest">ENCRYPTED</p>
+              </div>
+            </motion.div>
           ))}
         </div>
       </div>
 
-      {/* চ্যাট এরিয়া */}
-      <div className={`flex-1 flex flex-col bg-[#0b141a] relative ${!currentChat ? 'hidden md:flex items-center justify-center' : 'flex'}`}>
+      {/* ৩. মেইন ইন্টারফেস (Message Area) */}
+      <div className={`flex-1 ${glassBg} rounded-[3rem] flex flex-col relative border-cyan-500/10 ${!currentChat ? 'hidden md:flex items-center justify-center' : 'flex'}`}>
         {currentChat ? (
           <>
-            <header className="bg-[#202c33] px-4 py-2 flex justify-between items-center">
-              <div className="flex items-center gap-3">
-                <button className="md:hidden" onClick={() => setCurrentChat(null)}><HiOutlineChevronLeft size={24} /></button>
-                <img src={`https://ui-avatars.com/api/?name=${currentChat._id}`} className="w-10 h-10 rounded-full" />
-                <h3 className="font-medium">User_{currentChat._id.slice(-4)}</h3>
+            <header className="px-8 py-6 border-b border-white/5 flex justify-between items-center">
+              <div className="flex items-center gap-4">
+                <img src={`https://ui-avatars.com/api/?name=${currentChat._id}`} className="w-12 h-12 rounded-2xl border border-cyan-500/30" />
+                <div>
+                  <h3 className="text-lg font-black italic uppercase tracking-widest text-white">Aura_Node_{currentChat._id.slice(-4)}</h3>
+                  <span className="text-[10px] text-cyan-400 animate-pulse font-mono tracking-[0.3em]">LINK_STABLE</span>
+                </div>
               </div>
-              <div className="flex gap-6 text-[#aebac1]">
-                <HiOutlineVideoCamera size={24} className="cursor-pointer" onClick={() => navigate(`/call/${currentChat._id}?type=video`)} />
-                <HiOutlinePhone size={24} className="cursor-pointer" onClick={() => navigate(`/call/${currentChat._id}?type=voice`)} />
+              <div className="flex gap-4">
+                <button onClick={() => navigate(`/call/${currentChat._id}?type=video`)} className="p-3 bg-cyan-500/10 rounded-2xl hover:bg-cyan-500/30 text-cyan-400 border border-cyan-500/20"><HiOutlineVideoCamera size={22} /></button>
+                <button onClick={() => navigate(`/call/${currentChat._id}?type=voice`)} className="p-3 bg-purple-500/10 rounded-2xl hover:bg-purple-500/30 text-purple-400 border border-purple-500/20"><HiOutlinePhone size={22} /></button>
               </div>
             </header>
 
-            {/* চ্যাট মেসেজ উইন্ডো */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-2 bg-[url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png')] bg-repeat">
+            {/* চ্যাট এরিয়া (Cyberpunk Bubbles) */}
+            <div className="flex-1 overflow-y-auto p-8 space-y-6 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')]">
               {messages.map((m, i) => {
                 const isMe = m.senderId === user?.sub;
-                const isImage = m.text.startsWith("http"); // সাধারণ লজিক: URL হলে ইমেজ হিসেবে দেখানো
-
                 return (
-                  <div key={i} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`max-w-[75%] px-2 py-1.5 rounded-lg shadow-md ${isMe ? 'bg-[#005c4b]' : 'bg-[#202c33]'} ${isImage ? 'p-1' : ''}`}>
-                      {isImage ? (
-                        <img src={m.text} className="max-w-full rounded-md max-h-72 object-cover cursor-pointer" alt="Sent" onClick={() => window.open(m.text)} />
-                      ) : (
-                        <p className="px-1 text-[14.5px]">{m.text}</p>
-                      )}
-                      <div className="flex justify-end gap-1 mt-1">
-                        <span className="text-[10px] text-[#8696a0]">12:00 PM</span>
-                        {isMe && <HiCheck size={14} className="text-[#53bdeb]" />}
-                      </div>
+                  <motion.div initial={{ opacity: 0, x: isMe ? 50 : -50 }} animate={{ opacity: 1, x: 0 }} key={i} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
+                    <div className={`relative max-w-[70%] px-6 py-3 shadow-2xl transition-all ${isMe 
+                      ? 'bg-gradient-to-r from-cyan-600 to-blue-700 text-white rounded-l-2xl rounded-tr-2xl skew-x-[-10deg]' 
+                      : 'bg-white/5 border border-white/10 text-cyan-100 rounded-r-2xl rounded-tl-2xl skew-x-[10deg]'}`}>
+                      <p className={`${isMe ? 'skew-x-[10deg]' : 'skew-x-[-10deg]'} text-sm font-medium tracking-wide`}>{m.text}</p>
+                      <span className="text-[9px] opacity-40 mt-2 block text-right font-mono italic">RECEIVED</span>
                     </div>
-                  </div>
+                  </motion.div>
                 );
               })}
               <div ref={scrollRef} />
             </div>
 
-            {/* ইনপুট এরিয়া */}
-            <footer className="bg-[#202c33] p-2 flex items-center gap-3">
-              <div className="flex gap-3 text-[#aebac1] ml-2">
-                <HiOutlineFaceSmile size={26} className="cursor-pointer" />
-                <label className="cursor-pointer">
-                   <HiOutlinePaperClip size={26} />
-                   <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" accept="image/*,video/*" />
-                </label>
+            {/* ইনপুট বক্স (Neural Style) */}
+            <div className="p-8 bg-black/20">
+              <div className="flex items-center gap-4 bg-white/5 p-2 rounded-[2rem] border border-cyan-500/30 shadow-[0_0_20px_rgba(34,211,238,0.1)]">
+                <button className="p-3 text-gray-500 hover:text-cyan-400 transition-colors"><HiOutlineFaceSmile size={24} /></button>
+                <input 
+                  value={newMessage} onChange={(e) => setNewMessage(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+                  placeholder="ENCRYPTED FREQUENCY ACTIVE..." 
+                  className="flex-1 bg-transparent border-none outline-none text-xs text-cyan-100 uppercase tracking-widest"
+                />
+                <button className="p-3 text-gray-500 hover:text-cyan-400 transition-colors"><HiOutlineCamera size={24} /></button>
+                <button onClick={handleSend} className="bg-cyan-500 p-4 rounded-2xl text-black shadow-lg shadow-cyan-500/50 hover:scale-105 active:scale-95 transition-all">
+                  <HiOutlinePaperAirplane size={20} />
+                </button>
               </div>
-              
-              <input 
-                value={newMessage}
-                onChange={(e) => setNewMessage(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleSend(newMessage)}
-                placeholder={isUploading ? "Uploading file..." : "Type a message"}
-                disabled={isUploading}
-                className="flex-1 bg-[#2a3942] rounded-lg py-2.5 px-4 outline-none text-sm placeholder:text-[#8696a0]"
-              />
-
-              <button onClick={() => handleSend(newMessage)} className="mr-2 text-[#aebac1]">
-                <HiOutlinePaperAirplane size={24} className={newMessage ? "text-[#00a884]" : ""} />
-              </button>
-            </footer>
+            </div>
           </>
         ) : (
-          <div className="text-center opacity-20">
-             <HiChatBubbleLeftRight size={100} className="mx-auto" />
-             <h2 className="text-2xl mt-4">WhatsApp Neural Link</h2>
+          <div className="text-center">
+            <div className="w-32 h-32 bg-cyan-500/5 rounded-full border border-cyan-500/10 flex items-center justify-center mx-auto mb-6">
+              <HiOutlineChatBubbleBottomCenterText size={50} className="text-cyan-500 opacity-30" />
+            </div>
+            <h2 className="text-sm font-black uppercase tracking-[0.8em] text-cyan-500/50">Neural Link Idle</h2>
+            <p className="text-[10px] text-gray-600 mt-2 tracking-widest uppercase">Select Frequency To Start Transmission</p>
           </div>
         )}
       </div>
