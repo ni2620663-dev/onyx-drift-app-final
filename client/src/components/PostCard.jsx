@@ -23,11 +23,13 @@ const PostCard = ({ post, onAction, onDelete, onUserClick }) => {
   const likesArray = Array.isArray(post.likes) ? post.likes : [];
   const isLiked = user && likesArray.includes(user.sub);
 
-  // ক্লিক হ্যান্ডলার: প্রোফাইল পিকচার বা নামের ওপর ক্লিক করলে আইডিDiscovery পেজে পাঠাবে
+  // ক্লিক হ্যান্ডলার: প্রোফাইল পিকচার বা নামের ওপর ক্লিক করলে অ্যাকশন ট্রিগার করবে
   const handleProfileClick = (e) => {
     e.stopPropagation();
-    if (onUserClick && post.authorId) {
-      onUserClick(post.authorId);
+    // এখানে authorId অথবা authorAuth0Id চেক করে পাঠানো হচ্ছে
+    const targetId = post.authorId || post.authorAuth0Id || post.userId;
+    if (onUserClick && targetId) {
+      onUserClick(targetId);
     }
   };
 
@@ -110,10 +112,10 @@ const PostCard = ({ post, onAction, onDelete, onUserClick }) => {
     >
       <div className="p-6 flex items-center justify-between">
         <div className="flex items-center gap-4">
-          {/* প্রোফাইল পিকচার এবং নামের ক্লিক হ্যান্ডলার যুক্ত করা হয়েছে */}
+          {/* প্রোফাইল পিকচার ক্লিক ইভেন্ট */}
           <div 
             onClick={handleProfileClick}
-            className="p-[2px] rounded-2xl bg-gradient-to-tr from-cyan-400 to-purple-600 cursor-pointer active:scale-90 transition-transform"
+            className="p-[2px] rounded-2xl bg-gradient-to-tr from-cyan-400 to-purple-600 cursor-pointer active:scale-90 transition-transform hover:shadow-[0_0_15px_rgba(34,211,238,0.5)]"
           >
             <img 
               src={post.authorAvatar || `https://ui-avatars.com/api/?name=${post.authorName || 'User'}&background=random`} 
@@ -121,8 +123,9 @@ const PostCard = ({ post, onAction, onDelete, onUserClick }) => {
               alt="author" 
             />
           </div>
-          <div className="cursor-pointer" onClick={handleProfileClick}>
-            <h4 className="font-black text-white text-xs tracking-tighter uppercase italic hover:text-cyan-400 transition-colors">
+          {/* নামের ক্লিক ইভেন্ট */}
+          <div className="cursor-pointer group/name" onClick={handleProfileClick}>
+            <h4 className="font-black text-white text-xs tracking-tighter uppercase italic group-hover/name:text-cyan-400 transition-colors">
               {post.authorName || 'Anonymous'}
             </h4>
             <p className="text-[8px] text-gray-500 font-bold tracking-[0.2em] uppercase">
@@ -176,8 +179,6 @@ const PostCard = ({ post, onAction, onDelete, onUserClick }) => {
         </div>
         <FaShare className="text-gray-600 hover:text-white transition-all cursor-pointer" size={16} />
       </div>
-      
-      {/* কমেন্ট সেকশন আনচেঞ্জড (যদি লাগে) */}
     </motion.div>
   );
 };

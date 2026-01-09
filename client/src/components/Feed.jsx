@@ -23,9 +23,16 @@ const PremiumHomeFeed = () => {
   const [showPostSuccess, setShowPostSuccess] = useState(false);
   const [leftOpen, setLeftOpen] = useState(false);
   const [rightOpen, setRightOpen] = useState(false);
-  const [posts, setPosts] = useState([]); // রিয়েল পোস্ট স্টোর করার জন্য
+  const [posts, setPosts] = useState([]); // রিয়েল পোস্ট স্টোর করার জন্য
 
-  // ১. ডাটাবেস থেকে পোস্ট নিয়ে আসার ফাংশন
+  // প্রোফাইলে পাঠানোর ফাংশন (নতুন যোগ করা হয়েছে)
+  const handleProfileClick = (targetAuth0Id) => {
+    if (targetAuth0Id) {
+      navigate(`/following?userId=${targetAuth0Id}`);
+    }
+  };
+
+  // ১. ডাটাবেস থেকে পোস্ট নিয়ে আসার ফাংশন
   const fetchPosts = async () => {
     try {
       const response = await axios.get(`${API_BASE_URL}/api/posts`);
@@ -187,17 +194,21 @@ const PremiumHomeFeed = () => {
             ))}
           </div>
 
-          {/* পোস্ট কার্ডস (রিয়েল ডাটা কানেক্টেড) */}
+          {/* পোস্ট কার্ডস (রিয়েল ডাটা কানেক্টেড) */}
           <div className="space-y-6">
             {posts.map((p, index) => (
               <motion.div key={p.id || index} initial={{ opacity: 0 }} animate={{ opacity: 1 }} className={`${glassStyle} rounded-[2.5rem] p-6`}>
                 <div className="flex justify-between items-center mb-4">
-                  <div className="flex items-center gap-3">
-                    <img src={p.authorAvatar || `https://i.pravatar.cc/150?u=${index}`} className="w-10 h-10 rounded-xl border border-white/10" alt=""/>
+                  {/* প্রোফাইল সেকশন - এখানে লিঙ্কিং যোগ করা হয়েছে */}
+                  <div 
+                    className="flex items-center gap-3 cursor-pointer group/author"
+                    onClick={() => handleProfileClick(p.authorAuth0Id || p.userId)}
+                  >
+                    <img src={p.authorAvatar || `https://i.pravatar.cc/150?u=${index}`} className="w-10 h-10 rounded-xl border border-white/10 group-hover/author:border-cyan-500 transition-all shadow-lg" alt=""/>
                     <div>
-                      <h4 className="text-[12px] font-black uppercase italic tracking-tighter">{p.authorName || "Anonymous_Drifter"}</h4>
+                      <h4 className="text-[12px] font-black uppercase italic tracking-tighter group-hover/author:text-cyan-400 transition-colors">{p.authorName || "Anonymous_Drifter"}</h4>
                       {/* ইউজার আইডি বার */}
-                      <p className="text-[7px] text-gray-500 font-mono tracking-tighter">SIGNAL_ID: {p.id || 'SYNCING...'}</p>
+                      <p className="text-[7px] text-gray-500 font-mono tracking-tighter">SIGNAL_ID: {p.authorAuth0Id || p.id || 'SYNCING...'}</p>
                     </div>
                   </div>
                   <button onClick={() => handleFollow(p.authorName)} className="text-cyan-500 hover:text-white p-2">
@@ -210,7 +221,7 @@ const PremiumHomeFeed = () => {
                   {p.content || p.desc}
                 </p>
 
-                {/* পোস্টের মিডিয়া */}
+                {/* পোস্টের মিডিয়া */}
                 {(p.mediaUrl || p.imageUrl) && (
                   <div className="aspect-video bg-white/5 rounded-[2rem] mb-4 overflow-hidden border border-white/5">
                       <img src={p.mediaUrl ? `${API_BASE_URL}${p.mediaUrl}` : p.imageUrl} className="w-full h-full object-cover opacity-90" alt=""/>
