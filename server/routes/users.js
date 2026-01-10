@@ -26,21 +26,32 @@ const storage = new CloudinaryStorage({
 
 const upload = multer({ storage: storage });
 
-// --- ১. ইউজার সার্চ রাউট (নিচে নতুন যোগ করা হয়েছে) ---
-// এটি /api/user/search?query=... এই লিঙ্কে কাজ করবে
+// --- ১. ইউজার সার্চ এবং ডিসকভারি রাউট ---
 router.get('/search', auth, async (req, res) => {
   try {
     const { query } = req.query;
-    if (!query) return res.status(400).json({ msg: "Search query is empty" });
+    let users;
 
-    // Regex ব্যবহার করে নাম, ইমেইল বা আইডি দিয়ে সার্চ করা
-    const users = await User.find({
-      $or: [
-        { name: { $regex: query, $options: 'i' } },
-        { email: { $regex: query, $options: 'i' } },
-        { auth0Id: { $regex: query, $options: 'i' } }
-      ]
-    }).select('name avatar auth0Id isVerified').limit(10);
+    if (!query || query.trim() === "") {
+      // যদি সার্চ খালি থাকে, তবে নিজের আইডি বাদে বাকি ১০ জন ইউজারকে দেখাবে (Discovery Mode)
+      users = await User.find({ auth0Id: { $ne: req.user.id } })
+        .select('name avatar auth0Id isVerified bio')
+        .limit(12);
+    } else {
+      // Regex সার্চ (নাম বা ইমেইল দিয়ে)
+      users = await User.find({
+        $and: [
+          { auth0Id: { $ne: req.user.id } }, // নিজেকে সার্চে দেখাবে না
+          {
+            $or: [
+              { name: { $regex: query, $options: 'i' } },
+              { email: { $regex: query, $options: 'i' } },
+              { auth0Id: { $regex: query, $options: 'i' } }
+            ]
+          }
+        ]
+      }).select('name avatar auth0Id isVerified bio').limit(10);
+    }
 
     res.json(users);
   } catch (err) {
@@ -49,7 +60,38 @@ router.get('/search', auth, async (req, res) => {
   }
 });
 
-// ২. প্রোফাইল গেট করা
+// --- ২. ফলো/আনফলো সিস্টেম (FIXED 404 ERROR) ---
+router.post('/follow/:targetId', auth, async (req, res) => {
+  try {
+    const currentUserAuthId = req.user.id;
+    const { targetId } = req.params;
+
+    if (currentUserAuthId === targetId) {
+      return res.status(400).json({ msg: "Cannot follow yourself" });
+    }
+
+    const targetUser = await User.findOne({ auth0Id: targetId });
+    const currentUser = await User.findOne({ auth0Id: currentUserAuthId });
+
+    if (!targetUser || !currentUser) return res.status(404).json({ msg: "User not found" });
+
+    // যদি অলরেডি ফলো করা থাকে তবে আনফলো হবে
+    if (currentUser.following.includes(targetId)) {
+      await User.findOneAndUpdate({ auth0Id: currentUserAuthId }, { $pull: { following: targetId } });
+      await User.findOneAndUpdate({ auth0Id: targetId }, { $pull: { followers: currentUserAuthId } });
+      return res.json({ msg: "Unfollowed", isFollowing: false });
+    } else {
+      // ফলো করা না থাকলে ফলো হবে
+      await User.findOneAndUpdate({ auth0Id: currentUserAuthId }, { $addToSet: { following: targetId } });
+      await User.findOneAndUpdate({ auth0Id: targetId }, { $addToSet: { followers: currentUserAuthId } });
+      return res.json({ msg: "Followed", isFollowing: true });
+    }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ৩. প্রোফাইল গেট করা
 router.get('/profile/:id', auth, async (req, res) => {
   try {
     const user = await User.findOne({ auth0Id: req.params.id });
@@ -60,7 +102,7 @@ router.get('/profile/:id', auth, async (req, res) => {
   }
 });
 
-// ৩. সকল ইউজারের লিস্ট
+// ৪. সকল ইউজারের লিস্ট
 router.get('/all', auth, async (req, res) => {
   try {
     const users = await User.find().select('name avatar auth0Id isVerified');
@@ -70,18 +112,16 @@ router.get('/all', auth, async (req, res) => {
   }
 });
 
-// ৪. প্রোফাইল আপডেট
+// ৫. প্রোফাইল আপডেট
 router.put("/update-profile", auth, upload.fields([
   { name: 'avatar', maxCount: 1 },
   { name: 'cover', maxCount: 1 }
 ]), async (req, res) => {
   try {
     const { name, nickname, bio, location, workplace, email } = req.body;
-    
     const finalName = name || nickname;
-    if (!finalName) {
-        return res.status(400).json({ msg: 'Name or Nickname is required' });
-    }
+
+    if (!finalName) return res.status(400).json({ msg: 'Name is required' });
 
     let updateFields = { 
       name: finalName, 
@@ -105,57 +145,48 @@ router.put("/update-profile", auth, upload.fields([
 
     res.json(updatedUser);
   } catch (err) {
-    console.error("Update Error:", err);
-    if (err.code === 11000) return res.status(400).json({ msg: 'Email already exists' });
     res.status(500).json({ msg: 'Update Failed', error: err.message });
   }
 });
 
-// ৫. ফ্রেন্ড রিকোয়েস্ট পাঠানো
+// ৬. ফ্রেন্ড সিস্টেম (Atomic Updates)
 router.post('/friend-request/:targetUserId', auth, async (req, res) => {
-    try {
-        const senderId = req.user.id;
-        const { targetUserId } = req.params;
+  try {
+    const senderId = req.user.id;
+    const { targetUserId } = req.params;
+    if (senderId === targetUserId) return res.status(400).json({ msg: "Cannot add yourself" });
 
-        if (senderId === targetUserId) return res.status(400).json({ msg: "Cannot add yourself" });
-
-        await User.findOneAndUpdate(
-            { auth0Id: targetUserId },
-            { $addToSet: { friendRequests: senderId } }
-        );
-
-        res.json({ msg: "Friend request sent!" });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
+    await User.findOneAndUpdate(
+      { auth0Id: targetUserId },
+      { $addToSet: { friendRequests: senderId } }
+    );
+    res.json({ msg: "Friend request sent!" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-// ৬. ফ্রেন্ড রিকোয়েস্ট এক্সেপ্ট করা
 router.post('/friend-accept/:senderId', auth, async (req, res) => {
-    try {
-        const receiverId = req.user.id;
-        const senderId = req.params.senderId;
+  try {
+    const receiverId = req.user.id;
+    const senderId = req.params.senderId;
 
-        const updateReceiver = User.findOneAndUpdate(
-            { auth0Id: receiverId },
-            { 
-                $pull: { friendRequests: senderId },
-                $addToSet: { friends: senderId }
-            },
-            { new: true }
-        );
+    const updateReceiver = User.findOneAndUpdate(
+      { auth0Id: receiverId },
+      { $pull: { friendRequests: senderId }, $addToSet: { friends: senderId } },
+      { new: true }
+    );
 
-        const updateSender = User.findOneAndUpdate(
-            { auth0Id: senderId },
-            { $addToSet: { friends: receiverId } }
-        );
+    const updateSender = User.findOneAndUpdate(
+      { auth0Id: senderId },
+      { $addToSet: { friends: receiverId } }
+    );
 
-        await Promise.all([updateReceiver, updateSender]);
-
-        res.json({ msg: "You are now friends!" });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
+    await Promise.all([updateReceiver, updateSender]);
+    res.json({ msg: "You are now friends!" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 export default router;
