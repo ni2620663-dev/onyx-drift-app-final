@@ -7,21 +7,10 @@ import { createPost } from '../controllers/postController.js';
 
 const router = express.Router();
 
-/* ==========================================================
-    ⚙️ MULTER CONFIGURATION (Cloudinary/Disk Storage)
-========================================================== */
+// MULTER CONFIG
 const storage = multer.diskStorage({});
-const fileFilter = (req, file, cb) => {
-  if (file.mimetype.startsWith('image') || file.mimetype.startsWith('video')) {
-    cb(null, true);
-  } else {
-    cb(new Error('Invalid file type!'), false);
-  }
-};
-
 const upload = multer({ 
   storage, 
-  fileFilter,
   limits: { fileSize: 50 * 1024 * 1024 } 
 });
 
@@ -29,41 +18,40 @@ const upload = multer({
     🚀 ROUTES
 ========================================================== */
 
-/**
- * ১. নতুন পোস্ট তৈরি (Controller-এর মাধ্যমে)
- * এটি করার সময় নিশ্চিত করুন আপনার controller-এ authorAuth0Id সেভ হচ্ছে।
- */
+// ১. নতুন পোস্ট তৈরি
 router.post('/create', auth, upload.single('file'), createPost);
 
 /**
- * ২. নির্দিষ্ট ইউজারের সব পোস্ট পাওয়া (Neural Discovery Link)
- * এন্ডপয়েন্ট: GET /api/user/user/:userId
+ * ২. প্রোফাইল এবং পোস্ট একসাথে পাওয়া (Neural Fix)
+ * এটি আপনার ফ্রন্টএন্ডের 404 এবং ডাটা না পাওয়ার সমস্যা সমাধান করবে।
  */
 router.get('/user/:userId', auth, async (req, res) => {
   try {
-    // URL থেকে আসা আইডি ডিকোড করা (যেমন: google-oauth2|...)
-    // এটি অত্যন্ত গুরুত্বপূর্ণ কারণ আইডিতে বিশেষ চিহ্ন (|) থাকে।
     const targetId = decodeURIComponent(req.params.userId);
     
-    /**
-     * ডাটাবেসে মাল্টিপল ফিল্ড চেক করা হচ্ছে যাতে 
-     * আপনার আগের (authorId/author) এবং বর্তমান (authorAuth0Id) সব পোস্ট খুঁজে পাওয়া যায়।
-     */
+    // ১. প্রথমে ইউজার প্রোফাইল খুঁজে বের করা
+    const user = await User.findOne({ auth0Id: targetId }).lean();
+
+    // ২. ওই ইউজারের সব পোস্ট খুঁজে বের করা
     const posts = await Post.find({ 
       $or: [
         { authorAuth0Id: targetId },
         { authorId: targetId },
         { author: targetId },
-        { user: targetId } // কিছু পুরানো মডেলে user ফিল্ড থাকতে পারে
+        { user: targetId } 
       ]
     })
     .sort({ createdAt: -1 })
-    .lean(); // পারফরম্যান্স অপটিমাইজেশনের জন্য (read-only query)
+    .lean();
 
     console.log(`[Neural Link]: Found ${posts.length} signals for Identity: ${targetId}`);
     
-    // পোস্ট না পাওয়া গেলেও খালি অ্যারে [] রিটার্ন করবে (Error নয়)
-    res.json(posts);
+    // ৩. অবজেক্ট আকারে ইউজার এবং পোস্ট দুটোই পাঠানো (ফ্রন্টএন্ডের সাথে মিল রেখে)
+    res.json({
+      user: user || { auth0Id: targetId, name: "Unknown Drifter" },
+      posts: posts || []
+    });
+
   } catch (err) {
     console.error("Neural Fetch Error:", err);
     res.status(500).json({ 
@@ -74,27 +62,20 @@ router.get('/user/:userId', auth, async (req, res) => {
 });
 
 /**
- * ৩. ড্রিপ্টারের প্রোফাইল ডাটা পাওয়া (Discovery Card-এর জন্য)
- * এটি প্রোফাইল পেজে ইউজারের নাম, অবতার এবং বায়ো রেন্ডার করতে সাহায্য করে।
+ * ৩. সার্চ ফাংশনালিটি (সার্চ পেজের জন্য)
  */
-router.get('/profile/:userId', auth, async (req, res) => {
+router.get('/search', auth, async (req, res) => {
   try {
-    const targetId = decodeURIComponent(req.params.userId);
-    
-    // auth0Id দিয়ে ইউজারকে খোঁজা হচ্ছে
-    const user = await User.findOne({ auth0Id: targetId })
-      .select("-__v -password") // অপ্রয়োজনীয় সিকিউরিটি ডাটা বাদ দিয়ে
-      .lean();
-
-    if (!user) {
-      console.log(`[Neural Sync]: Identity ${targetId} not found in database.`);
-      return res.status(404).json({ message: "Identity not found in database." });
-    }
-
-    res.json(user);
+    const { query } = req.query;
+    const users = await User.find({
+      $or: [
+        { name: { $regex: query, $options: 'i' } },
+        { auth0Id: query }
+      ]
+    }).limit(10).lean();
+    res.json(users);
   } catch (err) {
-    console.error("Profile Fetch Error:", err);
-    res.status(500).json({ message: "Internal Neural Error" });
+    res.status(500).json({ message: "Search Error" });
   }
 });
 
