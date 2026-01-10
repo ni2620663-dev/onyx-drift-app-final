@@ -26,7 +26,30 @@ const storage = new CloudinaryStorage({
 
 const upload = multer({ storage: storage });
 
-// ১. প্রোফাইল গেট করা
+// --- ১. ইউজার সার্চ রাউট (নিচে নতুন যোগ করা হয়েছে) ---
+// এটি /api/user/search?query=... এই লিঙ্কে কাজ করবে
+router.get('/search', auth, async (req, res) => {
+  try {
+    const { query } = req.query;
+    if (!query) return res.status(400).json({ msg: "Search query is empty" });
+
+    // Regex ব্যবহার করে নাম, ইমেইল বা আইডি দিয়ে সার্চ করা
+    const users = await User.find({
+      $or: [
+        { name: { $regex: query, $options: 'i' } },
+        { email: { $regex: query, $options: 'i' } },
+        { auth0Id: { $regex: query, $options: 'i' } }
+      ]
+    }).select('name avatar auth0Id isVerified').limit(10);
+
+    res.json(users);
+  } catch (err) {
+    console.error("Search Error:", err);
+    res.status(500).json({ msg: 'Search operation failed' });
+  }
+});
+
+// ২. প্রোফাইল গেট করা
 router.get('/profile/:id', auth, async (req, res) => {
   try {
     const user = await User.findOne({ auth0Id: req.params.id });
@@ -37,7 +60,7 @@ router.get('/profile/:id', auth, async (req, res) => {
   }
 });
 
-// ২. সকল ইউজারের লিস্ট
+// ৩. সকল ইউজারের লিস্ট
 router.get('/all', auth, async (req, res) => {
   try {
     const users = await User.find().select('name avatar auth0Id isVerified');
@@ -47,7 +70,7 @@ router.get('/all', auth, async (req, res) => {
   }
 });
 
-// ৩. প্রোফাইল আপডেট (FIX: Validation Error Resolved)
+// ৪. প্রোফাইল আপডেট
 router.put("/update-profile", auth, upload.fields([
   { name: 'avatar', maxCount: 1 },
   { name: 'cover', maxCount: 1 }
@@ -55,7 +78,6 @@ router.put("/update-profile", auth, upload.fields([
   try {
     const { name, nickname, bio, location, workplace, email } = req.body;
     
-    // ভ্যালিডেশন এরর ফিক্স: name অথবা nickname যেটা পাওয়া যাবে সেটাই ইউজ হবে
     const finalName = name || nickname;
     if (!finalName) {
         return res.status(400).json({ msg: 'Name or Nickname is required' });
@@ -89,9 +111,7 @@ router.put("/update-profile", auth, upload.fields([
   }
 });
 
-// --- FRIEND SYSTEM (Super Fast Atomic Updates) ---
-
-// ৪. ফ্রেন্ড রিকোয়েস্ট পাঠানো
+// ৫. ফ্রেন্ড রিকোয়েস্ট পাঠানো
 router.post('/friend-request/:targetUserId', auth, async (req, res) => {
     try {
         const senderId = req.user.id;
@@ -99,7 +119,6 @@ router.post('/friend-request/:targetUserId', auth, async (req, res) => {
 
         if (senderId === targetUserId) return res.status(400).json({ msg: "Cannot add yourself" });
 
-        // $addToSet ব্যবহার করা হয়েছে যাতে ডুপ্লিকেট রিকোয়েস্ট না যায় (O(1) Speed)
         await User.findOneAndUpdate(
             { auth0Id: targetUserId },
             { $addToSet: { friendRequests: senderId } }
@@ -111,13 +130,12 @@ router.post('/friend-request/:targetUserId', auth, async (req, res) => {
     }
 });
 
-// ৫. ফ্রেন্ড রিকোয়েস্ট এক্সেপ্ট করা
+// ৬. ফ্রেন্ড রিকোয়েস্ট এক্সেপ্ট করা
 router.post('/friend-accept/:senderId', auth, async (req, res) => {
     try {
         const receiverId = req.user.id;
         const senderId = req.params.senderId;
 
-        // দুজনকেই একসাথে আপডেট করা (Parallel Execution)
         const updateReceiver = User.findOneAndUpdate(
             { auth0Id: receiverId },
             { 
