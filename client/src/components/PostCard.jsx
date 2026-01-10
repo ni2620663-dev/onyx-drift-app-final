@@ -23,13 +23,18 @@ const PostCard = ({ post, onAction, onDelete, onUserClick }) => {
   const likesArray = Array.isArray(post.likes) ? post.likes : [];
   const isLiked = user && likesArray.includes(user.sub);
 
-  // ক্লিক হ্যান্ডলার: প্রোফাইল পিকচার বা নামের ওপর ক্লিক করলে অ্যাকশন ট্রিগার করবে
+  /**
+   * প্রোফাইল বা নামের ওপর ক্লিক করলে FollowingPage-এ পাঠানোর লজিক
+   */
   const handleProfileClick = (e) => {
     e.stopPropagation();
-    // এখানে authorId অথবা authorAuth0Id চেক করে পাঠানো হচ্ছে
-    const targetId = post.authorId || post.authorAuth0Id || post.userId;
+    // ব্যাকএন্ডে যে নামে আইডি সেভ করা আছে (authorAuth0Id সাধারণত Auth0 sub হয়)
+    const targetId = post.authorAuth0Id || post.authorId || post.userId;
+    
     if (onUserClick && targetId) {
       onUserClick(targetId);
+    } else {
+      console.warn("Neural Link: Target ID not found for this drifter.");
     }
   };
 
@@ -69,22 +74,23 @@ const PostCard = ({ post, onAction, onDelete, onUserClick }) => {
 
     if (isVideo) {
       return (
-        <div className={`relative group overflow-hidden rounded-[2rem] border border-white/5 bg-black ${isReel ? "aspect-[9/16] max-h-[600px] mx-auto w-[85%]" : "aspect-video"}`}>
+        <div className={`relative group overflow-hidden rounded-[2rem] border border-white/5 bg-black/40 ${isReel ? "aspect-[9/16] max-h-[550px] mx-auto w-[90%]" : "aspect-video"}`}>
           <video
             ref={videoRef}
             src={post.media}
             loop
             muted={isMuted}
+            playsInline
             className="w-full h-full object-cover cursor-pointer"
             onClick={togglePlay}
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-6 pointer-events-none">
+          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-6 pointer-events-none">
             <div className="flex items-center justify-between pointer-events-auto">
-              <button onClick={(e) => { e.stopPropagation(); togglePlay(); }} className="p-3 bg-cyan-400/20 backdrop-blur-md rounded-full text-cyan-400">
-                {isPlaying ? <FaPause /> : <FaPlay />}
+              <button onClick={(e) => { e.stopPropagation(); togglePlay(); }} className="p-3 bg-cyan-400/20 backdrop-blur-xl rounded-full text-cyan-400 border border-cyan-400/20">
+                {isPlaying ? <FaPause size={12}/> : <FaPlay size={12}/>}
               </button>
-              <button onClick={(e) => { e.stopPropagation(); setIsMuted(!isMuted); }} className="p-3 bg-white/10 backdrop-blur-md rounded-full text-white">
-                {isMuted ? <FaVolumeMute /> : <FaVolumeUp />}
+              <button onClick={(e) => { e.stopPropagation(); setIsMuted(!isMuted); }} className="p-3 bg-white/5 backdrop-blur-xl rounded-full text-white border border-white/10">
+                {isMuted ? <FaVolumeMute size={12}/> : <FaVolumeUp size={12}/>}
               </button>
             </div>
           </div>
@@ -93,11 +99,12 @@ const PostCard = ({ post, onAction, onDelete, onUserClick }) => {
     }
 
     return (
-      <div className="px-2">
+      <div className="px-1">
         <img 
           src={post.media} 
-          className="rounded-[2rem] w-full object-cover max-h-[500px] border border-white/5 shadow-2xl transition-all hover:scale-[1.005]" 
-          alt="Neural Post"
+          className="rounded-[2.2rem] w-full object-cover max-h-[600px] border border-white/10 shadow-2xl" 
+          alt="Neural Grid Content"
+          loading="lazy"
         />
       </div>
     );
@@ -105,79 +112,92 @@ const PostCard = ({ post, onAction, onDelete, onUserClick }) => {
 
   return (
     <motion.div 
-      initial={{ opacity: 0, y: 20 }}
-      whileInView={{ opacity: 1, y: 0 }}
+      initial={{ opacity: 0, scale: 0.95 }}
+      whileInView={{ opacity: 1, scale: 1 }}
       viewport={{ once: true }}
-      className="bg-white/5 backdrop-blur-3xl border border-white/10 rounded-[2.5rem] overflow-hidden mb-8 w-full group/card"
+      className="bg-[#0f172a]/40 backdrop-blur-3xl border border-white/5 rounded-[2.8rem] overflow-hidden mb-10 w-full group/card hover:border-white/10 transition-colors shadow-2xl"
     >
+      {/* Header Section */}
       <div className="p-6 flex items-center justify-between">
         <div className="flex items-center gap-4">
-          {/* প্রোফাইল পিকচার ক্লিক ইভেন্ট */}
-          <div 
+          <motion.div 
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.9 }}
             onClick={handleProfileClick}
-            className="p-[2px] rounded-2xl bg-gradient-to-tr from-cyan-400 to-purple-600 cursor-pointer active:scale-90 transition-transform hover:shadow-[0_0_15px_rgba(34,211,238,0.5)]"
+            className="p-[2px] rounded-2xl bg-gradient-to-tr from-cyan-500 via-blue-500 to-purple-600 cursor-pointer shadow-lg"
           >
             <img 
-              src={post.authorAvatar || `https://ui-avatars.com/api/?name=${post.authorName || 'User'}&background=random`} 
-              className="w-10 h-10 rounded-[0.8rem] object-cover border-2 border-[#020617]" 
+              src={post.authorAvatar || `https://ui-avatars.com/api/?name=${post.authorName || 'Drifter'}&background=random`} 
+              className="w-11 h-11 rounded-[0.9rem] object-cover border-2 border-[#0b1120]" 
               alt="author" 
             />
-          </div>
-          {/* নামের ক্লিক ইভেন্ট */}
+          </motion.div>
+
           <div className="cursor-pointer group/name" onClick={handleProfileClick}>
-            <h4 className="font-black text-white text-xs tracking-tighter uppercase italic group-hover/name:text-cyan-400 transition-colors">
-              {post.authorName || 'Anonymous'}
+            <h4 className="font-black text-white text-sm tracking-tight uppercase italic group-hover/name:text-cyan-400 transition-colors flex items-center gap-2">
+              {post.authorName || 'UNKNOWN DRIFTER'}
+              {post.isVerified && <span className="w-2 h-2 bg-cyan-500 rounded-full animate-pulse"/>}
             </h4>
-            <p className="text-[8px] text-gray-500 font-bold tracking-[0.2em] uppercase">
-              {post.createdAt ? new Date(post.createdAt).toLocaleDateString() : 'Just now'} • {post.mediaType || 'neural'}
+            <p className="text-[9px] text-gray-500 font-black tracking-[0.2em] uppercase mt-0.5">
+              {post.createdAt ? new Date(post.createdAt).toLocaleDateString() : 'REALTIME'} • {post.mediaType || 'SIGNAL'}
             </p>
           </div>
         </div>
 
-        {(user?.sub === post.authorId || user?.email === post.authorId) && (
+        {/* Delete Action */}
+        {(user?.sub === post.authorId || user?.sub === post.authorAuth0Id) && (
           <button 
             onClick={(e) => {
               e.stopPropagation();
-              if(window.confirm("Are you sure you want to delete this signal?")) {
+              if(window.confirm("TERMINATE THIS SIGNAL?")) {
                 onDelete(post._id);
               }
             }} 
-            className="p-2 text-gray-600 hover:text-rose-500 hover:bg-rose-500/10 rounded-full transition-all"
+            className="p-2.5 text-gray-600 hover:text-rose-500 hover:bg-rose-500/10 rounded-2xl transition-all"
           >
             <FaTrashAlt size={14} />
           </button>
         )}
       </div>
 
-      <div className="px-8 pb-4">
-        <p className="text-gray-300 text-sm font-light leading-relaxed tracking-wide">
+      {/* Post Text */}
+      <div className="px-9 pb-5">
+        <p className="text-gray-300 text-sm font-medium leading-relaxed tracking-wide opacity-90">
           {post.text}
         </p>
       </div>
 
-      <div className="px-4 pb-4">
+      {/* Media Content */}
+      <div className="px-5 pb-5">
         {renderMedia()}
       </div>
 
-      <div className="px-8 py-5 flex items-center justify-between border-t border-white/5 bg-white/[0.01]">
-        <div className="flex items-center gap-8">
+      {/* Interactions Footer */}
+      <div className="px-8 py-5 flex items-center justify-between border-t border-white/5 bg-white/[0.02]">
+        <div className="flex items-center gap-10">
           <button 
             onClick={handleLike} 
             disabled={isLiking}
-            className={`flex items-center gap-2 group transition-all ${isLiked ? "text-rose-500" : "text-gray-500 hover:text-rose-400"}`}
+            className={`flex items-center gap-2.5 group transition-all ${isLiked ? "text-rose-500" : "text-gray-500 hover:text-rose-400"}`}
           >
-            <motion.div whileTap={{ scale: 0.8 }}>
-              {isLiked ? <FaHeart size={18} /> : <FaRegHeart size={18} />}
+            <motion.div whileTap={{ scale: 0.7 }} className={isLiked ? "drop-shadow-[0_0_8px_rgba(244,63,94,0.6)]" : ""}>
+              {isLiked ? <FaHeart size={20} /> : <FaRegHeart size={20} />}
             </motion.div>
-            <span className="text-[10px] font-black uppercase tracking-widest">{likesArray.length}</span>
+            <span className="text-xs font-black italic tracking-widest">{likesArray.length}</span>
           </button>
 
-          <button onClick={() => setShowComments(!showComments)} className="flex items-center gap-2 text-gray-500 hover:text-cyan-400">
-            <FaRegComment size={18} />
-            <span className="text-[10px] font-black uppercase tracking-widest">{post.comments?.length || 0}</span>
+          <button 
+            onClick={() => setShowComments(!showComments)} 
+            className="flex items-center gap-2.5 text-gray-500 hover:text-cyan-400 transition-all"
+          >
+            <FaRegComment size={20} />
+            <span className="text-xs font-black italic tracking-widest">{post.comments?.length || 0}</span>
           </button>
         </div>
-        <FaShare className="text-gray-600 hover:text-white transition-all cursor-pointer" size={16} />
+        
+        <button className="p-2 text-gray-600 hover:text-white transition-all">
+            <FaShare size={18} />
+        </button>
       </div>
     </motion.div>
   );

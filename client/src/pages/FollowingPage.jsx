@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import axios from 'axios';
 import { useAuth0 } from '@auth0/auth0-react';
 import { 
@@ -12,22 +12,24 @@ const FollowingPage = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState(""); 
   const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(true); // আরও ডেটা আছে কি না চেক করতে
+  const [hasMore, setHasMore] = useState(true);
   
   const { getAccessTokenSilently, user: auth0User } = useAuth0();
   const navigate = useNavigate();
   const location = useLocation();
 
+  // URL থেকে userId প্যারামিটার নেওয়া
   const queryParams = new URLSearchParams(location.search);
   const targetUserId = queryParams.get('userId');
 
   const API_URL = "https://onyx-drift-app-final.onrender.com";
 
   /**
-   * ইউজার লিস্ট ফেচ করা (Pagination Support সহ)
+   * ইউজার লিস্ট ফেচ করার মেইন ফাংশন
    */
   const fetchUsers = useCallback(async (query = "", isInitial = false) => {
     try {
+      setLoading(true);
       const token = await getAccessTokenSilently();
       const currentPage = isInitial ? 1 : page;
       
@@ -43,10 +45,13 @@ const FollowingPage = () => {
       if (isInitial) {
         setUsers(res.data);
       } else {
-        setUsers(prev => [...prev, ...res.data]);
+        // ডুপ্লিকেট ডেটা এড়াতে ফিল্টার
+        setUsers(prev => {
+          const newUsers = res.data.filter(u => !prev.some(p => p.auth0Id === u.auth0Id));
+          return [...prev, ...newUsers];
+        });
       }
 
-      // যদি ১২টির কম ডেটা আসে, তার মানে আর ডেটা নেই
       setHasMore(res.data.length === 12);
       setLoading(false);
     } catch (err) {
@@ -55,32 +60,41 @@ const FollowingPage = () => {
     }
   }, [getAccessTokenSilently, page]);
 
-  // ১. ইনিশিয়াল লোড এবং টার্গেট ইউজার সার্চ
+  // ১. যখনই page পরিবর্তন হবে, ডেটা ফেচ হবে (Infinite Scroll-এর জন্য)
+  useEffect(() => {
+    if (page > 1) {
+      fetchUsers(searchTerm, false);
+    }
+  }, [page]);
+
+  // ২. URL-এ targetUserId থাকলে সরাসরি তাকে সার্চ করা
   useEffect(() => {
     if (targetUserId) {
       setSearchTerm(targetUserId);
+      setPage(1);
       fetchUsers(targetUserId, true);
     } else {
       fetchUsers("", true);
     }
   }, [targetUserId]);
 
-  // ২. ডিব্রাউন্স সার্চ লজিক
+  // ৩. ডিব্রাউন্স সার্চ লজিক (শুধুমাত্র যখন URL-এ কোনো ID থাকবে না)
   useEffect(() => {
-    const delayDebounceFn = setTimeout(() => {
-      if (!targetUserId) {
-        setPage(1);
-        fetchUsers(searchTerm, true);
-      }
-    }, 500);
-    return () => clearTimeout(delayDebounceFn);
-  }, [searchTerm]);
+    if (targetUserId) return; // আইডি লক থাকলে সার্চ ব্লক থাকবে
 
-  // ৩. ইনফিনিট স্ক্রল লজিক
+    const delayDebounceFn = setTimeout(() => {
+      setPage(1);
+      fetchUsers(searchTerm, true);
+    }, 600);
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [searchTerm, targetUserId]);
+
+  // ৪. ইনফিনিট স্ক্রল লজিক
   useEffect(() => {
     const handleScroll = () => {
       if (
-        window.innerHeight + document.documentElement.scrollTop + 50 >= 
+        window.innerHeight + document.documentElement.scrollTop + 100 >= 
         document.documentElement.scrollHeight
       ) {
         if (hasMore && !loading) {
@@ -92,7 +106,7 @@ const FollowingPage = () => {
     return () => window.removeEventListener('scroll', handleScroll);
   }, [hasMore, loading]);
 
-  // ৪. ফলো হ্যান্ডেলার
+  // ৫. ফলো/আনফলো হ্যান্ডেলার
   const handleFollow = async (targetId) => {
     try {
       const token = await getAccessTokenSilently();
@@ -118,19 +132,24 @@ const FollowingPage = () => {
   };
 
   return (
-    <div className="p-6 bg-transparent min-h-screen font-sans max-w-7xl mx-auto">
+    <div className="p-6 bg-transparent min-h-screen font-sans max-w-7xl mx-auto selection:bg-cyan-500/30">
       
       {/* Header & Search */}
       <div className="mb-12 flex flex-col md:flex-row md:items-end justify-between gap-6">
-        <div>
-          <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-gray-500 hover:text-cyan-400 transition-colors text-[10px] font-black uppercase tracking-widest mb-4">
-            <FaArrowLeft /> Back to Drift
+        <div className="animate-in fade-in slide-in-from-left duration-700">
+          <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-gray-500 hover:text-cyan-400 transition-colors text-[10px] font-black uppercase tracking-widest mb-4 group">
+            <FaArrowLeft className="group-hover:-translate-x-1 transition-transform" /> Back to Drift
           </button>
           <h1 className="text-4xl font-black text-white italic tracking-tighter flex items-center gap-3">
-            <FaRocket className="text-cyan-500" /> NEURAL DISCOVERY
+            <FaRocket className="text-cyan-500 animate-bounce" /> NEURAL DISCOVERY
           </h1>
-          <p className="text-gray-500 text-[10px] mt-2 uppercase tracking-[0.4em] font-bold">
-            {searchTerm ? `Identity Locked: ${searchTerm}` : "Detecting drifters in your sector"}
+          <p className="text-gray-500 text-[10px] mt-2 uppercase tracking-[0.4em] font-bold flex items-center gap-2">
+            {searchTerm ? (
+              <>
+                <span className="w-2 h-2 bg-cyan-500 rounded-full animate-ping" />
+                Identity Locked: <span className="text-cyan-400">{searchTerm}</span>
+              </>
+            ) : "Detecting drifters in your sector"}
           </p>
         </div>
 
@@ -138,7 +157,7 @@ const FollowingPage = () => {
           <input 
             type="text" 
             placeholder="Search Identity Name or ID..." 
-            className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-white text-xs outline-none focus:border-cyan-500/50 transition-all backdrop-blur-xl shadow-2xl"
+            className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-white text-xs outline-none focus:border-cyan-500/50 transition-all backdrop-blur-xl shadow-2xl focus:ring-1 focus:ring-cyan-500/20"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
@@ -153,23 +172,30 @@ const FollowingPage = () => {
           const isTarget = user.auth0Id === targetUserId;
 
           return (
-            <div key={user.auth0Id} className={`backdrop-blur-2xl border rounded-[2.5rem] p-7 group shadow-2xl relative transition-all duration-500 ${isTarget ? 'bg-cyan-500/10 border-cyan-500/40 ring-1 ring-cyan-500/20' : 'bg-[#0f172a]/40 border-white/5 hover:border-white/10'}`}>
+            <div 
+              key={user.auth0Id} 
+              className={`backdrop-blur-2xl border rounded-[2.5rem] p-7 group shadow-2xl relative transition-all duration-500 hover:scale-[1.02] ${
+                isTarget 
+                ? 'bg-cyan-500/10 border-cyan-500/40 ring-1 ring-cyan-500/20' 
+                : 'bg-[#0f172a]/40 border-white/5 hover:border-white/10'
+              }`}
+            >
               
               {isTarget && (
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-cyan-500 text-black text-[8px] font-black px-4 py-1 rounded-full tracking-widest uppercase shadow-[0_0_15px_rgba(6,182,212,0.5)]">
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-cyan-500 text-black text-[8px] font-black px-4 py-1 rounded-full tracking-widest uppercase shadow-[0_0_15px_rgba(6,182,212,0.5)] z-20">
                   Signal Locked
                 </div>
               )}
 
               <div className="flex flex-col items-center text-center">
-                <div className="relative">
+                <div className="relative group-hover:rotate-3 transition-transform duration-500">
                   <img 
                     src={user.avatar || `https://ui-avatars.com/api/?name=${user.name}&background=random`} 
-                    className="w-24 h-24 rounded-[2.2rem] object-cover border-4 border-white/5 group-hover:border-cyan-500/50 transition-all duration-500"
+                    className="w-24 h-24 rounded-[2.2rem] object-cover border-4 border-white/5 group-hover:border-cyan-500/50 transition-all duration-500 shadow-xl"
                     alt={user.name}
                   />
                   {isFollowing && (
-                    <div className="absolute -bottom-1 -right-1 bg-cyan-500 text-black p-1.5 rounded-full border-4 border-[#0b1120]">
+                    <div className="absolute -bottom-1 -right-1 bg-cyan-500 text-black p-1.5 rounded-full border-4 border-[#0b1120] shadow-lg">
                       <FaUserCheck size={10} />
                     </div>
                   )}
@@ -180,25 +206,37 @@ const FollowingPage = () => {
                 <p className="text-cyan-400/40 text-[9px] font-black tracking-[0.3em] uppercase mt-1">
                   @{user.nickname || "drifter"}
                 </p>
-                <p className="text-gray-500 text-[10px] mt-3 line-clamp-1 px-4">{user.bio || "No neural bio available"}</p>
+                <p className="text-gray-500 text-[10px] mt-3 line-clamp-2 px-4 italic leading-relaxed">
+                  {user.bio || "No neural bio available for this drifter."}
+                </p>
               </div>
 
               {/* Action Buttons */}
               <div className="mt-8 grid grid-cols-3 gap-3 relative z-10">
                 <button 
                   onClick={() => handleFollow(user.auth0Id)}
-                  className={`flex flex-col items-center justify-center gap-2 p-4 rounded-3xl transition-all border ${isFollowing ? 'bg-cyan-500 text-black shadow-[0_0_20px_rgba(6,182,212,0.4)] border-transparent' : 'bg-white/5 text-cyan-500 border-white/5 hover:bg-white/10 hover:border-cyan-500/30'}`}
+                  className={`flex flex-col items-center justify-center gap-2 p-4 rounded-3xl transition-all border active:scale-90 ${
+                    isFollowing 
+                    ? 'bg-cyan-500 text-black shadow-[0_0_20px_rgba(6,182,212,0.4)] border-transparent' 
+                    : 'bg-white/5 text-cyan-500 border-white/5 hover:bg-white/10 hover:border-cyan-500/30'
+                  }`}
                 >
                   {isFollowing ? <FaUserCheck size={18} /> : <FaUserPlus size={18} />}
                   <span className="text-[7px] font-black uppercase tracking-widest">{isFollowing ? "Linked" : "Link"}</span>
                 </button>
 
-                <button onClick={() => navigate(`/messenger?userId=${encodeURIComponent(user.auth0Id)}`)} className="flex flex-col items-center justify-center gap-2 p-4 bg-white/5 text-purple-500 rounded-3xl border border-white/5 hover:bg-purple-600 hover:text-white transition-all">
+                <button 
+                  onClick={() => navigate(`/messenger?userId=${encodeURIComponent(user.auth0Id)}`)} 
+                  className="flex flex-col items-center justify-center gap-2 p-4 bg-white/5 text-purple-500 rounded-3xl border border-white/5 hover:bg-purple-600 hover:text-white transition-all active:scale-90"
+                >
                   <FaEnvelope size={18} />
                   <span className="text-[7px] font-black uppercase tracking-widest">Chat</span>
                 </button>
 
-                <button onClick={() => navigate(`/call/${user.auth0Id?.replace(/[^a-zA-Z0-9]/g, "_")}`)} className="flex flex-col items-center justify-center gap-2 p-4 bg-white/5 text-emerald-500 rounded-3xl border border-white/5 hover:bg-emerald-600 hover:text-white transition-all">
+                <button 
+                  onClick={() => navigate(`/call/${user.auth0Id?.replace(/[^a-zA-Z0-9]/g, "_")}`)} 
+                  className="flex flex-col items-center justify-center gap-2 p-4 bg-white/5 text-emerald-500 rounded-3xl border border-white/5 hover:bg-emerald-600 hover:text-white transition-all active:scale-90"
+                >
                   <FaPhoneAlt size={18} />
                   <span className="text-[7px] font-black uppercase tracking-widest">Call</span>
                 </button>
@@ -208,15 +246,24 @@ const FollowingPage = () => {
         })}
       </div>
 
-      {/* Loading & Empty States */}
+      {/* States */}
       {loading && (
-        <div className="text-center py-10 text-cyan-500 font-black animate-pulse uppercase tracking-[0.3em] text-xs">
+        <div className="text-center py-20 text-cyan-500 font-black animate-pulse uppercase tracking-[0.3em] text-[10px] flex flex-col items-center gap-4">
+          <div className="w-12 h-[2px] bg-cyan-500 animate-pulse" />
           Synchronizing Neural Nodes...
         </div>
       )}
       {!loading && users.length === 0 && (
-        <div className="col-span-full text-center py-20">
-          <p className="text-gray-600 font-black uppercase tracking-[0.5em] italic">No drifters detected in this sector</p>
+        <div className="col-span-full text-center py-32 animate-in fade-in duration-1000">
+          <p className="text-gray-600 font-black uppercase tracking-[0.5em] italic text-xs">
+            No drifters detected in this sector
+          </p>
+          <button 
+            onClick={() => {setSearchTerm(""); fetchUsers("", true);}}
+            className="mt-6 text-cyan-500 text-[10px] font-bold border-b border-cyan-500/20 pb-1 hover:border-cyan-500 transition-all"
+          >
+            RESET RADAR
+          </button>
         </div>
       )}
     </div>
