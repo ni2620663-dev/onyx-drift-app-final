@@ -3,7 +3,6 @@ import http from "http";
 import { Server } from "socket.io";
 import cors from "cors";
 import dotenv from "dotenv";
-import mongoose from "mongoose"; 
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import Redis from "ioredis"; 
 import { v2 as cloudinary } from 'cloudinary';
@@ -11,7 +10,7 @@ import { v2 as cloudinary } from 'cloudinary';
 // ১. কনফিগারেশন লোড
 dotenv.config();
 
-// ২. ডাটাবেস কানেকশন ও রাউট ইম্পোর্ট
+// ২. ডাটাবেস কানেকশন ও রাউট ইম্পোর্ট (নিশ্চিত করুন এই ফাইলগুলো সঠিক পাথে আছে)
 import connectDB from "./config/db.js"; 
 import profileRoutes from "./src/routes/profile.js"; 
 import postRoutes from "./routes/posts.js";
@@ -29,19 +28,17 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET 
 });
 
-// ৪. Redis কানেকশন
-let REDIS_URL = process.env.REDIS_URL || "redis://default:vrf4EFLABBRLQ65e02TISHLbzC3kGiCH@redis-16125.c10.us-east-1-4.ec2.cloud.redislabs.com:16125";
-if (!REDIS_URL.startsWith("redis://") && !REDIS_URL.startsWith("rediss://")) {
-    REDIS_URL = `redis://${REDIS_URL}`;
-}
+// ৪. Redis কানেকশন (Error Handling সহ)
+const REDIS_URL = process.env.REDIS_URL || "redis://default:vrf4EFLABBRLQ65e02TISHLbzC3kGiCH@redis-16125.c10.us-east-1-4.ec2.cloud.redislabs.com:16125";
 
-const redisOptions = {
+const redis = new Redis(REDIS_URL, {
     maxRetriesPerRequest: null,
     enableReadyCheck: false,
     retryStrategy: (times) => Math.min(times * 50, 2000),
-};
+});
 
-const redis = new Redis(REDIS_URL, redisOptions); 
+redis.on("error", (err) => console.log("❌ Redis Error:", err));
+redis.on("connect", () => console.log("✅ Redis Connected"));
 
 // ৫. AI কনফিগারেশন (Gemini)
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
@@ -86,7 +83,7 @@ app.post("/api/ai/enhance", async (req, res) => {
   try {
     const { prompt } = req.body;
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-    const result = await model.generateContent(`Aesthetic rewrite: "${prompt}"`);
+    const result = await model.generateContent(`Aesthetic rewrite this chat message: "${prompt}"`);
     res.json({ enhancedText: result.response.text() });
   } catch (error) {
     res.status(500).json({ error: "AI Error" });
@@ -95,36 +92,36 @@ app.post("/api/ai/enhance", async (req, res) => {
 
 app.get("/", (req, res) => res.send("✅ OnyxDrift Neural Server Online"));
 
-// ৮. সকেট ও রিয়েল-টাইম লজিক (কলিং সহ)
+// ৮. সকেট ও রিয়েল-টাইম লজিক (Signal Protocol)
 const io = new Server(server, {
   cors: { 
     origin: allowedOrigins, 
     methods: ["GET", "POST"], 
     credentials: true 
   },
-  transports: ['polling', 'websocket'], 
+  transports: ['websocket', 'polling'], 
   allowEIO3: true,
-  path: "/socket.io/"
 });
 
+
+
 io.on("connection", (socket) => {
-  console.log(`📡 Connected: ${socket.id}`);
+  console.log(`📡 Socket Connected: ${socket.id}`);
   
-  // ইউজার অনলাইন হলে Redis-এ সেভ করা
+  // ইউজার অনলাইন হলে Redis-এ ম্যাপিং সেভ করা
   socket.on("addNewUser", async (userId) => {
     if (userId) {
       await redis.hset("online_users", userId, socket.id);
       
-      // অনলাইন ইউজারের লিস্ট সবাইকে পাঠানো
+      // আপডেট অনলাইন লিস্ট পাঠানো
       const allUsers = await redis.hgetall("online_users");
       const onlineList = Object.keys(allUsers).map(id => ({ userId: id, socketId: allUsers[id] }));
       io.emit("getOnlineUsers", onlineList);
-      
-      console.log(`👤 User Online: ${userId}`);
+      console.log(`👤 User Active: ${userId}`);
     }
   });
 
-  // ১. মেসেজ পাঠানোর লজিক
+  // ১. রিয়েল টাইম মেসেজিং
   socket.on("sendMessage", async ({ senderId, receiverId, text }) => {
     const receiverSocketId = await redis.hget("online_users", receiverId);
     if (receiverSocketId) {
@@ -132,7 +129,7 @@ io.on("connection", (socket) => {
     }
   });
 
-  // ২. ইনকামিং কল হ্যান্ডলিং (Signal to Target)
+  // ২. কলিং সিস্টেম (WebRTC Signaling)
   socket.on("callUser", async ({ userToCall, fromName, roomId, type, from }) => {
     const receiverSocketId = await redis.hget("online_users", userToCall);
     if (receiverSocketId) {
@@ -140,18 +137,19 @@ io.on("connection", (socket) => {
         fromName, 
         roomId, 
         type, 
-        from: from // কলদাতার আইডি (রিজেক্ট করার জন্য লাগবে)
+        from 
       });
-      console.log(`📞 Call from ${fromName} to socket ${receiverSocketId}`);
+      console.log(`📞 Calling User: ${userToCall} for Room: ${roomId}`);
+    } else {
+        console.log("⚠️ User is offline, cannot call");
     }
   });
 
-  // ৩. কল রিজেক্ট বা কাট করা
+  // ৩. কল রিজেক্ট বা এন্ড করা
   socket.on("rejectCall", async ({ targetId }) => {
     const targetSocketId = await redis.hget("online_users", targetId);
     if (targetSocketId) {
       io.to(targetSocketId).emit("callRejected");
-      console.log(`🚫 Call rejected/cut for ${targetId}`);
     }
   });
 
@@ -161,19 +159,18 @@ io.on("connection", (socket) => {
     for (const [userId, socketId] of Object.entries(allUsers)) {
       if (socketId === socket.id) {
         await redis.hdel("online_users", userId);
-        console.log(`❌ User Offline: ${userId}`);
         break;
       }
     }
-    // আপডেট লিস্ট পাঠানো
     const remainingUsers = await redis.hgetall("online_users");
     const onlineList = Object.keys(remainingUsers).map(id => ({ userId: id, socketId: remainingUsers[id] }));
     io.emit("getOnlineUsers", onlineList);
+    console.log(`❌ Socket Disconnected: ${socket.id}`);
   });
 });
 
 // ৯. সার্ভার স্টার্ট
 const PORT = process.env.PORT || 10000;
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 System Active on Port: ${PORT}`);
+    console.log(`🚀 Neural System Running on Port: ${PORT}`);
 });
