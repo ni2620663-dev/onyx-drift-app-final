@@ -5,59 +5,77 @@ import { useAuth0 } from "@auth0/auth0-react";
 import { HiOutlineXMark } from "react-icons/hi2";
 
 const CallPage = () => {
-  // ১. useParams-এ 'id'-এর বদলে 'roomId' দিন (App.js-এর সাথে মিল রেখে)
   const { roomId } = useParams(); 
   const { user } = useAuth0();
   const navigate = useNavigate();
 
-  // ২. আপনার সঠিক AppID এবং ServerSecret/AppSign এখানে নিশ্চিত করুন
+  // ZegoCloud Credentials
   const appID = 1086315716;
   const serverSecret = "f0c34875a613274b39afc9b10d6f54a720d8212c57e83423ae902e54458bbd92"; 
 
   const myMeeting = async (element) => {
     if (!element || !roomId) return;
 
-    // টোকেন জেনারেট করা
-    const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(
-      appID, 
-      serverSecret, // এখন এটি ভেরিয়েবলের সাথে মিলবে
-      roomId, 
-      user?.sub || Date.now().toString(), 
-      user?.name || "Nexus User"
-    );
+    try {
+      /**
+       * গুরুত্বপূর্ণ: ZegoCloud UserID তে স্পেশাল ক্যারেক্টার (যেমন: auth0|...) সাপোর্ট করে না।
+       * তাই আমরা ID থেকে শুধু অক্ষর এবং সংখ্যা রেখে বাকি সব "_" দিয়ে বদলে দিচ্ছি।
+       */
+      const cleanUserID = user?.sub 
+        ? user.sub.replace(/[^a-zA-Z0-9_]/g, "_") 
+        : `user_${Math.floor(Math.random() * 10000)}`;
 
-    // কলিং ইন্টারফেস তৈরি করা
-    const zp = ZegoUIKitPrebuilt.create(kitToken);
-    
-    zp.joinRoom({
-      container: element,
-      sharedLinks: [
-        {
-          name: 'Personal link',
-          url: window.location.origin + window.location.pathname,
+      const userName = user?.name || "Nexus User";
+
+      // ১. টোকেন জেনারেট করা
+      const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(
+        appID, 
+        serverSecret, 
+        roomId, 
+        cleanUserID, 
+        userName
+      );
+
+      // ২. কলিং ইন্টারফেস তৈরি করা
+      const zp = ZegoUIKitPrebuilt.create(kitToken);
+      
+      zp.joinRoom({
+        container: element,
+        sharedLinks: [
+          {
+            name: 'Personal link',
+            url: window.location.origin + window.location.pathname,
+          },
+        ],
+        scenario: {
+          mode: ZegoUIKitPrebuilt.OneONoneCall, 
         },
-      ],
-      scenario: {
-        mode: ZegoUIKitPrebuilt.OneONoneCall, 
-      },
-      showScreenSharingButton: true,
-      onLeaveRoom: () => {
-        navigate(-1); 
-      },
-    });
+        showScreenSharingButton: true,
+        showPreJoinView: false, // সরাসরি কলে ঢোকার জন্য এটি false রাখতে পারেন
+        onLeaveRoom: () => {
+          navigate(-1); 
+        },
+      });
+    } catch (error) {
+      console.error("Zego Initialization Error:", error);
+    }
   };
 
   return (
-    <div className="relative w-full h-screen bg-[#020617] flex flex-col">
-      {/* টপ বার - আপনার ডিজাইন অনুযায়ী */}
-      <div className="absolute top-0 left-0 w-full p-6 z-50 flex justify-between items-center bg-gradient-to-b from-black/50 to-transparent pointer-events-none">
-        <div>
-          <h2 className="text-cyan-400 font-black uppercase tracking-[0.3em] text-xs">Secure Channel</h2>
-          <p className="text-white/50 text-[10px] font-bold">ENCRYPTED VIDEO FEED</p>
+    <div className="relative w-full h-screen bg-[#020617] flex flex-col overflow-hidden">
+      {/* HUD / টপ বার */}
+      <div className="absolute top-0 left-0 w-full p-6 z-[999] flex justify-between items-center bg-gradient-to-b from-black/80 to-transparent pointer-events-none">
+        <div className="flex items-center gap-3">
+          <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+          <div>
+            <h2 className="text-cyan-400 font-black uppercase tracking-[0.3em] text-xs">Secure Channel</h2>
+            <p className="text-white/40 text-[9px] font-mono">ID: {roomId?.substring(0, 8)}... ENCRYPTED</p>
+          </div>
         </div>
+        
         <button 
           onClick={() => navigate(-1)}
-          className="w-12 h-12 bg-white/5 backdrop-blur-md rounded-full flex items-center justify-center border border-white/10 text-white hover:bg-red-500/20 transition-all pointer-events-auto"
+          className="w-12 h-12 bg-white/5 backdrop-blur-xl rounded-full flex items-center justify-center border border-white/10 text-white hover:bg-red-500/40 hover:border-red-500/50 transition-all pointer-events-auto shadow-2xl"
         >
           <HiOutlineXMark size={24} />
         </button>
@@ -66,9 +84,16 @@ const CallPage = () => {
       {/* ভিডিও কন্টেইনার */}
       <div 
         ref={myMeeting} 
-        className="w-full h-full"
+        className="zego-view-container w-full h-full"
         style={{ width: '100vw', height: '100vh' }}
       ></div>
+
+      {/* স্টাইল ওভাররাইড (Zego-র ডিফল্ট সাদা ব্যাকগ্রাউন্ড কালো করার জন্য) */}
+      <style>{`
+        .zego-view-container div {
+          background-color: transparent !important;
+        }
+      `}</style>
     </div>
   );
 };
