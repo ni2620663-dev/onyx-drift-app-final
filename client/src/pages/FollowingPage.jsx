@@ -18,42 +18,50 @@ const FollowingPage = () => {
   const queryParams = new URLSearchParams(location.search);
   const targetUserId = queryParams.get('userId');
 
-  // আপনার API URL
   const API_URL = "https://onyx-drift-app-final.onrender.com";
 
   /**
-   * ইউজার লিস্ট ফেচ করা
-   * নোট: কনসোলের "Cannot GET /api/user/all" এরর ফিক্স করতে এখানে /search ব্যবহার করা হয়েছে
+   * ইউজার লিস্ট ফেচ করা (সার্চ কোয়েরি সহ)
    */
-  const fetchUsers = async () => {
+  const fetchUsers = async (query = "") => {
     try {
+      // ব্যাকএন্ডে সার্চ করার সময় লোডিং স্টেট অন না করলে স্মুথ লাগে
       const token = await getAccessTokenSilently();
       
-      // আপনার ব্যাকএন্ডে /all নেই, তাই /search রাউট কল করা হচ্ছে
-      const res = await axios.get(`${API_URL}/api/user/search`, {
+      // ব্যাকএন্ডের /search রাউট কল করা হচ্ছে সঠিক কোয়েরি প্যারামিটার সহ
+      const res = await axios.get(`${API_URL}/api/user/search?query=${query}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       
       setUsers(res.data);
       setLoading(false);
-
-      if (targetUserId) {
-        setSearchTerm(targetUserId); 
-      }
     } catch (err) {
       console.error("Neural Fetch Error:", err.response?.data || err.message);
       setLoading(false);
     }
   };
 
+  // প্রথমবার লোড এবং টার্গেট ইউজার থাকলে সার্চ করা
   useEffect(() => {
-    fetchUsers();
+    if (targetUserId) {
+      setSearchTerm(targetUserId);
+      fetchUsers(targetUserId);
+    } else {
+      fetchUsers();
+    }
   }, [getAccessTokenSilently, targetUserId]);
 
-  /**
-   * ফলো/আনফলো সিস্টেম
-   * আইডি-তে থাকা পাইপ (|) ক্যারেক্টার হ্যান্ডেল করার জন্য encodeURIComponent ব্যবহার করা হয়েছে
-   */
+  // যখনই ইউজার সার্চ ইনপুটে টাইপ করবে, তখন ব্যাকএন্ড কল হবে
+  useEffect(() => {
+    const delayDebounceFn = setTimeout(() => {
+      if (!targetUserId) { // যদি টার্গেট আইডি ইউআরএল এ না থাকে তখনই টাইপিং এ সার্চ হবে
+        fetchUsers(searchTerm);
+      }
+    }, 500); // ৫০০ মিলিসেকেন্ড ডিব্রাউন্স টাইম (সার্ভার প্রেশার কমাতে)
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [searchTerm]);
+
   const handleFollow = async (targetId) => {
     try {
       const token = await getAccessTokenSilently();
@@ -63,7 +71,6 @@ const FollowingPage = () => {
         headers: { Authorization: `Bearer ${token}` }
       });
 
-      // রিয়েল-টাইম UI আপডেট
       setUsers(prevUsers => 
         prevUsers.map(u => {
           if (u.auth0Id === targetId) {
@@ -80,16 +87,6 @@ const FollowingPage = () => {
       console.error("Neural Link failed", err.response?.data || err.message);
     }
   };
-
-  const filteredUsers = users.filter(user => {
-    if (!searchTerm) return true;
-    const searchLower = searchTerm.toLowerCase();
-    return (
-      user.name?.toLowerCase().includes(searchLower) || 
-      user.nickname?.toLowerCase().includes(searchLower) ||
-      user.auth0Id?.toLowerCase().includes(searchLower)
-    );
-  });
 
   if (loading) return (
     <div className="p-10 text-cyan-400 animate-pulse font-black italic flex flex-col justify-center items-center h-screen uppercase tracking-widest bg-[#020617]">
@@ -113,7 +110,7 @@ const FollowingPage = () => {
             <FaRocket className="text-cyan-500" /> NEURAL DISCOVERY
           </h1>
           <p className="text-gray-500 text-[10px] mt-2 uppercase tracking-[0.4em] font-bold">
-            {targetUserId ? `Target Lock: ${targetUserId}` : "Detecting drifters in your sector"}
+            {searchTerm ? `Identity Locked: ${searchTerm}` : "Detecting drifters in your sector"}
           </p>
         </div>
 
@@ -128,7 +125,10 @@ const FollowingPage = () => {
           <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 group-focus-within:text-cyan-500 transition-colors" />
           {searchTerm && (
             <button 
-                onClick={() => setSearchTerm("")}
+                onClick={() => {
+                  setSearchTerm("");
+                  fetchUsers("");
+                }}
                 className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] text-gray-500 hover:text-white font-bold"
             >
                 CLEAR
@@ -138,8 +138,8 @@ const FollowingPage = () => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-        {filteredUsers.length > 0 ? (
-          filteredUsers.map((user) => {
+        {users.length > 0 ? (
+          users.map((user) => {
             const isFollowing = user.followers?.includes(auth0User?.sub);
             const isTarget = user.auth0Id === targetUserId;
 
@@ -193,16 +193,16 @@ const FollowingPage = () => {
                   </button>
 
                   <button 
-                    onClick={() => navigate(`/messenger?userId=${user.auth0Id}`)} 
-                    className="flex flex-col items-center justify-center gap-2 p-4 bg-white/5 text-purple-500 rounded-3xl border border-white/5 hover:bg-purple-600 hover:text-white transition-all group/btn"
+                    onClick={() => navigate(`/messenger?userId=${encodeURIComponent(user.auth0Id)}`)} 
+                    className="flex flex-col items-center justify-center gap-2 p-4 bg-white/5 text-purple-500 rounded-3xl border border-white/5 hover:bg-purple-600 hover:text-white transition-all"
                   >
                     <FaEnvelope size={18} />
                     <span className="text-[7px] font-black uppercase tracking-widest">Chat</span>
                   </button>
 
                   <button 
-                    onClick={() => navigate(`/call/${user.auth0Id?.replace('|', '_')}`)} 
-                    className="flex flex-col items-center justify-center gap-2 p-4 bg-white/5 text-emerald-500 rounded-3xl border border-white/5 hover:bg-emerald-600 hover:text-white transition-all group/btn"
+                    onClick={() => navigate(`/call/${user.auth0Id?.replace(/[^a-zA-Z0-9]/g, "_")}`)} 
+                    className="flex flex-col items-center justify-center gap-2 p-4 bg-white/5 text-emerald-500 rounded-3xl border border-white/5 hover:bg-emerald-600 hover:text-white transition-all"
                   >
                     <FaPhoneAlt size={18} />
                     <span className="text-[7px] font-black uppercase tracking-widest">Call</span>
