@@ -1,12 +1,12 @@
 import express from 'express';
-const router = express.Router();
 import User from '../models/User.js'; 
 import auth from '../middleware/auth.js'; 
-import upload from '../middleware/multer.js'; // নিশ্চিত করুন এখানে cloudinaryStorage কনফিগার করা আছে
+import upload from '../middleware/multer.js'; // নিশ্চিত করুন cloudinaryStorage এখানে আছে
+
+const router = express.Router();
 
 /* ==========================================================
-   1️⃣ UPDATE PROFILE (Avatar, Cover, Bio, Workplace)
-   Route: PUT api/user/update-profile
+    1️⃣ UPDATE PROFILE (Optimized for Speed)
 ========================================================== */
 router.put("/update-profile", auth, upload.fields([
   { name: 'avatar', maxCount: 1 },
@@ -14,56 +14,54 @@ router.put("/update-profile", auth, upload.fields([
 ]), async (req, res) => {
   try {
     const { nickname, name, bio, location, workplace } = req.body;
-    
-    let updateFields = {};
-    if (name) updateFields.name = name;
-    if (nickname) updateFields.nickname = nickname;
-    if (bio) updateFields.bio = bio;
-    if (location) updateFields.location = location;
-    if (workplace) updateFields.workplace = workplace;
+    const targetAuth0Id = req.user.sub || req.user.id;
 
+    let updateFields = { name, nickname, bio, location, workplace };
+
+    // ইমেজ চেক এবং পাথ সেট
     if (req.files) {
-      if (req.files.avatar) {
-        updateFields.avatar = req.files.avatar[0].path;
-      }
-      if (req.files.cover) {
-        updateFields.coverImg = req.files.cover[0].path;
-      }
+      if (req.files.avatar) updateFields.avatar = req.files.avatar[0].path;
+      if (req.files.cover) updateFields.coverImg = req.files.cover[0].path;
     }
 
-    const targetAuth0Id = req.user.sub || req.user.id;
+    // অপ্রয়োজনীয় undefined ফিল্ড বাদ দেওয়া
+    Object.keys(updateFields).forEach(key => updateFields[key] === undefined && delete updateFields[key]);
 
     const updatedUser = await User.findOneAndUpdate(
       { auth0Id: targetAuth0Id }, 
       { $set: updateFields },
-      { new: true, upsert: true }
+      { new: true, upsert: true, lean: true } // lean() ফাস্টার পারফরম্যান্স দেয়
     );
 
     res.json(updatedUser);
-
   } catch (err) {
     console.error("Profile Update Error:", err);
-    res.status(500).json({ msg: 'Identity Sync Failed', error: err.message });
+    res.status(500).json({ msg: 'Identity Sync Failed' });
   }
 });
 
 /* ==========================================================
-   2️⃣ NEURAL SEARCH (Search Users for SearchBar)
-   Route: GET api/user/search?query=name
+    2️⃣ NEURAL SEARCH (Scalable Search with Pagination)
 ========================================================== */
 router.get("/search", auth, async (req, res) => {
   try {
-    const { query } = req.query;
+    const { query, page = 1, limit = 10 } = req.query;
     if (!query) return res.json([]);
 
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const searchRegex = new RegExp(`^${query.trim()}`, "i"); // '^' দিয়ে শুরু হওয়া নাম আগে আসবে (Index Friendly)
+
     const users = await User.find({
+      auth0Id: { $ne: req.user.sub || req.user.id },
       $or: [
-        { name: { $regex: query, $options: "i" } },
-        { nickname: { $regex: query, $options: "i" } }
+        { name: { $regex: searchRegex } },
+        { nickname: { $regex: searchRegex } }
       ]
     })
-    .select("name nickname avatar auth0Id location isPremium")
-    .limit(10);
+    .select("name nickname avatar auth0Id location isVerified")
+    .skip(skip)
+    .limit(parseInt(limit))
+    .lean();
 
     res.json(users);
   } catch (err) {
@@ -72,13 +70,13 @@ router.get("/search", auth, async (req, res) => {
 });
 
 /* ==========================================================
-   3️⃣ GET PROFILE BY ID
-   Route: GET api/user/profile/:id
+    3️⃣ GET PROFILE BY ID
 ========================================================== */
 router.get("/profile/:id", auth, async (req, res) => {
   try {
     const user = await User.findOne({ auth0Id: req.params.id })
-      .populate("friends", "name avatar auth0Id");
+      .select("-__v")
+      .lean();
     
     if (!user) return res.status(404).json({ msg: "User not found in orbit" });
     res.json(user);
@@ -88,61 +86,54 @@ router.get("/profile/:id", auth, async (req, res) => {
 });
 
 /* ==========================================================
-   4️⃣ FRIEND REQUEST SYSTEM (Connect Signals)
+    4️⃣ FOLLOW SYSTEM (Atomic & Fast)
 ========================================================== */
-
-router.post("/friend-request/:targetAuth0Id", auth, async (req, res) => {
-  try {
-    const senderId = req.user.sub || req.user.id;
-    const targetId = req.params.targetAuth0Id;
-
-    if (senderId === targetId) return res.status(400).json({ msg: "Self-linking prohibited" });
-
-    await User.findOneAndUpdate(
-      { auth0Id: targetId },
-      { $addToSet: { pendingRequests: senderId } }
-    );
-
-    res.json({ msg: "Neural Request Dispatched" });
-  } catch (err) {
-    res.status(500).json({ msg: "Connection Request Failed" });
-  }
-});
-
-router.post("/accept-friend/:senderAuth0Id", auth, async (req, res) => {
+router.post("/follow/:targetId", auth, async (req, res) => {
   try {
     const myId = req.user.sub || req.user.id;
-    const friendId = req.params.senderAuth0Id;
+    const targetId = req.params.targetId;
 
-    await User.findOneAndUpdate(
-      { auth0Id: myId },
-      { $pull: { pendingRequests: friendId }, $addToSet: { friends: friendId } }
-    );
+    if (myId === targetId) return res.status(400).json({ msg: "Self-linking prohibited" });
 
-    await User.findOneAndUpdate(
-      { auth0Id: friendId },
-      { $addToSet: { friends: myId } }
-    );
+    // চেক করা হচ্ছে অলরেডি ফলো করা আছে কি না
+    const user = await User.findOne({ auth0Id: myId }).select('following').lean();
+    const isFollowing = user.following?.includes(targetId);
 
-    res.json({ msg: "Neural Link Established" });
+    if (isFollowing) {
+      // Unfollow Logic
+      await Promise.all([
+        User.updateOne({ auth0Id: myId }, { $pull: { following: targetId } }),
+        User.updateOne({ auth0Id: targetId }, { $pull: { followers: myId } })
+      ]);
+      return res.json({ msg: "Unfollowed", followed: false });
+    } else {
+      // Follow Logic
+      await Promise.all([
+        User.updateOne({ auth0Id: myId }, { $addToSet: { following: targetId } }),
+        User.updateOne({ auth0Id: targetId }, { $addToSet: { followers: myId } })
+      ]);
+      return res.json({ msg: "Followed", followed: true });
+    }
   } catch (err) {
-    res.status(500).json({ msg: "Sync Failed" });
+    res.status(500).json({ msg: "Follow operation failed" });
   }
 });
 
 /* ==========================================================
-   5️⃣ SUGGESTED USERS (Sidebar/Connect Page)
-   Route: GET api/user/all
+    5️⃣ SUGGESTED USERS / DISCOVERY
 ========================================================== */
 router.get("/all", auth, async (req, res) => {
   try {
     const currentUserId = req.user.sub || req.user.id;
-    
-    const users = await User.find({ 
-      auth0Id: { $ne: currentUserId } 
-    })
-    .select("name nickname avatar auth0Id bio")
-    .limit(8);
+    const { page = 1, limit = 8 } = req.query;
+    const skip = (page - 1) * limit;
+
+    const users = await User.find({ auth0Id: { $ne: currentUserId } })
+      .select("name nickname avatar auth0Id bio isVerified")
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit))
+      .lean();
 
     res.json(users);
   } catch (err) {
@@ -151,47 +142,18 @@ router.get("/all", auth, async (req, res) => {
 });
 
 /* ==========================================================
-   6️⃣ FOLLOW SYSTEM (New Logic)
-   Route: POST api/user/follow/:targetId
-========================================================== */
-router.post("/follow/:targetId", auth, async (req, res) => {
-  try {
-    const myAuth0Id = req.user.sub || req.user.id;
-    const targetId = req.params.targetId;
-
-    if (myAuth0Id === targetId) return res.status(400).json({ msg: "Cannot follow yourself" });
-
-    const currentUser = await User.findOne({ auth0Id: myAuth0Id });
-    const isFollowing = currentUser.following.includes(targetId);
-
-    if (isFollowing) {
-      // Unfollow
-      await User.findOneAndUpdate({ auth0Id: myAuth0Id }, { $pull: { following: targetId } });
-      await User.findOneAndUpdate({ auth0Id: targetId }, { $pull: { followers: myAuth0Id } });
-      res.json({ msg: "Unfollowed successfully", isFollowing: false });
-    } else {
-      // Follow
-      await User.findOneAndUpdate({ auth0Id: myAuth0Id }, { $addToSet: { following: targetId } });
-      await User.findOneAndUpdate({ auth0Id: targetId }, { $addToSet: { followers: myAuth0Id } });
-      res.json({ msg: "Followed successfully", isFollowing: true });
-    }
-  } catch (err) {
-    res.status(500).json({ msg: "Follow operation failed" });
-  }
-});
-
-/* ==========================================================
-   7️⃣ GET FOLLOWING LIST (For Following Page)
-   Route: GET api/user/following-list
+    6️⃣ FOLLOWING LIST (With Optimized Query)
 ========================================================== */
 router.get("/following-list", auth, async (req, res) => {
   try {
     const myId = req.user.sub || req.user.id;
-    const user = await User.findOne({ auth0Id: myId });
+    const user = await User.findOne({ auth0Id: myId }).select('following').lean();
     
-    // যাদের ফলো করা হয়েছে তাদের তথ্য খোঁজা
+    if (!user || !user.following.length) return res.json([]);
+
     const followingUsers = await User.find({ auth0Id: { $in: user.following } })
-      .select("name avatar bio auth0Id isPremium");
+      .select("name avatar bio auth0Id isVerified")
+      .lean();
 
     res.json(followingUsers);
   } catch (err) {
