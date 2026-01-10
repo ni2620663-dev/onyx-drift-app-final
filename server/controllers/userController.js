@@ -1,39 +1,20 @@
-import User from "../models/User.js";
-import Post from "../models/Post.js"; // পোস্ট লোড করার জন্য অবশ্যই প্রয়োজন
+import express from 'express';
+import Post from '../models/Post.js'; 
+import User from '../models/User.js';
+import auth from '../middleware/auth.js';
 
-/* ==========================================================
-    ১. প্রোফাইল আপডেট (Auth0 ID সাপোর্ট সহ)
-========================================================== */
-export const updateUserProfile = async (req, res) => {
+const router = express.Router();
+
+// নির্দিষ্ট ইউজারের পোস্ট এবং প্রোফাইল ডাটা পাওয়া
+router.get('/user/:userId', auth, async (req, res) => {
   try {
-    const { name, avatar, bio, nickname } = req.body;
-    const auth0Id = req.user.sub || req.user.id; // মিডলওয়্যার থেকে প্রাপ্ত আইডি
-
-    const updatedUser = await User.findOneAndUpdate(
-      { auth0Id: auth0Id }, // ID এর বদলে Auth0 ID দিয়ে খোঁজা নিরাপদ
-      { name, avatar, bio, nickname },
-      { new: true, upsert: true } // না থাকলে তৈরি করবে
-    );
-
-    res.status(200).json(updatedUser);
-  } catch (error) {
-    res.status(500).json({ message: "Error updating profile", error: error.message });
-  }
-};
-
-/* ==========================================================
-    ২. ইউজারের ডাটা এবং পোস্ট পাওয়া (Neural Discovery Fix)
-========================================================== */
-export const getUserData = async (req, res) => {
-  try {
-    // ফ্রন্টএন্ড থেকে আসা targetId (google-oauth2|...)
-    const targetId = decodeURIComponent(req.params.id);
-
-    // ১. ইউজার প্রোফাইল খোঁজা
-    const user = await User.findOne({ auth0Id: targetId }).lean();
+    const targetId = decodeURIComponent(req.params.userId);
     
-    // ২. ওই ইউজারের সব পোস্ট খোঁজা (এটি প্রোফাইল পেজের জন্য জরুরি)
-    const posts = await Post.find({
+    // ১. প্রথমে আইডি দিয়ে ইউজার প্রোফাইল খুঁজে বের করা
+    const user = await User.findOne({ auth0Id: targetId }).lean();
+
+    // ২. ওই ইউজারের করা সব পোস্ট খুঁজে বের করা (মাল্টিপল ফিল্ড চেক সহ)
+    const posts = await Post.find({ 
       $or: [
         { authorAuth0Id: targetId },
         { authorId: targetId },
@@ -41,37 +22,17 @@ export const getUserData = async (req, res) => {
       ]
     }).sort({ createdAt: -1 }).lean();
 
-    if (!user && posts.length === 0) {
-      return res.status(404).json({ message: "No drifter signal detected in this sector" });
-    }
-
-    // প্রোফাইল এবং পোস্ট একসাথে পাঠানো হচ্ছে
-    res.status(200).json({
+    // রেজাল্ট পাঠানো (ডাটা না থাকলেও খালি অ্যারে [] পাঠাবে যেন ফ্রন্টএন্ড এরর না দেয়)
+    res.json({
       user: user || { auth0Id: targetId, name: "Unknown Drifter" },
-      posts: posts
+      posts: posts || []
     });
 
-  } catch (error) {
-    console.error("Neural Fetch Error:", error);
-    res.status(500).json({ message: "Signal synchronization failed" });
+    console.log(`[Neural Link]: Found ${posts.length} signals for ${targetId}`);
+  } catch (err) {
+    console.error("Neural Fetch Error:", err);
+    res.status(500).json({ msg: "Neural Link Synchronization Error" });
   }
-};
+});
 
-/* ==========================================================
-    ৩. সোশ্যাল লজিক (Placeholder)
-========================================================== */
-export const sendRequest = async (req, res) => {
-  try {
-    res.status(200).json({ message: "Neural handshake initiated" });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-};
-
-export const acceptRequest = async (req, res) => {
-  try {
-    res.status(200).json({ message: "Neural link established" });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-};
+export default router;
