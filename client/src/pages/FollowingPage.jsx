@@ -15,22 +15,21 @@ const FollowingPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // URL থেকে userId সংগ্রহ করা (যদি ফিড থেকে ক্লিক করে আসা হয়)
   const queryParams = new URLSearchParams(location.search);
   const targetUserId = queryParams.get('userId');
 
+  // আপনার API URL
   const API_URL = "https://onyx-drift-app-final.onrender.com";
 
   /**
    * ইউজার লিস্ট ফেচ করা
-   * আপনার ব্যাকএন্ডে /api/user/search রাউটটি এখন /all এর বিকল্প হিসেবে কাজ করবে
+   * নোট: কনসোলের "Cannot GET /api/user/all" এরর ফিক্স করতে এখানে /search ব্যবহার করা হয়েছে
    */
   const fetchUsers = async () => {
     try {
       const token = await getAccessTokenSilently();
       
-      // গুরুত্বপূর্ণ: /api/user/all এর বদলে /api/user/search কল করা হচ্ছে
-      // কারণ আপনার ব্যাকএন্ডে সার্চ রাউটটি খালি কোয়েরিতে ডিফল্ট ইউজার লিস্ট দেয়
+      // আপনার ব্যাকএন্ডে /all নেই, তাই /search রাউট কল করা হচ্ছে
       const res = await axios.get(`${API_URL}/api/user/search`, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -42,7 +41,7 @@ const FollowingPage = () => {
         setSearchTerm(targetUserId); 
       }
     } catch (err) {
-      console.error("Neural Sync Error:", err.response?.data || err.message);
+      console.error("Neural Fetch Error:", err.response?.data || err.message);
       setLoading(false);
     }
   };
@@ -52,16 +51,19 @@ const FollowingPage = () => {
   }, [getAccessTokenSilently, targetUserId]);
 
   /**
-   * ফলো/আনফলো হ্যান্ডলার (Twitter-style Toggle)
+   * ফলো/আনফলো সিস্টেম
+   * আইডি-তে থাকা পাইপ (|) ক্যারেক্টার হ্যান্ডেল করার জন্য encodeURIComponent ব্যবহার করা হয়েছে
    */
   const handleFollow = async (targetId) => {
     try {
       const token = await getAccessTokenSilently();
-      const res = await axios.post(`${API_URL}/api/user/follow/${targetId}`, {}, {
+      const encodedId = encodeURIComponent(targetId);
+      
+      const res = await axios.post(`${API_URL}/api/user/follow/${encodedId}`, {}, {
         headers: { Authorization: `Bearer ${token}` }
       });
 
-      // UI আপডেট: সরাসরি লোকাল স্টেট পরিবর্তন করা হচ্ছে যাতে রিফ্রেশ ছাড়াই ফলো দেখায়
+      // রিয়েল-টাইম UI আপডেট
       setUsers(prevUsers => 
         prevUsers.map(u => {
           if (u.auth0Id === targetId) {
@@ -79,9 +81,6 @@ const FollowingPage = () => {
     }
   };
 
-  /**
-   * লোকাল ফিল্টারিং (সার্চ বার এর জন্য)
-   */
   const filteredUsers = users.filter(user => {
     if (!searchTerm) return true;
     const searchLower = searchTerm.toLowerCase();
@@ -102,7 +101,6 @@ const FollowingPage = () => {
   return (
     <div className="p-6 bg-transparent min-h-screen font-sans max-w-7xl mx-auto">
       
-      {/* হেডার সেকশন */}
       <div className="mb-12 flex flex-col md:flex-row md:items-end justify-between gap-6">
         <div>
           <button 
@@ -119,7 +117,6 @@ const FollowingPage = () => {
           </p>
         </div>
 
-        {/* সার্চ বার */}
         <div className="relative w-full md:w-96 group">
           <input 
             type="text" 
@@ -140,11 +137,9 @@ const FollowingPage = () => {
         </div>
       </div>
 
-      {/* ইউজার গ্রিড */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
         {filteredUsers.length > 0 ? (
           filteredUsers.map((user) => {
-            // চেক করা হচ্ছে আপনি এই ইউজারকে ফলো করেন কি না
             const isFollowing = user.followers?.includes(auth0User?.sub);
             const isTarget = user.auth0Id === targetUserId;
 
@@ -159,7 +154,7 @@ const FollowingPage = () => {
               >
                 {isTarget && (
                     <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-cyan-500 text-black text-[8px] font-black px-4 py-1 rounded-full tracking-widest uppercase">
-                        Signal Strong
+                        Signal Found
                     </div>
                 )}
 
@@ -171,7 +166,7 @@ const FollowingPage = () => {
                       alt={user.name}
                     />
                     {isFollowing && (
-                        <div className="absolute -bottom-1 -right-1 bg-cyan-500 text-black p-1.5 rounded-full border-4 border-[#0b1120] animate-pulse">
+                        <div className="absolute -bottom-1 -right-1 bg-cyan-500 text-black p-1.5 rounded-full border-4 border-[#0b1120]">
                             <FaUserCheck size={10} />
                         </div>
                     )}
@@ -180,13 +175,11 @@ const FollowingPage = () => {
                     {user.name}
                   </h3>
                   <p className="text-cyan-400/40 text-[9px] font-black tracking-[0.3em] uppercase mt-1">
-                    ID: {user.auth0Id?.split('|')[1]?.substring(0, 10)}...
+                    @{user.nickname || "drifter"}
                   </p>
                 </div>
 
-                {/* অ্যাকশন বাটনসমূহ */}
                 <div className="mt-8 grid grid-cols-3 gap-3 relative z-10">
-                  {/* Follow/Link Button */}
                   <button 
                     onClick={() => handleFollow(user.auth0Id)}
                     className={`flex flex-col items-center justify-center gap-2 p-4 rounded-3xl transition-all border ${
@@ -196,26 +189,22 @@ const FollowingPage = () => {
                     }`}
                   >
                     {isFollowing ? <FaUserCheck size={18} /> : <FaUserPlus size={18} />}
-                    <span className="text-[7px] font-black uppercase tracking-widest">
-                      {isFollowing ? "Linked" : "Link"}
-                    </span>
+                    <span className="text-[7px] font-black uppercase tracking-widest">{isFollowing ? "Linked" : "Link"}</span>
                   </button>
 
-                  {/* Chat Button */}
                   <button 
                     onClick={() => navigate(`/messenger?userId=${user.auth0Id}`)} 
                     className="flex flex-col items-center justify-center gap-2 p-4 bg-white/5 text-purple-500 rounded-3xl border border-white/5 hover:bg-purple-600 hover:text-white transition-all group/btn"
                   >
-                    <FaEnvelope size={18} className="group-hover/btn:scale-110 transition-transform" />
+                    <FaEnvelope size={18} />
                     <span className="text-[7px] font-black uppercase tracking-widest">Chat</span>
                   </button>
 
-                  {/* Call Button */}
                   <button 
-                    onClick={() => alert(`Establishing Secure Voice Link to ${user.name}...`)} 
+                    onClick={() => navigate(`/call/${user.auth0Id?.replace('|', '_')}`)} 
                     className="flex flex-col items-center justify-center gap-2 p-4 bg-white/5 text-emerald-500 rounded-3xl border border-white/5 hover:bg-emerald-600 hover:text-white transition-all group/btn"
                   >
-                    <FaPhoneAlt size={18} className="group-hover/btn:rotate-12 transition-transform" />
+                    <FaPhoneAlt size={18} />
                     <span className="text-[7px] font-black uppercase tracking-widest">Call</span>
                   </button>
                 </div>
@@ -223,10 +212,8 @@ const FollowingPage = () => {
             );
           })
         ) : (
-          <div className="col-span-full text-center py-20 border border-dashed border-white/10 rounded-[3rem]">
-            <p className="text-gray-600 font-black uppercase tracking-[0.5em] italic">
-              No drifters found in this sector
-            </p>
+          <div className="col-span-full text-center py-20">
+            <p className="text-gray-600 font-black uppercase tracking-[0.5em] italic">No drifters detected in this sector</p>
           </div>
         )}
       </div>
