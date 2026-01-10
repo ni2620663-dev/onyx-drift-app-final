@@ -9,7 +9,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 
 const FollowingPage = () => {
   const [users, setUsers] = useState([]);
-  const [posts, setPosts] = useState([]); // নির্দিষ্ট ইউজারের পোস্টের জন্য
+  const [posts, setPosts] = useState([]); 
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState(""); 
   const [page, setPage] = useState(1);
@@ -26,6 +26,7 @@ const FollowingPage = () => {
 
   /**
    * নির্দিষ্ট ইউজারের প্রোফাইল এবং পোস্ট ফেচ করা
+   * ফিক্স: এন্ডপয়েন্ট পাথ /api/user/${id} এ পরিবর্তন করা হয়েছে
    */
   const fetchTargetData = useCallback(async (id) => {
     try {
@@ -33,18 +34,17 @@ const FollowingPage = () => {
       const token = await getAccessTokenSilently();
       const decodedId = decodeURIComponent(id);
       
-      // আমাদের নতুন ব্যাকএন্ড এন্ডপয়েন্ট কল করা হচ্ছে
-      const res = await axios.get(`${API_URL}/api/user/user/${encodeURIComponent(decodedId)}`, {
+      // ✅ ব্যাকএন্ডের নতুন রুট অনুযায়ী পাথ ফিক্স করা হয়েছে
+      const res = await axios.get(`${API_URL}/api/user/${encodeURIComponent(decodedId)}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
 
-      // রেজাল্টে ইউজার এবং পোস্ট দুটোই থাকবে
       if (res.data.user) setUsers([res.data.user]);
       if (res.data.posts) setPosts(res.data.posts);
       
       setLoading(false);
     } catch (err) {
-      console.error("Neural Fetch Error:", err);
+      console.error("Neural Fetch Error (Target):", err.response?.status, err.message);
       setLoading(false);
     }
   }, [getAccessTokenSilently]);
@@ -63,20 +63,20 @@ const FollowingPage = () => {
         headers: { Authorization: `Bearer ${token}` }
       });
 
-      setUsers(isInitial ? res.data : [...users, ...res.data]);
+      setUsers(isInitial ? res.data : (prev) => [...prev, ...res.data]);
       setHasMore(res.data.length === 12);
       setLoading(false);
     } catch (err) {
       console.error("Search Error:", err.message);
       setLoading(false);
     }
-  }, [getAccessTokenSilently, page, users]);
+  }, [getAccessTokenSilently, page]);
 
   // ১. ইনিশিয়াল লোড লজিক
   useEffect(() => {
     if (targetUserId) {
       setSearchTerm(""); 
-      setPosts([]); // পুরানো পোস্ট ক্লিয়ার করা
+      setPosts([]); 
       fetchTargetData(targetUserId);
     } else {
       fetchUsers("", true);
@@ -98,11 +98,11 @@ const FollowingPage = () => {
   const handleFollow = async (targetId) => {
     try {
       const token = await getAccessTokenSilently();
-      const res = await axios.post(`${API_URL}/api/user/follow/${encodeURIComponent(targetId)}`, {}, {
+      await axios.post(`${API_URL}/api/user/follow/${encodeURIComponent(targetId)}`, {}, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      // আপডেট স্টেট লজিক আগের মতই থাকবে...
-    } catch (err) { console.error(err); }
+      // ফলো আপডেট করার পর ইউজারকে রি-ফেচ করতে পারেন অথবা লোকাল স্টেট আপডেট করতে পারেন
+    } catch (err) { console.error("Follow failed", err); }
   };
 
   return (
@@ -111,7 +111,7 @@ const FollowingPage = () => {
       {/* Header Section */}
       <div className="mb-12 flex flex-col md:flex-row md:items-end justify-between gap-6">
         <div>
-          <button onClick={() => navigate('/feed')} className="flex items-center gap-2 text-gray-500 hover:text-cyan-400 transition-colors text-[10px] font-black uppercase tracking-widest mb-4 group">
+          <button onClick={() => { navigate('/feed'); window.location.reload(); }} className="flex items-center gap-2 text-gray-500 hover:text-cyan-400 transition-colors text-[10px] font-black uppercase tracking-widest mb-4 group">
             <FaArrowLeft className="group-hover:-translate-x-1 transition-transform" /> Back to Drift
           </button>
           <h1 className="text-4xl font-black text-white italic tracking-tighter flex items-center gap-3">
@@ -122,24 +122,26 @@ const FollowingPage = () => {
           </p>
         </div>
 
-        <div className="relative w-full md:w-96">
-          <input 
-            type="text" 
-            placeholder="Search Identity Name..." 
-            className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-12 text-white text-xs outline-none focus:border-cyan-500/50 transition-all backdrop-blur-xl"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-          <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" />
-        </div>
+        {!targetUserId && (
+          <div className="relative w-full md:w-96">
+            <input 
+              type="text" 
+              placeholder="Search Identity Name..." 
+              className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-12 text-white text-xs outline-none focus:border-cyan-500/50 transition-all backdrop-blur-xl"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+            <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" />
+          </div>
+        )}
       </div>
 
       {/* Discovery Grid (Profile Cards) */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-16">
-        {users.map((user) => (
-          <div key={user.auth0Id} className={`backdrop-blur-2xl border rounded-[2.5rem] p-7 group shadow-2xl relative transition-all duration-500 ${user.auth0Id === targetUserId ? 'bg-cyan-500/10 border-cyan-500/40' : 'bg-[#0f172a]/40 border-white/5'}`}>
+        {users.length > 0 ? users.map((user) => (
+          <div key={user.auth0Id || user._id} className={`backdrop-blur-2xl border rounded-[2.5rem] p-7 group shadow-2xl relative transition-all duration-500 ${user.auth0Id === targetUserId ? 'bg-cyan-500/10 border-cyan-500/40' : 'bg-[#0f172a]/40 border-white/5'}`}>
             <div className="flex flex-col items-center text-center">
-              <img src={user.avatar || user.picture} className="w-24 h-24 rounded-[2.2rem] object-cover border-4 border-white/5 group-hover:border-cyan-500/50" alt={user.name} />
+              <img src={user.avatar || user.picture || `https://ui-avatars.com/api/?name=${user.name}`} className="w-24 h-24 rounded-[2.2rem] object-cover border-4 border-white/5 group-hover:border-cyan-500/50" alt={user.name} />
               <h3 className="text-white font-black text-xl mt-5 italic uppercase">{user.name}</h3>
               <p className="text-cyan-400/40 text-[9px] font-black tracking-widest mt-1">{user.nickname || "DRIFTER"}</p>
             </div>
@@ -156,12 +158,12 @@ const FollowingPage = () => {
                 </button>
             </div>
           </div>
-        ))}
+        )) : !loading && <p className="text-white/20 text-center col-span-full uppercase font-black tracking-widest">No Drifter Data Found</p>}
       </div>
 
       {/* Neural Signals (Posts Section) */}
-      {targetUserId && (
-        <div className="mt-20">
+      {targetUserId && !loading && (
+        <div className="mt-20 animate-in fade-in slide-in-from-bottom duration-1000">
           <h2 className="text-2xl font-black text-white italic tracking-tighter mb-8 flex items-center gap-3">
             <div className="w-8 h-[2px] bg-cyan-500" /> NEURAL SIGNALS (POSTS)
           </h2>
@@ -169,14 +171,14 @@ const FollowingPage = () => {
           {posts.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {posts.map(post => (
-                <div key={post._id} className="bg-white/5 border border-white/10 p-6 rounded-[2rem] backdrop-blur-md">
+                <div key={post._id} className="bg-white/5 border border-white/10 p-6 rounded-[2rem] backdrop-blur-md hover:border-cyan-500/30 transition-all group">
                   {post.mediaUrl && (
-                    <img src={post.mediaUrl} className="w-full h-48 object-cover rounded-2xl mb-4 border border-white/5" alt="Post content" />
+                    <img src={post.mediaUrl} className="w-full h-48 object-cover rounded-2xl mb-4 border border-white/5 group-hover:scale-[1.01] transition-transform" alt="Post content" />
                   )}
                   <p className="text-gray-300 text-sm leading-relaxed">{post.content || post.text}</p>
                   <div className="mt-4 flex items-center justify-between text-[10px] font-bold text-gray-500 uppercase tracking-widest">
                     <span>{new Date(post.createdAt).toLocaleDateString()}</span>
-                    <span className="text-cyan-500">{post.mediaType || 'SIGNAL'}</span>
+                    <span className="text-cyan-500/50">{post.mediaType || 'SIGNAL'}</span>
                   </div>
                 </div>
               ))}
@@ -190,7 +192,14 @@ const FollowingPage = () => {
         </div>
       )}
 
-      {loading && <div className="text-center py-20 text-cyan-500 font-black animate-pulse uppercase text-[10px]">Synchronizing...</div>}
+      {loading && (
+        <div className="fixed inset-0 flex items-center justify-center bg-[#0b1120]/50 backdrop-blur-sm z-50">
+          <div className="text-center">
+            <div className="w-12 h-12 border-4 border-cyan-500/20 border-t-cyan-500 rounded-full animate-spin mx-auto mb-4"></div>
+            <p className="text-cyan-500 font-black animate-pulse uppercase text-[10px] tracking-widest">Synchronizing Neural Stream...</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
