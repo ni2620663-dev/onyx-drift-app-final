@@ -38,31 +38,31 @@ router.get('/search', auth, async (req, res) => {
     const { query } = req.query;
     const myId = req.user.sub || req.user.id;
     
-    // রেন্ডার লগ-এ এটি দেখা যাবে
-    console.log("Incoming Search Query:", query);
+    console.log("Searching for Drifter:", query); // Render Logs এ দেখা যাবে
 
-    let filter = { auth0Id: { $ne: myId } };
-
-    if (query && query.trim() !== "") {
-      // নামের যেকোনো অংশ (Partial match) খুঁজে বের করার জন্য রেজেক্স
-      const cleanQuery = query.trim();
-      const searchRegex = new RegExp(cleanQuery, 'i'); 
-
-      filter.$or = [
-        { name: { $regex: searchRegex } }, 
-        { nickname: { $regex: searchRegex } },
-        { auth0Id: { $regex: searchRegex } } // আইডি দিয়েও সার্চ করার সুবিধা রাখা হলো
-      ];
-    } else {
-      // কুয়েরি না থাকলে লেটেস্ট ড্রাফটারদের দেখাবে
-      const fallback = await User.find(filter).limit(10).lean();
-      return res.json(fallback);
+    // যদি কুয়েরি না থাকে, তবে লেটেস্ট ১০ জন ইউজার দেখাবে (টেস্ট করার জন্য)
+    if (!query || query.trim() === "") {
+      const allUsers = await User.find({ auth0Id: { $ne: myId } })
+        .limit(10)
+        .lean();
+      console.log(`No query provided. Returning ${allUsers.length} users.`);
+      return res.json(allUsers);
     }
 
-    const users = await User.find(filter)
-      .select('name avatar auth0Id isVerified bio followers nickname')
-      .limit(20)
-      .lean();
+    // রেজেক্স লজিক: নামের শুরুতে বা মাঝে যেকোনো জায়গায় মিললে খুঁজে বের করবে
+    const searchRegex = new RegExp(query.trim(), 'i'); 
+
+    const users = await User.find({
+      auth0Id: { $ne: myId },
+      $or: [
+        { name: { $regex: searchRegex } },
+        { nickname: { $regex: searchRegex } },
+        { bio: { $regex: searchRegex } } // বায়ো থেকেও সার্চ করার সুবিধা
+      ]
+    })
+    .select('name avatar auth0Id isVerified nickname bio')
+    .limit(20)
+    .lean();
     
     console.log(`Found ${users.length} Drifters for query: ${query}`);
     res.json(users);
