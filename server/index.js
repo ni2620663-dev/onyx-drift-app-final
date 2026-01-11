@@ -6,6 +6,7 @@ import dotenv from "dotenv";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import Redis from "ioredis"; 
 import { v2 as cloudinary } from 'cloudinary';
+import path from 'path';
 
 // ১. কনফিগারেশন লোড
 dotenv.config();
@@ -14,7 +15,8 @@ dotenv.config();
 import connectDB from "./config/db.js"; 
 import profileRoutes from "./src/routes/profile.js"; 
 import postRoutes from "./routes/posts.js";
-import usersRoutes from './routes/users.js'; // এটি আপনার user.js ফাইল হওয়া উচিত
+// ✅ ফিক্স: আপনার ফাইলের নাম user.js হলে ইম্পোর্ট এভাবেই রাখুন
+import userRoutes from './routes/users.js'; 
 import messageRoutes from "./routes/messages.js";      
 import uploadRoutes from './routes/upload.js';
 
@@ -71,11 +73,13 @@ app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 connectDB();
 
 /* ==========================================================
-    🚀 ROUTE MOUNTING
+    🚀 ROUTE MOUNTING (সঠিকভাবে ম্যাপিং করা হয়েছে)
 ========================================================== */
 
-// আপনার ফ্রন্টএন্ড কল করছে /api/user/profile/:id
-app.use("/api/user", usersRoutes); 
+// ফ্রন্টএন্ড কল করছে /api/user/profile/:id 
+// তাই এখানে /api/user মাউন্ট করতে হবে
+app.use("/api/user", userRoutes); 
+
 app.use("/api/profile", profileRoutes); 
 app.use("/api/posts", postRoutes); 
 app.use("/api/messages", messageRoutes); 
@@ -85,7 +89,7 @@ app.use("/api/upload", uploadRoutes);
 app.get("/", (req, res) => res.send("✅ OnyxDrift Neural Server Online"));
 
 /* ==========================================================
-    📡 SOCKET.IO LOGIC (Fixed Syntaxes)
+    📡 SOCKET.IO LOGIC
 ========================================================== */
 const io = new Server(server, {
   cors: { 
@@ -98,7 +102,6 @@ const io = new Server(server, {
 });
 
 io.on("connection", (socket) => {
-  // ইউজার অনলাইন হলে
   socket.on("addNewUser", async (userId) => {
     if (userId && redis) {
       await redis.hset("online_users", userId, socket.id);
@@ -108,7 +111,6 @@ io.on("connection", (socket) => {
     }
   });
 
-  // ডিসকানেক্ট হলে
   socket.on("disconnect", async () => {
     if (redis) {
         const allUsers = await redis.hgetall("online_users");
