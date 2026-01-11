@@ -74,7 +74,7 @@ const Messenger = () => {
 
   useEffect(() => { if (user?.sub) fetchConv(); }, [user, fetchConv]);
 
-  // --- 🛰️ URL ID Sync & Clean (প্রোফাইল থেকে আসলে কাজ করবে) ---
+  // --- 🛰️ URL ID Sync & Clean ---
   useEffect(() => {
     const syncUrlUser = async () => {
       const queryParams = new URLSearchParams(location.search);
@@ -90,7 +90,6 @@ const Messenger = () => {
           
           setCurrentChat(res.data);
           setSearchTerm("");
-          // ✅ আইডি পাওয়ার পর ইউআরএল ক্লিন করে ফেলুন যাতে রিফ্রেশে ঝামেলা না হয়
           navigate('/messenger', { replace: true }); 
         } catch (err) {
           console.error("URL Sync Error", err);
@@ -116,7 +115,6 @@ const Messenger = () => {
     return () => clearTimeout(delayDebounceFn);
   }, [searchTerm]);
 
-  // --- Manual Select User ---
   const selectUser = async (target) => {
     try {
       const token = await getAccessTokenSilently();
@@ -175,9 +173,9 @@ const Messenger = () => {
   };
 
   return (
-    <div className="flex h-screen bg-[#010409] text-white p-2 md:p-6 gap-2 md:gap-6 font-sans overflow-hidden fixed inset-0">
+    <div className="flex h-screen bg-[#010409] text-white p-0 md:p-6 gap-0 md:gap-6 font-sans overflow-hidden fixed inset-0">
       
-      {/* 🚀 Side Nav */}
+      {/* 🚀 Side Nav (Desktop Only) */}
       <div className={`hidden md:flex w-20 ${glassPanel} rounded-[2rem] flex-col items-center py-10 gap-12 border-cyan-500/20`}>
         <div className="w-12 h-12 rounded-full bg-cyan-500/10 flex items-center justify-center border border-cyan-500/30 shadow-[0_0_15px_cyan]">
           <HiOutlineMicrophone size={24} className="text-cyan-400" />
@@ -187,7 +185,7 @@ const Messenger = () => {
       </div>
 
       {/* 📡 Chat List & Search */}
-      <div className={`${currentChat ? 'hidden md:flex' : 'flex'} w-full md:w-[380px] ${glassPanel} rounded-[3rem] flex flex-col overflow-hidden`}>
+      <div className={`${currentChat ? 'hidden md:flex' : 'flex'} w-full md:w-[380px] ${glassPanel} md:rounded-[3rem] flex flex-col overflow-hidden`}>
         <div className="p-6">
           <h2 className={`text-xl uppercase italic tracking-tighter ${neonText}`}>Neonus Channels</h2>
           <div className="mt-4 bg-white/5 p-3 rounded-2xl border border-white/10 flex items-center group focus-within:border-cyan-500/40 transition-all">
@@ -203,7 +201,7 @@ const Messenger = () => {
 
         <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-3 custom-scrollbar">
           {searchResults.length > 0 && (
-            <div className="mb-6 animate-in fade-in slide-in-from-top-2">
+            <div className="mb-6">
               <p className="text-[10px] text-cyan-400 mb-2 ml-2 tracking-widest uppercase font-black">Detected Drifters</p>
               {searchResults.map(u => (
                 <div key={u.auth0Id} onClick={() => selectUser(u)} className="p-3 bg-cyan-500/5 hover:bg-cyan-500/10 rounded-2xl border border-cyan-500/10 mb-2 cursor-pointer flex items-center gap-3 transition-all">
@@ -223,15 +221,12 @@ const Messenger = () => {
             return (
               <div 
                 key={c._id} 
-                onClick={() => {
-                  // ✅ ফিক্স: এখানে navigate সরানো হয়েছে যাতে পেজ রিলোড না হয়
-                  setCurrentChat(c); 
-                }} 
-                className={`p-4 rounded-[2rem] flex items-center gap-4 cursor-pointer transition-all duration-300 ${currentChat?._id === c._id ? 'bg-cyan-500/20 border border-cyan-500/30 shadow-[0_0_20px_rgba(6,182,212,0.1)]' : 'hover:bg-white/5 border border-transparent'}`}
+                onClick={() => setCurrentChat(c)} 
+                className={`p-4 rounded-[2rem] flex items-center gap-4 cursor-pointer transition-all duration-300 ${currentChat?._id === c._id ? 'bg-cyan-500/20 border border-cyan-500/30' : 'hover:bg-white/5 border border-transparent'}`}
               >
                 <div className="relative">
-                  <img src={`https://ui-avatars.com/api/?name=${c._id}&background=random&color=fff`} className="w-12 h-12 rounded-2xl rotate-2" alt="Node" />
-                  {isOnline && <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-cyan-400 rounded-full border-2 border-[#010409] animate-pulse shadow-[0_0_10px_cyan]"></div>}
+                  <img src={`https://ui-avatars.com/api/?name=${c._id}&background=random&color=fff`} className="w-12 h-12 rounded-2xl" alt="Node" />
+                  {isOnline && <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-cyan-400 rounded-full border-2 border-[#010409]"></div>}
                 </div>
                 <div className="overflow-hidden">
                   <h4 className="font-bold text-sm truncate uppercase italic tracking-wider">Node_{c._id.slice(-6)}</h4>
@@ -250,35 +245,35 @@ const Messenger = () => {
         </div>
       </div>
 
-      {/* ⚔️ Main Chat Area */}
-      <div className={`${!currentChat ? 'hidden md:flex' : 'flex'} flex-1 ${glassPanel} rounded-[3.5rem] flex flex-col relative overflow-hidden`}>
+      {/* ⚔️ Main Chat Area (Fixed UI for Mobile) */}
+      <div className={`${!currentChat ? 'hidden md:flex' : 'flex'} flex-1 ${glassPanel} md:rounded-[3.5rem] flex flex-col relative overflow-hidden`}>
         {currentChat ? (
           <>
-            <header className="px-6 py-6 border-b border-white/5 flex justify-between items-center bg-white/[0.02]">
-              <div className="flex items-center gap-4">
-                <button onClick={() => setCurrentChat(null)} className="md:hidden p-2 text-cyan-400"><HiOutlineChevronLeft size={24} /></button>
-                <div className="w-12 h-12 bg-cyan-500/10 rounded-xl flex items-center justify-center border border-cyan-500/20 shadow-[0_0_15px_rgba(6,182,212,0.1)]">
-                    <HiOutlineUser size={24} className="text-cyan-400" />
+            <header className="px-4 py-4 md:px-6 md:py-6 border-b border-white/5 flex justify-between items-center bg-white/[0.02]">
+              <div className="flex items-center gap-3 md:gap-4">
+                <button onClick={() => setCurrentChat(null)} className="md:hidden p-1 text-cyan-400"><HiOutlineChevronLeft size={24} /></button>
+                <div className="w-10 h-10 md:w-12 md:h-12 bg-cyan-500/10 rounded-xl flex items-center justify-center border border-cyan-500/20">
+                    <HiOutlineUser size={20} className="text-cyan-400" />
                 </div>
-                <div>
-                  <h3 className="text-sm font-black italic uppercase tracking-widest">Target_ID: {currentChat._id.slice(-6)}</h3>
-                  <p className="text-[9px] text-cyan-400 animate-pulse font-mono tracking-widest uppercase">Encryption Active</p>
+                <div className="max-w-[120px] md:max-w-none">
+                  <h3 className="text-[11px] md:text-sm font-black italic uppercase tracking-widest truncate">Node_{currentChat._id.slice(-6)}</h3>
+                  <p className="text-[8px] md:text-[9px] text-cyan-400 animate-pulse font-mono tracking-widest uppercase">Encryption Active</p>
                 </div>
               </div>
-              <div className="flex gap-3">
-                <button onClick={() => startCall('video')} className="p-3 bg-cyan-500/10 rounded-xl text-cyan-400 border border-cyan-500/10 hover:shadow-[0_0_20px_cyan] transition-all"><HiOutlineVideoCamera size={20} /></button>
-                <button onClick={() => startCall('voice')} className="p-3 bg-purple-500/10 rounded-xl text-purple-400 border border-purple-500/10 hover:shadow-[0_0_20px_purple] transition-all"><HiOutlinePhone size={20} /></button>
+              <div className="flex gap-2">
+                <button onClick={() => startCall('video')} className="p-2 md:p-3 bg-cyan-500/10 rounded-xl text-cyan-400 border border-cyan-500/10"><HiOutlineVideoCamera size={18} /></button>
+                <button onClick={() => startCall('voice')} className="p-2 md:p-3 bg-purple-500/10 rounded-xl text-purple-400 border border-purple-500/10"><HiOutlinePhone size={18} /></button>
               </div>
             </header>
 
-            <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
+            <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4 custom-scrollbar">
               {messages.map((m, i) => {
                 const isMe = m.senderId === user?.sub;
                 return (
-                  <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} key={i} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`max-w-[75%] px-6 py-3 shadow-2xl ${isMe ? 'bg-cyan-600/30 text-white rounded-l-[1.5rem] rounded-tr-[1.5rem] border border-cyan-400/30 shadow-[0_0_20px_rgba(6,182,212,0.05)]' : 'bg-white/5 border border-white/10 text-cyan-100 rounded-r-[1.5rem] rounded-tl-[1.5rem]'}`}>
-                      <p className="text-[13px] leading-relaxed font-medium">{m.text}</p>
-                      <div className="text-[8px] mt-2 opacity-50 flex justify-end gap-1 uppercase font-black tracking-tighter">
+                  <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} key={i} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
+                    <div className={`max-w-[85%] md:max-w-[75%] px-4 py-2.5 md:px-6 md:py-3 shadow-xl ${isMe ? 'bg-cyan-600/30 text-white rounded-l-2xl rounded-tr-2xl border border-cyan-400/30' : 'bg-white/5 border border-white/10 text-cyan-100 rounded-r-2xl rounded-tl-2xl'}`}>
+                      <p className="text-[12px] md:text-[13px] leading-relaxed font-medium break-words">{m.text}</p>
+                      <div className="text-[7px] md:text-[8px] mt-1.5 opacity-50 flex justify-end gap-1 uppercase font-black tracking-tighter">
                         {new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         {isMe && <HiCheck size={10} className="text-cyan-400" />}
                       </div>
@@ -289,16 +284,16 @@ const Messenger = () => {
               <div ref={scrollRef} />
             </div>
 
-            <div className="p-6 bg-white/[0.01]">
-              <div className="flex items-center gap-3 bg-[#0a0f1a] p-2 rounded-[2rem] border border-white/10 focus-within:border-cyan-500/50 transition-all">
-                <button className="p-3 text-gray-500 hover:text-cyan-400 transition-colors"><HiOutlinePaperClip size={20} /></button>
+            <div className="p-4 md:p-6 bg-white/[0.01]">
+              <div className="flex items-center gap-2 md:gap-3 bg-[#0a0f1a] p-1.5 md:p-2 rounded-full border border-white/10 focus-within:border-cyan-500/50">
+                <button className="p-2 text-gray-500 hover:text-cyan-400"><HiOutlinePaperClip size={20} /></button>
                 <input 
                   value={newMessage} onChange={(e) => setNewMessage(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleSend(newMessage)}
-                  placeholder="ENCRYPT NEURAL SIGNAL..."
-                  className="flex-1 bg-transparent border-none outline-none text-xs text-cyan-100 tracking-widest uppercase placeholder:text-gray-700"
+                  placeholder="NEURAL SIGNAL..."
+                  className="flex-1 bg-transparent border-none outline-none text-[11px] text-cyan-100 tracking-widest uppercase placeholder:text-gray-700"
                 />
-                <button onClick={() => handleSend(newMessage)} className="bg-cyan-500 p-4 rounded-full text-black shadow-[0_0_20px_cyan] hover:scale-105 active:scale-90 transition-all">
+                <button onClick={() => handleSend(newMessage)} className="bg-cyan-500 p-3 md:p-4 rounded-full text-black shadow-[0_0_15px_cyan] active:scale-90 transition-all">
                   <HiOutlinePaperAirplane size={18} className="rotate-45" />
                 </button>
               </div>
@@ -306,34 +301,28 @@ const Messenger = () => {
           </>
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center text-center p-10">
-             <div className="relative mb-6">
-                <HiOutlineChatBubbleBottomCenterText size={100} className="text-cyan-500 opacity-20" />
-                <motion.div animate={{ scale: [1, 1.2, 1] }} transition={{ repeat: Infinity, duration: 4 }} className="absolute inset-0 flex items-center justify-center">
-                   <div className="w-20 h-20 bg-cyan-500/10 rounded-full blur-2xl"></div>
-                </motion.div>
-             </div>
-             <h2 className="text-2xl font-black uppercase tracking-[0.5em] text-white opacity-40">Neural Idle</h2>
-             <p className="text-[10px] text-cyan-400/30 uppercase mt-2 tracking-widest font-bold">Select a node or search for an identity to establish a secure link</p>
+              <HiOutlineChatBubbleBottomCenterText size={80} className="text-cyan-500 opacity-20 mb-4" />
+              <h2 className="text-xl font-black uppercase tracking-[0.5em] text-white opacity-40">Neural Idle</h2>
+              <p className="text-[9px] text-cyan-400/30 uppercase mt-2 tracking-widest font-bold">Establish link with a drifter</p>
           </div>
         )}
       </div>
 
-      {/* 🔔 Incoming Call Modal */}
       <AnimatePresence>
         {incomingCall && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[100] flex items-center justify-center bg-black/95 backdrop-blur-2xl p-4">
-            <div className={`p-10 rounded-[4rem] ${glassPanel} text-center max-w-sm w-full border-cyan-500 shadow-[0_0_100px_rgba(6,182,212,0.3)] animate-in zoom-in-95`}>
-              <div className="relative w-24 h-24 mx-auto mb-8">
+            <div className={`p-8 md:p-10 rounded-[3rem] md:rounded-[4rem] ${glassPanel} text-center max-w-sm w-full border-cyan-500 shadow-[0_0_100px_rgba(6,182,212,0.3)]`}>
+              <div className="relative w-20 h-20 md:w-24 md:h-24 mx-auto mb-8">
                 <div className="absolute inset-0 bg-cyan-500 rounded-full animate-ping opacity-20"></div>
-                <div className="relative w-full h-full rounded-full bg-cyan-500/20 border-2 border-cyan-500 flex items-center justify-center">
-                  <HiOutlinePhone size={40} className="text-cyan-400 animate-bounce" />
+                <div className="relative w-full h-full rounded-full bg-cyan-500/20 border-2 border-cyan-500 flex items-center justify-center text-cyan-400">
+                  <HiOutlinePhone size={32} className="animate-bounce" />
                 </div>
               </div>
-              <h2 className="text-2xl font-black uppercase mb-2 tracking-tighter italic">Incoming Link</h2>
-              <p className="text-cyan-400 font-mono mb-10 tracking-widest truncate uppercase text-xs">{incomingCall.fromName}</p>
-              <div className="flex flex-col gap-4">
-                <button onClick={() => { stopRingtone(); navigate(`/call/${incomingCall.roomId}?type=${incomingCall.type}`); setIncomingCall(null); }} className="w-full bg-cyan-500 text-black py-5 rounded-3xl font-black uppercase shadow-[0_0_30px_cyan] hover:scale-105 transition-all">Connect</button>
-                <button onClick={() => { stopRingtone(); setIncomingCall(null); }} className="w-full bg-red-500/10 text-red-500 border border-red-500/40 py-5 rounded-3xl font-black uppercase hover:bg-red-500/20 transition-all">Sever Connection</button>
+              <h2 className="text-xl md:text-2xl font-black uppercase mb-2 tracking-tighter italic">Incoming Link</h2>
+              <p className="text-cyan-400 font-mono mb-8 tracking-widest truncate uppercase text-xs">{incomingCall.fromName}</p>
+              <div className="flex flex-col gap-3">
+                <button onClick={() => { stopRingtone(); navigate(`/call/${incomingCall.roomId}?type=${incomingCall.type}`); setIncomingCall(null); }} className="w-full bg-cyan-500 text-black py-4 rounded-2xl font-black uppercase shadow-[0_0_20px_cyan]">Connect</button>
+                <button onClick={() => { stopRingtone(); setIncomingCall(null); }} className="w-full bg-red-500/10 text-red-500 border border-red-500/40 py-4 rounded-2xl font-black uppercase">Sever</button>
               </div>
             </div>
           </motion.div>
@@ -341,10 +330,9 @@ const Messenger = () => {
       </AnimatePresence>
 
       <style jsx>{`
-        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar { width: 3px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(6, 182, 212, 0.1); border-radius: 10px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(6, 182, 212, 0.3); }
       `}</style>
     </div>
   );
