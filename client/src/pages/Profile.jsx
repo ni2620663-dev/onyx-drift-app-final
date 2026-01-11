@@ -37,7 +37,7 @@ const Profile = () => {
   const [postType, setPostType] = useState("image"); 
   const [isTransmitting, setIsTransmitting] = useState(false);
 
-  // --- API URL ---
+  // --- 🛠 API URL Configuration ---
   const API_URL = (import.meta.env.VITE_API_BASE_URL || "https://onyx-drift-app-final.onrender.com").replace(/\/$/, "");
   const fileInputRef = useRef(null);
 
@@ -57,19 +57,24 @@ const Profile = () => {
   }, [userProfile]);
 
   const fetchProfileData = async () => {
-    if (!isAuthenticated && !userId) return;
+    // currentUser না আসা পর্যন্ত বা userId না থাকলে রিকোয়েস্ট থামিয়ে দেয়া
+    if (!isAuthenticated && !userId && !currentUser?.sub) return;
 
     try {
       setLoading(true);
       const token = await getAccessTokenSilently();
       
+      // ✅ ফিক্স: সোর্স আইডি নির্ধারণ এবং URL সেফ এনকোডিং
       const rawId = userId || currentUser?.sub;
       if (!rawId) return;
       
-      // ✅ ফিক্স: সোর্স আইডি এনকোডিং
       const targetId = encodeURIComponent(rawId); 
       
+      // কনসোলে চেক করার জন্য:
+      console.log(`Fetching from: ${API_URL}/api/user/profile/${targetId}`);
+
       const [profileRes, postsRes, usersRes] = await Promise.all([
+        // এখানে নিশ্চিত করা হয়েছে যে '/profile/' অংশটি আছে
         axios.get(`${API_URL}/api/user/profile/${targetId}`, {
           headers: { Authorization: `Bearer ${token}` }
         }),
@@ -96,7 +101,9 @@ const Profile = () => {
     if (isAuthenticated || userId) {
       fetchProfileData();
     }
-  }, [userId, isAuthenticated, currentUser]);
+  }, [userId, isAuthenticated, currentUser?.sub]); 
+
+  // --- অন্যান্য ফাংশনসমূহ ---
 
   const handleDeletePost = async (postId) => {
     if (!window.confirm("Are you sure you want to terminate this neural echo?")) return;
@@ -118,7 +125,6 @@ const Profile = () => {
     if (query.length > 2) {
       try {
         const token = await getAccessTokenSilently();
-        // ✅ ফিক্স: ব্যাকএন্ড 'query' কি-ওয়ার্ড খুঁজছে, 'q' নয়
         const res = await axios.get(`${API_URL}/api/user/search?query=${query}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
@@ -273,6 +279,7 @@ const Profile = () => {
 
         {/* Main Feed */}
         <main className="flex-1 pb-20">
+          {/* ... Profile Layout (Keep your existing JSX here) ... */}
           <div className="relative h-48 md:h-72 w-full overflow-hidden">
             <img 
               src={userProfile?.coverImg || "https://images.unsplash.com/photo-1614850523296-d8c1af93d400?q=80&w=1000"} 
@@ -349,7 +356,7 @@ const Profile = () => {
                   )}
                 </div>
               </div>
-
+              {/* Stats & Tabs (Keep your existing stats and tabs JSX) */}
               <div className="mt-8 md:mt-10 grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8 pt-8 border-t border-white/5">
                 <div className="col-span-2">
                   <h3 className={`text-[9px] md:text-[10px] font-black uppercase tracking-[0.3em] mb-3 text-center md:text-left transition-colors ${isGhostMode ? 'text-white' : 'text-cyan-400'}`}>Neural Signature</h3>
@@ -370,7 +377,7 @@ const Profile = () => {
               </div>
             </motion.div>
 
-            {/* Tabs & Posts */}
+            {/* Tabs */}
             <div className="mt-12">
               <div className="flex items-center justify-center md:justify-start gap-6 md:gap-8 px-2 md:px-6 mb-8 border-b border-white/5">
                 {["Echoes", "Insights", "Media"].map((tab) => (
@@ -405,7 +412,7 @@ const Profile = () => {
         </main>
       </div>
 
-      {/* --- MODALS --- */}
+      {/* --- MODALS (Edit & Create) --- */}
       <AnimatePresence>
         {isEditOpen && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[100] flex items-center justify-center p-3 md:p-4 bg-black/95 backdrop-blur-2xl">
