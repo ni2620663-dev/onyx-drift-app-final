@@ -32,45 +32,40 @@ router.get('/all', auth, async (req, res) => {
 
 /* ==========================================================
     🔍 ২. SEARCH (FIXED: Improved Partial Name Matching)
-========================================================== */
 router.get('/search', auth, async (req, res) => {
   try {
     const { query } = req.query;
     const myId = req.user.sub || req.user.id;
     
-    console.log("Searching for Drifter:", query); // Render Logs এ দেখা যাবে
+    console.log("Searching for:", query);
 
-    // যদি কুয়েরি না থাকে, তবে লেটেস্ট ১০ জন ইউজার দেখাবে (টেস্ট করার জন্য)
-    if (!query || query.trim() === "") {
-      const allUsers = await User.find({ auth0Id: { $ne: myId } })
-        .limit(10)
-        .lean();
-      console.log(`No query provided. Returning ${allUsers.length} users.`);
-      return res.json(allUsers);
+    let filter = { auth0Id: { $ne: myId } };
+
+    if (query && query.trim() !== "") {
+      // স্পেশাল ক্যারেক্টার হ্যান্ডেল করার জন্য
+      const safeQuery = query.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const searchRegex = new RegExp(safeQuery, 'i'); 
+
+      filter.$or = [
+        { name: { $regex: searchRegex } }, 
+        { nickname: { $regex: searchRegex } }
+      ];
+    } else {
+      // কিছু না লিখলে লেটেস্ট ৫ জন ইউজার দেখাবে (টেস্টিং এর জন্য)
+      const drifters = await User.find(filter).limit(5).lean();
+      return res.json(drifters);
     }
 
-    // রেজেক্স লজিক: নামের শুরুতে বা মাঝে যেকোনো জায়গায় মিললে খুঁজে বের করবে
-    const searchRegex = new RegExp(query.trim(), 'i'); 
-
-    const users = await User.find({
-      auth0Id: { $ne: myId },
-      $or: [
-        { name: { $regex: searchRegex } },
-        { nickname: { $regex: searchRegex } },
-        { bio: { $regex: searchRegex } } // বায়ো থেকেও সার্চ করার সুবিধা
-      ]
-    })
-    .select('name avatar auth0Id isVerified nickname bio')
-    .limit(20)
-    .lean();
+    const users = await User.find(filter)
+      .select('name avatar auth0Id isVerified nickname')
+      .limit(20).lean();
     
-    console.log(`Found ${users.length} Drifters for query: ${query}`);
+    console.log(`Found ${users.length} Drifters`);
     res.json(users);
   } catch (err) { 
-    console.error("Search API Error:", err);
     res.status(500).json({ msg: 'Search Failed' }); 
   }
-});
+});========================================================== */
 /* ==========================================================
     🤝 ৪. ফলো/আনফলো সিস্টেম
 ========================================================== */
