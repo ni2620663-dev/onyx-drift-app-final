@@ -26,7 +26,7 @@ const Messenger = () => {
   const scrollRef = useRef();
   const ringtoneRef = useRef();
   const navigate = useNavigate();
-  const location = useLocation(); // URL ট্র্যাকিং এর জন্য
+  const location = useLocation();
   const API_URL = "https://onyx-drift-app-final.onrender.com";
 
   const glassPanel = "bg-[#030712]/60 backdrop-blur-2xl border border-white/[0.08] shadow-[0_8px_32px_0_rgba(0,0,0,0.3)]";
@@ -74,31 +74,31 @@ const Messenger = () => {
 
   useEffect(() => { if (user?.sub) fetchConv(); }, [user, fetchConv]);
 
-  // --- 🛰️ URL ID Sync Logic (Fix for your issue) ---
+  // --- 🛰️ URL ID Sync & Clean (প্রোফাইল থেকে আসলে কাজ করবে) ---
   useEffect(() => {
     const syncUrlUser = async () => {
       const queryParams = new URLSearchParams(location.search);
-      const targetUserId = queryParams.get("userId"); // URL থেকে আইডি নেয়া হচ্ছে
+      const targetUserId = queryParams.get("userId");
 
       if (targetUserId && user?.sub) {
         try {
           const token = await getAccessTokenSilently();
-          // অটোমেটিক চ্যাট কনভারসেশন তৈরি বা ফেচ করা
           const res = await axios.post(`${API_URL}/api/messages/conversation`, {
             senderId: user.sub,
             receiverId: targetUserId
           }, { headers: { Authorization: `Bearer ${token}` } });
           
           setCurrentChat(res.data);
-          // সার্চ টার্ম ক্লিয়ার করা যাতে ইন্টারফেস ক্লিন থাকে
-          setSearchTerm(""); 
+          setSearchTerm("");
+          // ✅ আইডি পাওয়ার পর ইউআরএল ক্লিন করে ফেলুন যাতে রিফ্রেশে ঝামেলা না হয়
+          navigate('/messenger', { replace: true }); 
         } catch (err) {
-          console.error("URL Identity Sync Failed", err);
+          console.error("URL Sync Error", err);
         }
       }
     };
     syncUrlUser();
-  }, [location.search, user, getAccessTokenSilently]);
+  }, [location.search, user, getAccessTokenSilently, navigate]);
 
   // --- Search Logic ---
   useEffect(() => {
@@ -223,7 +223,10 @@ const Messenger = () => {
             return (
               <div 
                 key={c._id} 
-                onClick={() => {setCurrentChat(c); navigate('/messenger');}} 
+                onClick={() => {
+                  // ✅ ফিক্স: এখানে navigate সরানো হয়েছে যাতে পেজ রিলোড না হয়
+                  setCurrentChat(c); 
+                }} 
                 className={`p-4 rounded-[2rem] flex items-center gap-4 cursor-pointer transition-all duration-300 ${currentChat?._id === c._id ? 'bg-cyan-500/20 border border-cyan-500/30 shadow-[0_0_20px_rgba(6,182,212,0.1)]' : 'hover:bg-white/5 border border-transparent'}`}
               >
                 <div className="relative">
