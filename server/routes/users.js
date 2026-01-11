@@ -38,22 +38,25 @@ router.get('/search', auth, async (req, res) => {
     const { query } = req.query;
     const myId = req.user.sub || req.user.id;
     
-    // ব্যাকএন্ড টার্মিনালে চেক করার জন্য লগ
-    console.log("Search Request Received for query:", query);
+    // রেন্ডার লগ-এ এটি দেখা যাবে
+    console.log("Incoming Search Query:", query);
 
     let filter = { auth0Id: { $ne: myId } };
 
     if (query && query.trim() !== "") {
-      // নামের যেকোনো জায়গায় অক্ষরটি থাকলে খুঁজে বের করবে
-      const searchRegex = new RegExp(query.trim(), 'i'); 
+      // নামের যেকোনো অংশ (Partial match) খুঁজে বের করার জন্য রেজেক্স
+      const cleanQuery = query.trim();
+      const searchRegex = new RegExp(cleanQuery, 'i'); 
+
       filter.$or = [
         { name: { $regex: searchRegex } }, 
-        { nickname: { $regex: searchRegex } }
+        { nickname: { $regex: searchRegex } },
+        { auth0Id: { $regex: searchRegex } } // আইডি দিয়েও সার্চ করার সুবিধা রাখা হলো
       ];
     } else {
-      // কুয়েরি না থাকলে লেটেস্ট ৫ জন ইউজার দেখাবে
-      const fallbackUsers = await User.find(filter).limit(5).lean();
-      return res.json(fallbackUsers);
+      // কুয়েরি না থাকলে লেটেস্ট ড্রাফটারদের দেখাবে
+      const fallback = await User.find(filter).limit(10).lean();
+      return res.json(fallback);
     }
 
     const users = await User.find(filter)
@@ -61,10 +64,10 @@ router.get('/search', auth, async (req, res) => {
       .limit(20)
       .lean();
     
-    console.log(`Found ${users.length} users for query: ${query}`);
+    console.log(`Found ${users.length} Drifters for query: ${query}`);
     res.json(users);
   } catch (err) { 
-    console.error("Search Error:", err);
+    console.error("Search API Error:", err);
     res.status(500).json({ msg: 'Search Failed' }); 
   }
 });
