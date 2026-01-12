@@ -26,24 +26,35 @@ const FollowingPage = () => {
 
   /**
    * ১. প্রোফাইল ও পোস্ট ফেচিং (Neural Sync)
-   * সরাসরি ID পাঠানো হচ্ছে কারণ ব্যাকএন্ডে decodeURIComponent করা আছে।
+   * এখানে পাথটি ঠিক করা হয়েছে: /api/user/profile/${id}
    */
   const fetchTargetData = useCallback(async (id) => {
     try {
       setLoading(true);
       const token = await getAccessTokenSilently();
       
-      const res = await axios.get(`${API_URL}/api/user/${id}`, {
+      // পাথ সংশোধন করা হয়েছে: /api/user/profile/${id}
+      const res = await axios.get(`${API_URL}/api/user/profile/${encodeURIComponent(id)}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
 
-      if (res.data.user) {
-        setUsers([res.data.user]);
+      // আপনার ব্যাকএন্ড রেসপন্স স্ট্রাকচার অনুযায়ী ডাটা সেট করা
+      if (res.data) {
+        setUsers([res.data]); // profile endpoint সাধারণত সরাসরি ইউজার অবজেক্ট দেয়
       } else {
         setUsers([{ auth0Id: id, name: "Unknown Drifter", avatar: "" }]);
       }
       
-      setPosts(res.data.posts || []);
+      // পোস্ট ফেচ করার জন্য আলাদা কল (যদি প্রোফাইল এন্ডপয়েন্ট পোস্ট না দেয়)
+      try {
+          const postsRes = await axios.get(`${API_URL}/api/posts/user/${encodeURIComponent(id)}`, {
+              headers: { Authorization: `Bearer ${token}` }
+          });
+          setPosts(postsRes.data || []);
+      } catch (postErr) {
+          console.error("Posts fetch error");
+      }
+
       setLoading(false);
     } catch (err) {
       console.error("📡 Neural Link Error:", err.response?.status);
@@ -99,7 +110,7 @@ const FollowingPage = () => {
   const handleFollow = async (targetId) => {
     try {
       const token = await getAccessTokenSilently();
-      const res = await axios.post(`${API_URL}/api/user/follow/${targetId}`, {}, {
+      const res = await axios.post(`${API_URL}/api/user/follow/${encodeURIComponent(targetId)}`, {}, {
         headers: { Authorization: `Bearer ${token}` }
       });
       
@@ -162,7 +173,6 @@ const FollowingPage = () => {
                   className="w-20 h-20 md:w-24 md:h-24 rounded-[2.2rem] object-cover border-4 border-white/5 group-hover:border-cyan-500/50 transition-all" 
                   alt={u.name} 
                 />
-                {/* Identity Verified Badge - নাম লক থাকার প্রমাণ */}
                 <div className="absolute -bottom-1 -right-1 bg-cyan-500 text-black p-1.5 rounded-full border-2 border-[#020617]">
                   <FaUserCheck size={10} />
                 </div>
@@ -176,7 +186,7 @@ const FollowingPage = () => {
                   <FaUserPlus size={16} className="group-hover/btn:scale-110 transition-transform" />
                   <span className="text-[7px] font-black mt-1 uppercase">Link</span>
                 </button>
-                <button onClick={() => navigate(`/messenger?userId=${u.auth0Id}`)} className="flex flex-col items-center justify-center p-3 md:p-4 bg-white/5 rounded-3xl border border-white/5 text-purple-500 hover:bg-purple-600 hover:text-white transition-all group/btn">
+                <button onClick={() => navigate(`/messenger?userId=${encodeURIComponent(u.auth0Id)}`)} className="flex flex-col items-center justify-center p-3 md:p-4 bg-white/5 rounded-3xl border border-white/5 text-purple-500 hover:bg-purple-600 hover:text-white transition-all group/btn">
                   <FaEnvelope size={16} className="group-hover/btn:scale-110 transition-transform" />
                   <span className="text-[7px] font-black mt-1 uppercase">Chat</span>
                 </button>
