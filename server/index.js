@@ -16,7 +16,7 @@ import connectDB from "./config/db.js";
 import User from "./models/User.js"; 
 import Post from "./models/Post.js"; 
 import Notification from "./models/Notification.js"; 
-import Message from "./models/Message.js"; // মেসেজ মডেলটি ইম্পোর্ট করো
+import Message from "./models/Message.js"; 
 
 // রাুট ফাইলগুলো
 import profileRoutes from "./src/routes/profile.js"; 
@@ -29,11 +29,18 @@ import communityRoutes from "./routes/communities.js";
 const app = express();
 const server = http.createServer(app);
 
-// ৩. সকেট আইও ডিক্লেয়ারেশন (এটি তোমার কোডে মিসিং ছিল)
+// ৩. সকেট আইও ডিক্লেয়ারেশন (CORS ফিক্স করা হয়েছে)
 const io = new Server(server, {
     cors: {
-        origin: ["http://localhost:5173", "https://onyx-drift-app-final.onrender.com"],
-        methods: ["GET", "POST"]
+        // এখানে আপনার সব ডোমেইন যোগ করা হয়েছে
+        origin: [
+            "http://localhost:5173", 
+            "https://onyx-drift-app-final.onrender.com",
+            "https://www.onyx-drift.com",
+            "https://onyx-drift.com"
+        ],
+        methods: ["GET", "POST"],
+        credentials: true
     }
 });
 
@@ -56,9 +63,12 @@ if (REDIS_URL) {
     redis.on("connect", () => console.log("✅ Neural Cache (Redis) Connected"));
 }
 
-// AI, Middleware, Database Connection (তোমার আগের কোড অনুযায়ী ঠিক আছে...)
+// ৬. Middleware ও DB Connection
 connectDB();
-app.use(cors({ credentials: true, origin: true }));
+app.use(cors({ 
+    credentials: true, 
+    origin: ["http://localhost:5173", "https://www.onyx-drift.com", "https://onyx-drift.com"] 
+}));
 app.use(express.json({ limit: "50mb" }));
 
 // রাুট মাউন্টিং
@@ -68,27 +78,33 @@ app.use("/api/posts", postRoutes);
 app.use("/api/messages", messageRoutes); 
 
 /* ==========================================================
-    📡 REAL-TIME ENGINE (Typing, Seen, Delete Added)
+    📡 REAL-TIME ENGINE (Global Chat & CORS Fixed)
 ========================================================== */
 io.on("connection", (socket) => {
     
     // অনলাইন ইউজার ট্র্যাকিং
     socket.on("addNewUser", async (userId) => {
-        if (redis) {
+        if (redis && userId) {
             await redis.hset("online_users", userId, socket.id);
             const allUsers = await redis.hgetall("online_users");
             io.emit("getOnlineUsers", Object.keys(allUsers).map(id => ({ userId: id })));
         }
     });
 
-    // ১. মেসেজ পাঠানো
+    // ১. পার্সোনাল মেসেজ পাঠানো
     socket.on("sendMessage", async (data) => {
         const { receiverId } = data;
         const socketId = await redis?.hget("online_users", receiverId);
         if (socketId) io.to(socketId).emit("getMessage", data);
     });
 
-    // ২. টাইপিং ইন্ডিকেটর (New)
+    // ২. গ্লোবাল চ্যাট রুম (ChatRoom.jsx এর জন্য)
+    socket.on("sendGlobalMessage", (data) => {
+        // মেসেজটি সবাইকে পাঠিয়ে দাও (ব্রডকাস্ট)
+        socket.broadcast.emit("getGlobalMessage", data);
+    });
+
+    // ৩. টাইপিং ইন্ডিকেটর
     socket.on("typing", async ({ receiverId, senderId }) => {
         const socketId = await redis?.hget("online_users", receiverId);
         if (socketId) io.to(socketId).emit("displayTyping", { senderId });
@@ -99,29 +115,29 @@ io.on("connection", (socket) => {
         if (socketId) io.to(socketId).emit("hideTyping");
     });
 
-    // ৩. ব্লু টিক / মেসেজ সিন (New)
-    socket.on("messageSeen", async ({ messageId, senderId, receiverId }) => {
+    // ৪. ব্লু টিক / মেসেজ সিন
+    socket.on("messageSeen", async ({ messageId, senderId }) => {
         try {
-            // DB আপডেট (Message মডেল অনুযায়ী)
             await Message.findByIdAndUpdate(messageId, { seen: true });
             const socketId = await redis?.hget("online_users", senderId);
             if (socketId) io.to(socketId).emit("messageSeenUpdate", { messageId });
-        } catch (err) { console.log(err); }
+        } catch (err) { console.log("Seen Error:", err); }
     });
 
-    // ৪. মেসেজ ডিলিট (New)
+    // ৫. মেসেজ ডিলিট
     socket.on("deleteMessage", async ({ messageId, receiverId }) => {
         const socketId = await redis?.hget("online_users", receiverId);
         if (socketId) io.to(socketId).emit("messageDeleted", messageId);
     });
 
-    // ৫. কল লজিক
+    // ৬. ভিডিও/অডিও কল লজিক
     socket.on("callUser", ({ userToCall, from, fromName, type, roomId }) => {
         redis?.hget("online_users", userToCall).then((socketId) => {
             if (socketId) io.to(socketId).emit("incomingCall", { from, fromName, type, roomId });
         });
     });
 
+    // ডিসকানেক্ট হ্যান্ডলার
     socket.on("disconnect", async () => {
         if (redis) {
             const all = await redis.hgetall("online_users");
