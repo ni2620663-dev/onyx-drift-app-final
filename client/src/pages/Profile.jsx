@@ -105,18 +105,14 @@ const Profile = () => {
   const [coverFile, setCoverFile] = useState(null);
   const [isUpdating, setIsUpdating] = useState(false);
 
-  // --- 🛠 FIXED LOGIC START ---
   const fetchProfileData = async () => {
     if (!isAuthenticated) return;
     try {
       setLoading(true);
       const token = await getAccessTokenSilently();
-      
-      // গুরুত্বপূর্ণ: ID না থাকলে কারেন্ট ইউজারের আইডি নিন
       const rawId = userId || currentUser?.sub;
       if (!rawId) return;
       
-      // ID টি এনকোড করুন যাতে google-oauth2|... এর পাইপ (|) ক্যারেক্টার সমস্যা না করে
       const targetId = encodeURIComponent(rawId); 
 
       const [profileRes, postsRes, usersRes] = await Promise.all([
@@ -136,14 +132,12 @@ const Profile = () => {
       setSuggestedUsers(usersRes.data.slice(0, 5));
     } catch (err) {
       console.error("📡 Neural Link Error:", err.message);
-      // যদি ইউজার পাওয়া না যায়, তবে আগের ডাটা ক্লিয়ার করে দিন
       setUserProfile(null);
       setUserPosts([]);
     } finally {
       setLoading(false);
     }
   };
-  // --- 🛠 FIXED LOGIC END ---
 
   useEffect(() => {
     if (isAuthenticated) fetchProfileData();
@@ -294,7 +288,6 @@ const Profile = () => {
           </div>
 
           <div className="max-w-[900px] mx-auto px-4 -mt-16 md:-mt-24 relative z-20">
-            {/* 🚀 GenesisCard Integration */}
             {isOwnProfile && <GenesisCard userData={userProfile} />}
 
             {userProfile ? (
