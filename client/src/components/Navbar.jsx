@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FaSearch, FaBell, FaCommentDots, FaCheckCircle, FaSignOutAlt } from 'react-icons/fa';
+import { FaSearch, FaBell, FaCommentDots, FaCheckCircle, FaSignOutAlt, FaRegCommentDots } from 'react-icons/fa'; // FaRegCommentDots যোগ করা হয়েছে
 import { useNavigate } from 'react-router-dom';
 import { useAuth0 } from "@auth0/auth0-react";
 import axios from 'axios';
@@ -18,31 +18,22 @@ const Navbar = ({ user, setSearchQuery }) => {
   const [notifications, setNotifications] = useState([]);
   const [hasNewNotification, setHasNewNotification] = useState(false);
 
-  // ১. ইউআরএল হ্যান্ডলিং (আগের ফাইলগুলোর সাথে সামঞ্জস্য রেখে)
   const BASE = (import.meta.env.VITE_API_BASE_URL || "https://onyx-drift-app-final.onrender.com").replace(/\/$/, "");
   const API_URL = `${BASE}/api`;
 
-  // ২. সকেট সাবস্ক্রিপশন এবং ক্লিনআপ
   useEffect(() => {
     let subscription = null;
-
     if (user?.sub) {
       subscription = webSocketService.subscribe(`/topic/notifications/${user.sub}`, (data) => {
         setNotifications((prev) => [data, ...prev]);
         setHasNewNotification(true);
       });
     }
-
-    // কম্পোনেন্ট আনমাউন্ট হলে সাবস্ক্রিপশন রিমুভ করা
     return () => {
-      if (subscription) {
-        // যদি আপনার সার্ভিসে unsubscribe মেথড থাকে তবে সেটি কল করুন
-        // webSocketService.unsubscribe(`/topic/notifications/${user.sub}`);
-      }
+      if (subscription) { /* webSocketService.unsubscribe logic */ }
     };
   }, [user]);
 
-  // ৩. সার্চ লজিক (Debounced)
   useEffect(() => {
     const delayDebounceFn = setTimeout(async () => {
       if (localSearch.trim().length > 0) {
@@ -118,7 +109,6 @@ const Navbar = ({ user, setSearchQuery }) => {
                 <span>Neural Connects</span>
                 <span className="text-cyan-400 animate-pulse font-bold">{loading ? "Scanning..." : "Live Scan"}</span>
               </div>
-              
               <div className="max-h-[380px] overflow-y-auto no-scrollbar">
                 {searchResults.length > 0 ? (
                   searchResults.map((d) => (
@@ -139,24 +129,14 @@ const Navbar = ({ user, setSearchQuery }) => {
                           </div>
                         )}
                       </div>
-                      
                       <div className="flex-1">
                         <p className="text-[12px] font-black text-white uppercase italic tracking-tighter group-hover:text-cyan-400 transition-colors">{d.nickname || d.name}</p>
                         <p className="text-[8px] text-gray-500 uppercase font-bold tracking-widest">{d.location || "Verified Drifter"}</p>
                       </div>
-
-                      <div className="flex items-center gap-2">
-                        <button 
-                          onClick={(e) => { e.stopPropagation(); navigate('/messenger'); }}
-                          className="p-2.5 bg-white/5 hover:bg-cyan-500/20 rounded-xl text-gray-400 hover:text-cyan-400 transition-all border border-white/5"
-                        >
-                          <FaCommentDots size={14} />
-                        </button>
-                      </div>
                     </div>
                   ))
                 ) : (
-                  <div className="p-10 text-center text-xs text-gray-500 italic uppercase tracking-[0.2em]">No drifters found in this orbit...</div>
+                  <div className="p-10 text-center text-xs text-gray-500 italic uppercase tracking-[0.2em]">No drifters found...</div>
                 )}
               </div>
             </motion.div>
@@ -165,7 +145,18 @@ const Navbar = ({ user, setSearchQuery }) => {
       </div>
 
       {/* Action Buttons */}
-      <div className="flex items-center gap-5 min-w-fit">
+      <div className="flex items-center gap-3 sm:gap-5 min-w-fit">
+        
+        {/* 💬 Messenger Button (New) */}
+        <motion.button 
+          whileTap={{ scale: 0.9 }}
+          onClick={() => navigate('/messages')} 
+          className="p-2 text-gray-400 hover:text-cyan-400 transition-all"
+        >
+          <FaRegCommentDots size={20} className="drop-shadow-[0_0_8px_rgba(34,211,238,0.4)]" />
+        </motion.button>
+
+        {/* Notifications */}
         <div className="relative">
           <button 
             onClick={() => {
@@ -191,7 +182,6 @@ const Navbar = ({ user, setSearchQuery }) => {
                   className="absolute right-0 mt-4 w-64 bg-[#0f172a] border border-white/10 rounded-2xl p-5 shadow-2xl z-[120] backdrop-blur-xl"
                 >
                   <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-3">Neural Updates</p>
-                  
                   <div className="max-h-[200px] overflow-y-auto no-scrollbar space-y-3 mb-4">
                     {notifications.length > 0 ? (
                         notifications.map((notif, idx) => (
@@ -200,14 +190,10 @@ const Navbar = ({ user, setSearchQuery }) => {
                             </div>
                         ))
                     ) : (
-                        <div className="text-xs text-gray-400 italic">No new signals detected...</div>
+                        <div className="text-xs text-gray-400 italic">No new signals...</div>
                     )}
                   </div>
-                  
-                  <button 
-                    onClick={handleLogout}
-                    className="w-full flex items-center justify-center gap-2 p-3 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 text-rose-500 rounded-xl text-[10px] font-black uppercase transition-all"
-                  >
+                  <button onClick={handleLogout} className="w-full flex items-center justify-center gap-2 p-3 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 text-rose-500 rounded-xl text-[10px] font-black uppercase">
                     <FaSignOutAlt /> Sign Out
                   </button>
                 </motion.div>
@@ -220,7 +206,7 @@ const Navbar = ({ user, setSearchQuery }) => {
         <motion.div 
           whileTap={{ scale: 0.95 }}
           onClick={() => navigate(`/profile/${user?.sub}`)}
-          className="flex items-center gap-3 bg-white/5 p-1 pr-4 rounded-full border border-white/10 cursor-pointer hover:bg-white/10 transition-all group shadow-inner"
+          className="flex items-center gap-3 bg-white/5 p-1 pr-2 sm:pr-4 rounded-full border border-white/10 cursor-pointer hover:bg-white/10 transition-all group shadow-inner"
         >
           <div className="w-8 h-8 rounded-full overflow-hidden border border-cyan-500/30">
             <img src={user?.picture || "https://via.placeholder.com/150"} className="w-full h-full object-cover" alt="Profile" />
@@ -229,12 +215,10 @@ const Navbar = ({ user, setSearchQuery }) => {
             <p className="text-[10px] font-black text-white uppercase group-hover:text-cyan-400 transition-colors tracking-tighter">
               {user?.nickname || "Drifter"}
             </p>
-            <p className="text-[7px] text-cyan-500 font-bold uppercase tracking-widest">Verified</p>
           </div>
         </motion.div>
       </div>
       
-      {/* Search Overlay */}
       {showResults && <div className="fixed inset-0 z-[250] bg-black/20 backdrop-blur-sm" onClick={() => setShowResults(false)}></div>}
     </nav>
   );
