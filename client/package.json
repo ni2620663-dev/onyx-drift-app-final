@@ -17,6 +17,7 @@
     "axios": "^1.13.2",
     "bcryptjs": "^3.0.3",
     "framer-motion": "^12.23.26",
+    "html2canvas": "^1.4.1",
     "lucide": "^0.562.0",
     "lucide-react": "^0.562.0",
     "moment": "^2.30.1",
