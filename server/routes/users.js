@@ -31,41 +31,46 @@ router.get('/all', auth, async (req, res) => {
 });
 
 /* ==========================================================
-    🔍 ২. SEARCH (FIXED: Improved Partial Name Matching)
+    🔍 ২. SEARCH (Fixed & Cleaned)
+========================================================== */
 router.get('/search', auth, async (req, res) => {
   try {
     const { query } = req.query;
     const myId = req.user.sub || req.user.id;
-    
-    console.log("Searching for:", query);
-
     let filter = { auth0Id: { $ne: myId } };
 
     if (query && query.trim() !== "") {
-      // স্পেশাল ক্যারেক্টার হ্যান্ডেল করার জন্য
       const safeQuery = query.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const searchRegex = new RegExp(safeQuery, 'i'); 
-
-      filter.$or = [
-        { name: { $regex: searchRegex } }, 
-        { nickname: { $regex: searchRegex } }
-      ];
-    } else {
-      // কিছু না লিখলে লেটেস্ট ৫ জন ইউজার দেখাবে (টেস্টিং এর জন্য)
-      const drifters = await User.find(filter).limit(5).lean();
-      return res.json(drifters);
+      filter.$or = [{ name: { $regex: searchRegex } }, { nickname: { $regex: searchRegex } }];
     }
 
-    const users = await User.find(filter)
-      .select('name avatar auth0Id isVerified nickname')
-      .limit(20).lean();
-    
-    console.log(`Found ${users.length} Drifters`);
+    const users = await User.find(filter).select('name avatar auth0Id isVerified nickname').limit(20).lean();
     res.json(users);
-  } catch (err) { 
-    res.status(500).json({ msg: 'Search Failed' }); 
+  } catch (err) { res.status(500).json({ msg: 'Search Failed' }); }
+});
+
+/* ==========================================================
+    👤 ৩. GET SINGLE USER PROFILE (এটি মিসিং ছিল - ৪MD ফিক্স)
+========================================================== */
+router.get('/:auth0Id', auth, async (req, res) => {
+  try {
+    const targetId = decodeURIComponent(req.params.auth0Id);
+    const userProfile = await User.findOne({ auth0Id: targetId })
+      .select('-password') // পাসওয়ার্ড বা সেনসিটিভ কিছু থাকলে হাইড করবে
+      .lean();
+
+    if (!userProfile) {
+      return res.status(404).json({ msg: "Drifter not found in neural network" });
+    }
+
+    res.json(userProfile);
+  } catch (err) {
+    console.error("Profile Fetch Error:", err);
+    res.status(500).json({ msg: "Neural Link Error" });
   }
-});========================================================== */
+});
+
 /* ==========================================================
     🤝 ৪. ফলো/আনফলো সিস্টেম
 ========================================================== */
@@ -108,10 +113,6 @@ router.put("/update-profile", auth, upload.fields([
 
     if (req.files?.avatar) updateFields.avatar = req.files.avatar[0].path;
     if (req.files?.cover) updateFields.coverImg = req.files.cover[0].path;
-
-    Object.keys(updateFields).forEach(key => 
-      (updateFields[key] === undefined || updateFields[key] === "") && delete updateFields[key]
-    );
 
     const updatedUser = await User.findOneAndUpdate(
       { auth0Id: myId },

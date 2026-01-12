@@ -3,48 +3,55 @@ import http from "http";
 import { Server } from "socket.io";
 import cors from "cors";
 import dotenv from "dotenv";
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import Redis from "ioredis"; 
 import { v2 as cloudinary } from 'cloudinary';
-import mongoose from "mongoose";
 
-// ১. কনফিগারেশন লোড
+// ১. কনফিগারেশন ও ডাটাবেস লোড
 dotenv.config();
-
-// ২. ডাটাবেস ও রাুট ইম্পোর্ট
 import connectDB from "./config/db.js"; 
 import User from "./models/User.js"; 
-import Post from "./models/Post.js"; 
-import Notification from "./models/Notification.js"; 
 import Message from "./models/Message.js"; 
 
-// রাুট ফাইলগুলো
+// রাুট ইম্পোর্ট
 import profileRoutes from "./src/routes/profile.js"; 
 import postRoutes from "./routes/posts.js";
 import userRoutes from './routes/users.js'; 
 import messageRoutes from "./routes/messages.js";         
-import uploadRoutes from './routes/upload.js';
-import communityRoutes from "./routes/communities.js";
 
 const app = express();
 const server = http.createServer(app);
 
-// ৩. সকেট আইও ডিক্লেয়ারেশন (CORS ফিক্স করা হয়েছে)
+// ২. CORS কনফিগারেশন (একবারই ডিফাইন করা হয়েছে)
+const allowedOrigins = [
+    "http://localhost:5173", 
+    "https://onyx-drift-app-final.onrender.com",
+    "https://www.onyx-drift.com",
+    "https://onyx-drift.com"
+];
+
+const corsOptions = {
+    origin: function (origin, callback) {
+        if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+            callback(null, true);
+        } else {
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"]
+};
+
+app.use(cors(corsOptions));
+app.use(express.json({ limit: "50mb" }));
+
+// ৩. সকেট আইও (Double Header ফিক্সড)
 const io = new Server(server, {
-    cors: {
-        // এখানে আপনার সব ডোমেইন যোগ করা হয়েছে
-        origin: [
-            "http://localhost:5173", 
-            "https://onyx-drift-app-final.onrender.com",
-            "https://www.onyx-drift.com",
-            "https://onyx-drift.com"
-        ],
-        methods: ["GET", "POST"],
-        credentials: true
-    }
+    cors: corsOptions,
+    transports: ['websocket', 'polling']
 });
 
-// ৪. Cloudinary কনফিগারেশন
+// ৪. ডাটাবেস ও ক্লাউডিনারি
+connectDB();
 cloudinary.config({ 
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME, 
   api_key: process.env.CLOUDINARY_API_KEY, 
@@ -52,37 +59,24 @@ cloudinary.config({
 });
 
 // ৫. Redis কানেকশন
-const REDIS_URL = process.env.REDIS_URL;
-let redis;
-if (REDIS_URL) {
-    redis = new Redis(REDIS_URL, {
-        maxRetriesPerRequest: null,
-        enableReadyCheck: false,
-        retryStrategy: (times) => Math.min(times * 50, 2000),
-    });
-    redis.on("connect", () => console.log("✅ Neural Cache (Redis) Connected"));
-}
+const redis = process.env.REDIS_URL ? new Redis(process.env.REDIS_URL, {
+    maxRetriesPerRequest: null,
+    retryStrategy: (times) => Math.min(times * 50, 2000),
+}) : null;
 
-// ৬. Middleware ও DB Connection
-connectDB();
-app.use(cors({ 
-    credentials: true, 
-    origin: ["http://localhost:5173", "https://www.onyx-drift.com", "https://onyx-drift.com"] 
-}));
-app.use(express.json({ limit: "50mb" }));
+if(redis) redis.on("connect", () => console.log("✅ Neural Cache Connected"));
 
-// রাুট মাউন্টিং
+// ৬. রাুট মাউন্টিং (৪MD ফিক্স করতে পাথ চেক করুন)
 app.use("/api/user", userRoutes); 
-app.use("/api/profile", profileRoutes); 
+app.use("/api/profile", profileRoutes); // যদি ফ্রন্টএন্ড /api/profile কল করে
 app.use("/api/posts", postRoutes); 
 app.use("/api/messages", messageRoutes); 
 
 /* ==========================================================
-    📡 REAL-TIME ENGINE (Global Chat & CORS Fixed)
+    📡 REAL-TIME ENGINE
 ========================================================== */
 io.on("connection", (socket) => {
     
-    // অনলাইন ইউজার ট্র্যাকিং
     socket.on("addNewUser", async (userId) => {
         if (redis && userId) {
             await redis.hset("online_users", userId, socket.id);
@@ -91,20 +85,16 @@ io.on("connection", (socket) => {
         }
     });
 
-    // ১. পার্সোনাল মেসেজ পাঠানো
     socket.on("sendMessage", async (data) => {
         const { receiverId } = data;
         const socketId = await redis?.hget("online_users", receiverId);
         if (socketId) io.to(socketId).emit("getMessage", data);
     });
 
-    // ২. গ্লোবাল চ্যাট রুম (ChatRoom.jsx এর জন্য)
     socket.on("sendGlobalMessage", (data) => {
-        // মেসেজটি সবাইকে পাঠিয়ে দাও (ব্রডকাস্ট)
         socket.broadcast.emit("getGlobalMessage", data);
     });
 
-    // ৩. টাইপিং ইন্ডিকেটর
     socket.on("typing", async ({ receiverId, senderId }) => {
         const socketId = await redis?.hget("online_users", receiverId);
         if (socketId) io.to(socketId).emit("displayTyping", { senderId });
@@ -115,7 +105,6 @@ io.on("connection", (socket) => {
         if (socketId) io.to(socketId).emit("hideTyping");
     });
 
-    // ৪. ব্লু টিক / মেসেজ সিন
     socket.on("messageSeen", async ({ messageId, senderId }) => {
         try {
             await Message.findByIdAndUpdate(messageId, { seen: true });
@@ -124,20 +113,6 @@ io.on("connection", (socket) => {
         } catch (err) { console.log("Seen Error:", err); }
     });
 
-    // ৫. মেসেজ ডিলিট
-    socket.on("deleteMessage", async ({ messageId, receiverId }) => {
-        const socketId = await redis?.hget("online_users", receiverId);
-        if (socketId) io.to(socketId).emit("messageDeleted", messageId);
-    });
-
-    // ৬. ভিডিও/অডিও কল লজিক
-    socket.on("callUser", ({ userToCall, from, fromName, type, roomId }) => {
-        redis?.hget("online_users", userToCall).then((socketId) => {
-            if (socketId) io.to(socketId).emit("incomingCall", { from, fromName, type, roomId });
-        });
-    });
-
-    // ডিসকানেক্ট হ্যান্ডলার
     socket.on("disconnect", async () => {
         if (redis) {
             const all = await redis.hgetall("online_users");
@@ -154,4 +129,4 @@ io.on("connection", (socket) => {
 });
 
 const PORT = process.env.PORT || 10000;
-server.listen(PORT, '0.0.0.0', () => console.log(`🚀 OnyxDrift Core Online: ${PORT}`));
+server.listen(PORT, '0.0.0.0', () => console.log(`🚀 Core Online: ${PORT}`));
