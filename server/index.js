@@ -5,6 +5,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import Redis from "ioredis"; 
 import { v2 as cloudinary } from 'cloudinary';
+import https from 'https'; // Self-ping এর জন্য
 
 // ১. কনফিগারেশন ও ডাটাবেস লোড
 dotenv.config();
@@ -16,12 +17,12 @@ import Message from "./models/Message.js";
 import profileRoutes from "./src/routes/profile.js"; 
 import postRoutes from "./routes/posts.js";
 import userRoutes from './routes/users.js'; 
-import messageRoutes from "./routes/messages.js";         
+import messageRoutes from "./routes/messages.js";          
 
 const app = express();
 const server = http.createServer(app);
 
-// ২. CORS কনফিগারেশন (Strict & Secure)
+// ২. CORS কনফিগারেশন (Strict & Updated)
 const allowedOrigins = [
     "http://localhost:5173", 
     "https://onyx-drift-app-final.onrender.com",
@@ -30,9 +31,8 @@ const allowedOrigins = [
 ];
 
 const corsOptions = {
-    origin: (origin, callback) => {
-        // origin undefined মানে হলো লোকাল রিকোয়েস্ট বা সার্ভার টু সার্ভার
-        if (!origin || allowedOrigins.includes(origin)) {
+    origin: function (origin, callback) {
+        if (!origin || allowedOrigins.indexOf(origin) !== -1) {
             callback(null, true);
         } else {
             callback(new Error('Signal Blocked: CORS Security Policy'));
@@ -45,12 +45,14 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(express.json({ limit: "50mb" }));
 
-// ৩. সকেট আইও কনফিগারেশন (Stable Connection)
+// ৩. সকেট আইও কনফিগারেশন (Stability Optimized)
 const io = new Server(server, {
     cors: corsOptions,
-    transports: ['websocket', 'polling'],
-    pingTimeout: 60000, // কানেকশন স্ট্যাবিলিটি বাড়াবে
-    pingInterval: 25000
+    transports: ['polling', 'websocket'], // Polling-কে আগে দিলে কানেকশন ফেইলর কমে
+    pingTimeout: 60000,
+    pingInterval: 25000,
+    connectTimeout: 45000,
+    allowEIO3: true // Compatibility-র জন্য
 });
 
 // ৪. ডাটাবেস ও ক্লাউডিনারি কানেকশন
@@ -61,7 +63,7 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET 
 });
 
-// ৫. Redis (Neural Cache) Setup
+// ৫. Redis Setup (Error Handling Enhanced)
 const redis = process.env.REDIS_URL ? new Redis(process.env.REDIS_URL, {
     maxRetriesPerRequest: null,
     enableReadyCheck: false,
@@ -79,12 +81,21 @@ app.use("/api/profile", profileRoutes);
 app.use("/api/posts", postRoutes); 
 app.use("/api/messages", messageRoutes); 
 
-// ৭. Global Error Handler (CORS বা অন্যান্য এরর হ্যান্ডেল করতে)
+// ৭. Keep-Alive Mechanism (Render-এর সার্ভারকে জাগিয়ে রাখবে)
+setInterval(() => {
+    https.get('https://onyx-drift-app-final.onrender.com', (res) => {
+        // Just a ping to prevent spin-down
+    }).on('error', (err) => {
+        console.log('Keep-alive ping error');
+    });
+}, 840000); // প্রতি ১৪ মিনিটে একবার
+
+// ৮. Global Error Handler
 app.use((err, req, res, next) => {
-    if (err.message === 'Not allowed by CORS') {
+    if (err.message === 'Signal Blocked: CORS Security Policy') {
         res.status(403).json({ error: "Access Denied: Neural link rejected" });
     } else {
-        next(err);
+        res.status(500).json({ error: "Internal Neural Breakdown" });
     }
 });
 
@@ -111,7 +122,7 @@ io.on("connection", (socket) => {
         }
     });
 
-    // ৩. গ্লোবাল চ্যাট (Broadcasting)
+    // ৩. গ্লোবাল চ্যাট
     socket.on("sendGlobalMessage", (data) => {
         socket.broadcast.emit("getGlobalMessage", data);
     });
@@ -152,4 +163,4 @@ io.on("connection", (socket) => {
 });
 
 const PORT = process.env.PORT || 10000;
-server.listen(PORT, '0.0.0.0', () => console.log(`🚀 OnyxDrift Core: ${PORT}`));
+server.listen(PORT, '0.0.0.0', () => console.log(`🚀 OnyxDrift Core Active on Port: ${PORT}`));

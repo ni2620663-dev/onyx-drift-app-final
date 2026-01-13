@@ -119,54 +119,40 @@ router.delete("/:id", auth, async (req, res) => {
     res.status(500).json({ msg: "Delete failed" });
   }
 });
-
 /* ==========================================================
-    🔥 THE VIRAL ENGINE (Algorithm v1.0)
-    লজিক: Engagement Score + New User Boost + Decay Factor
+    🔥 THE VIRAL ENGINE (Updated & Fixed)
 ========================================================== */
 router.get("/viral-feed", auth, async (req, res) => {
   try {
-    const posts = await Post.find()
-      .populate("author", "name avatar createdAt isVerified")
-      .lean();
-
+    // ১. সব পোস্ট নিয়ে আসা (authorAuth0Id ব্যবহার করে)
+    const posts = await Post.find().lean();
     const now = new Date();
 
-    const viralPosts = posts.map(post => {
-      // ১. বেসিক এঙ্গেজমেন্ট স্কোর
-      const likeWeight = 1;
-      const commentWeight = 3;
-      const shareWeight = 5; // যদি শেয়ার কাউন্ট থাকে
+    const viralPosts = await Promise.all(posts.map(async (post) => {
+      // authorAuth0Id দিয়ে ইউজার ডাটা খুঁজে বের করা (যেহেতু populate কাজ নাও করতে পারে)
+      const authorProfile = await User.findOne({ auth0Id: post.authorAuth0Id || post.author }).lean();
+      
+      let engagementScore = (post.likes.length * 1) + ((post.comments?.length || 0) * 3);
 
-      let engagementScore = (post.likes.length * likeWeight) + 
-                            ((post.comments?.length || 0) * commentWeight);
-
-      // ২. নিউ ইউজার বুস্ট (Creator Friendly Logic)
-      // যদি ইউজারের একাউন্ট ৩০ দিনের কম পুরনো হয়, তাকে ৫০ পয়েন্ট বোনাস দাও
-      const accountAgeInDays = (now - new Date(post.author.createdAt)) / (1000 * 60 * 60 * 24);
-      if (accountAgeInDays < 30) {
-        engagementScore += 50; 
+      // নিউ ইউজার বুস্ট
+      if (authorProfile) {
+        const accountAgeInDays = (now - new Date(authorProfile.createdAt)) / (1000 * 60 * 60 * 24);
+        if (accountAgeInDays < 30) engagementScore += 50; 
+        if (authorProfile.isVerified) engagementScore += 20;
       }
 
-      // ৩. ভেরিফাইড ইউজার বুস্ট
-      if (post.author.isVerified) {
-        engagementScore += 20;
-      }
-
-      // ৪. টাইম ডিকে (Time Decay - পুরনো পোস্টের গুরুত্ব কমানো)
-      // পোস্ট যত পুরনো হবে, স্কোর তত কমবে (Gravity formula)
+      // টাইম ডিকে (Time Decay)
       const postAgeInHours = (now - new Date(post.createdAt)) / (1000 * 60 * 60);
       const gravity = 1.8;
       const finalScore = engagementScore / Math.pow((postAgeInHours + 2), gravity);
 
-      return { ...post, viralRank: finalScore };
-    });
+      return { ...post, authorData: authorProfile, viralRank: finalScore };
+    }));
 
-    // ৫. র‍্যাঙ্ক অনুযায়ী সর্ট করা
+    // র‍্যাঙ্ক অনুযায়ী সর্ট করা
     viralPosts.sort((a, b) => b.viralRank - a.viralRank);
-
-    // প্রথম ২০টি ভাইরাল পোস্ট পাঠানো
     res.json(viralPosts.slice(0, 20));
+
   } catch (err) {
     console.error("Viral Engine Error:", err);
     res.status(500).json({ msg: "Neural Uplink Failure" });
