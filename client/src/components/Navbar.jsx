@@ -18,7 +18,7 @@ const Navbar = ({ setSearchQuery }) => {
 
   const API_URL = (import.meta.env.VITE_API_BASE_URL || "https://onyx-drift-app-final.onrender.com").replace(/\/$/, "");
 
-  // --- Notification Listener ---
+  // Notification Listener
   useEffect(() => {
     if (isAuthenticated && user?.sub) {
       const subscription = webSocketService.subscribe(`/topic/notifications/${user.sub}`, (data) => {
@@ -28,7 +28,7 @@ const Navbar = ({ setSearchQuery }) => {
     }
   }, [user, isAuthenticated]);
 
-  // --- Real-time Search Logic ---
+  // Real-time Search Logic
   useEffect(() => {
     const delayDebounceFn = setTimeout(async () => {
       if (localSearch.trim().length > 0) {
@@ -53,20 +53,21 @@ const Navbar = ({ setSearchQuery }) => {
     return () => clearTimeout(delayDebounceFn);
   }, [localSearch, getAccessTokenSilently, API_URL]);
 
+  // মোবাইলে এই নেভবারটি হাইড থাকবে কারণ পেইজের ভেতর অলরেডি হেডার আছে
   return (
-    <nav className="h-[75px] px-6 flex items-center justify-between bg-black border-b border-white/5 w-full sticky top-0 z-[200]">
+    <nav className="hidden lg:flex h-[75px] px-6 items-center justify-between bg-black border-b border-white/5 w-full sticky top-0 z-[200]">
       
       {/* ১. লোগো সেকশন */}
       <div className="flex items-center gap-3 min-w-fit cursor-pointer" onClick={() => navigate('/feed')}>
         <div className="w-10 h-10 bg-gradient-to-tr from-cyan-400 to-purple-600 rounded-xl flex items-center justify-center shadow-lg shadow-cyan-500/20">
           <span className="text-black font-black text-lg italic tracking-tighter">OX</span>
         </div>
-        <h1 className="hidden md:block text-xl font-black text-white italic tracking-tighter uppercase">
+        <h1 className="text-xl font-black text-white italic tracking-tighter uppercase">
           ONYX<span className="text-cyan-500">DRIFT</span>
         </h1>
       </div>
 
-      {/* ২. সার্চ বার (একদম ক্লিন ডিজাইন) */}
+      {/* ২. সার্চ বার */}
       <div className="relative flex items-center bg-white/5 border border-white/10 rounded-2xl px-4 py-2 w-full max-w-sm mx-4 focus-within:border-cyan-500/50 transition-all">
         <FaSearch className="text-gray-500 text-sm" />
         <input
@@ -81,7 +82,6 @@ const Navbar = ({ setSearchQuery }) => {
           onFocus={() => localSearch.length > 0 && setShowResults(true)}
         />
 
-        {/* সার্চ রেজাল্ট ড্রপডাউন */}
         <AnimatePresence>
           {showResults && (
             <motion.div
@@ -113,8 +113,6 @@ const Navbar = ({ setSearchQuery }) => {
 
       {/* ৩. রাইট অ্যাকশন বাটনসমূহ */}
       <div className="flex items-center gap-4 min-w-fit">
-        
-        {/* নোটিফিকেশন বাটন */}
         <div className="relative">
           <button className="p-2 text-gray-400 hover:text-white transition-colors relative">
             <FaBell size={18} />
@@ -122,7 +120,6 @@ const Navbar = ({ setSearchQuery }) => {
           </button>
         </div>
 
-        {/* প্রোফাইল এবং ড্রপডাউন */}
         <div className="relative">
             <div 
             onClick={() => setShowDropdown(!showDropdown)}
@@ -141,7 +138,7 @@ const Navbar = ({ setSearchQuery }) => {
                         className="absolute right-0 mt-3 w-44 bg-[#0A0A0A] border border-white/10 rounded-2xl p-2 shadow-2xl overflow-hidden"
                     >
                         <button 
-                            onClick={() => navigate(`/profile/${user?.sub}`)}
+                            onClick={() => { navigate(`/profile/${user?.sub}`); setShowDropdown(false); }}
                             className="w-full text-left px-4 py-3 text-[10px] font-black text-gray-400 hover:text-white hover:bg-white/5 rounded-xl uppercase transition-all"
                         >
                             View Profile

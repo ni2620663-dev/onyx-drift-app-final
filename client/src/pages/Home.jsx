@@ -16,14 +16,13 @@ const Home = ({ user, searchQuery = "" }) => {
   const [loading, setLoading] = useState(true);
   const [isCached, setIsCached] = useState(false);
 
-  // ১. এপিআই ইউআরএল ফিক্স (এনভায়রনমেন্ট ভেরিয়েবল সাপোর্টসহ)
+  // এপিআই ইউআরএল কনফিগ
   const BASE = (import.meta.env.VITE_API_BASE_URL || "https://onyx-drift-app-final.onrender.com").replace(/\/$/, "");
   const API_BASE_URL = `${BASE}/api`;
 
-  // ২. মেমোইজড ফেচ ফাংশন
+  // মেমোইজড ফেচ ফাংশন
   const fetchPosts = useCallback(async () => {
     try {
-      // টোকেন না থাকলেও যাতে পাবলিক পোস্ট দেখা যায় তার জন্য ট্রাই-ক্যাচ
       let headers = { "Cache-Control": "no-cache" };
       
       if (isAuthenticated) {
@@ -37,14 +36,16 @@ const Home = ({ user, searchQuery = "" }) => {
 
       const startTime = Date.now();
 
-      // ৩. রিকোয়েস্ট পাঠানো (টাইমস্ট্যাম্পসহ যাতে ব্রাউজার ক্যাশ না করে)
+      // রিকোয়েস্ট পাঠানো (t: Date.now() যোগ করা হয়েছে ক্যাশ এড়ানোর জন্য)
       const response = await axios.get(`${API_BASE_URL}/posts`, {
         headers: headers,
         params: { t: Date.now() } 
       });
 
       const latency = Date.now() - startTime;
+      // যদি রেসপন্স ১৫০ মিলিসেকেন্ডের কম সময়ে আসে, তবে ধরে নিচ্ছি এটি ক্যাশ থেকে আসছে
       if (latency < 150) setIsCached(true); 
+      else setIsCached(false);
 
       setPosts(Array.isArray(response.data) ? response.data : []);
     } catch (err) {
@@ -58,7 +59,7 @@ const Home = ({ user, searchQuery = "" }) => {
     fetchPosts();
   }, [fetchPosts]);
 
-  // ৪. ফিল্টারিং লজিক
+  // ফিল্টারিং লজিক (সার্চ কুয়েরি অনুযায়ী)
   const filteredPosts = posts.filter((post) => {
     const term = searchQuery.toLowerCase();
     return (
@@ -71,9 +72,10 @@ const Home = ({ user, searchQuery = "" }) => {
 
   return (
     <div className="w-full min-h-screen bg-transparent">
+      {/* মোবাইলে অতিরিক্ত প্যাডিং কমানো হয়েছে যা Navbar ডুপ্লিকেট ইস্যু ঠিক করতে সাহায্য করবে */}
       <main className="w-full max-w-[680px] mx-auto py-4 flex flex-col gap-6 px-4 sm:px-0">
         
-        {/* ৫. সিস্টেম স্ট্যাটাস বার */}
+        {/* সিস্টেম স্ট্যাটাস বার */}
         <div className="flex justify-between items-center px-4">
           <div className="flex items-center gap-2">
              <div className={`h-1.5 w-1.5 rounded-full animate-pulse ${isCached ? 'bg-cyan-400' : 'bg-green-400'}`}></div>
@@ -95,7 +97,7 @@ const Home = ({ user, searchQuery = "" }) => {
             <PostBox user={user} onPostCreated={fetchPosts} />
         </div>
 
-        {/* OnyxDrift Stream Divider */}
+        {/* Stream Divider */}
         <div className="flex items-center gap-4 px-4 py-2">
             <div className="h-[1px] flex-1 bg-gradient-to-r from-transparent via-white/10 to-transparent"></div>
             <span className="text-[10px] font-black text-gray-600 uppercase tracking-widest">{BRAND_NAME} Stream</span>
