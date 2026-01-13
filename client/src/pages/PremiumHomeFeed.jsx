@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   FaPlus, FaTimes, FaMagic,
-  FaCloudUploadAlt, FaImage, FaVideo, FaRegSmile, FaPaperPlane
+  FaImage, FaVideo, FaRegSmile, FaPaperPlane, FaSearch
 } from 'react-icons/fa'; 
 import { useAuth0 } from "@auth0/auth0-react";
 import axios from "axios";
@@ -11,7 +11,7 @@ import { io } from "socket.io-client";
 import PostCard from "../components/PostCard"; 
 import { HiOutlineSparkles } from "react-icons/hi2"; 
 
-const PremiumHomeFeed = ({ searchQuery }) => {
+const PremiumHomeFeed = () => {
   const { user, getAccessTokenSilently, isAuthenticated } = useAuth0();
   const navigate = useNavigate(); 
   const [postText, setPostText] = useState("");
@@ -19,9 +19,6 @@ const PremiumHomeFeed = ({ searchQuery }) => {
   const [loading, setLoading] = useState(true);
   const [aiLoading, setAiLoading] = useState(false);
   
-  // মেনু বাটন রিমুভ করার জন্য এই স্টেটটি আর প্রয়োজন নেই
-  // const [isSidebarOpen, setIsSidebarOpen] = useState(false); 
-
   const [selectedPostMedia, setSelectedPostMedia] = useState(null);
   const [mediaFile, setMediaFile] = useState(null); 
   const [mediaType, setMediaType] = useState(null); 
@@ -30,8 +27,9 @@ const PremiumHomeFeed = ({ searchQuery }) => {
 
   const API_URL = (import.meta.env.VITE_API_BASE_URL || "https://onyx-drift-app-final.onrender.com").replace(/\/$/, "");
 
+  // AI Caption Logic
   const handleAICaption = async () => {
-    if (!postText.trim()) return alert("Please type a keyword or sentence first!");
+    if (!postText.trim()) return;
     setAiLoading(true);
     try {
       const token = await getAccessTokenSilently();
@@ -41,34 +39,24 @@ const PremiumHomeFeed = ({ searchQuery }) => {
       );
       setPostText(data.captions);
     } catch (err) {
-      console.error("AI Sync Error:", err);
-      alert("AI Neural link failed. Try again.");
+      console.error("AI Error:", err);
     } finally {
       setAiLoading(false);
     }
   };
 
   const handleUserClick = (userId) => {
-    if (userId) {
-      navigate(`/following?userId=${encodeURIComponent(userId)}`);
-    }
+    if (userId) navigate(`/following?userId=${encodeURIComponent(userId)}`);
   };
 
+  // Socket setup
   useEffect(() => {
     if (isAuthenticated) {
-      socketRef.current = io(API_URL, {
-        transports: ["websocket", "polling"],
-        path: "/socket.io/",
-        withCredentials: true
-      });
-
+      socketRef.current = io(API_URL, { transports: ["websocket", "polling"], path: "/socket.io/", withCredentials: true });
       socketRef.current.on("receiveNewPost", (newPost) => {
         setPosts((prevPosts) => [newPost, ...prevPosts]);
       });
-
-      return () => {
-        if (socketRef.current) socketRef.current.disconnect();
-      };
+      return () => { if (socketRef.current) socketRef.current.disconnect(); };
     }
   }, [isAuthenticated, API_URL]);
 
@@ -78,18 +66,16 @@ const PremiumHomeFeed = ({ searchQuery }) => {
       const response = await axios.get(`${API_URL}/api/posts?t=${Date.now()}`);
       setPosts(response.data);
     } catch (err) {
-      console.error("Error fetching posts:", err);
+      console.error("Fetch Error:", err);
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    fetchPosts();
-  }, []);
+  useEffect(() => { fetchPosts(); }, []);
 
   const handleDeletePost = async (postId) => {
-    if (window.confirm("Are you sure you want to delete this signal?")) {
+    if (window.confirm("Terminate this signal?")) {
       try {
         const token = await getAccessTokenSilently();
         await axios.delete(`${API_URL}/api/posts/${postId}`, {
@@ -97,33 +83,25 @@ const PremiumHomeFeed = ({ searchQuery }) => {
         });
         setPosts(prevPosts => prevPosts.filter(p => (p._id || p.id) !== postId));
       } catch (err) {
-        alert("Action Denied: You can only delete your own signals!");
+        alert("Action Denied!");
       }
     }
   };
 
+  // Stories Logic
   const [stories, setStories] = useState(() => {
-    const savedStories = localStorage.getItem('user_stories');
-    const currentTime = Date.now();
-    if (savedStories) {
-      const parsed = JSON.parse(savedStories);
-      return parsed.filter(s => (currentTime - s.timestamp) < 86400000);
+    const saved = localStorage.getItem('user_stories');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      return parsed.filter(s => (Date.now() - s.timestamp) < 86400000);
     }
-    return [{ id: 1, img: "https://images.unsplash.com/photo-1614850523296-d8c1af93d400?q=80&w=500", name: "Alex", timestamp: currentTime, filterClass: "" }];
+    return [{ id: 1, img: "https://images.unsplash.com/photo-1614850523296-d8c1af93d400?q=80&w=500", name: "Alex", timestamp: Date.now() }];
   });
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [viewingStory, setViewingStory] = useState(null);
   const [selectedImage, setSelectedImage] = useState(null);
-  const [activeFilter, setActiveFilter] = useState("none");
-
   const fileInputRef = useRef(null);
-  const filters = [
-    { name: "none", class: "" },
-    { name: "Cyber", class: "hue-rotate-90 saturate-150 contrast-125" },
-    { name: "Mono", class: "grayscale brightness-110" },
-    { name: "Warm", class: "sepia brightness-90 saturate-150" },
-  ];
 
   const handlePostMediaChange = (e) => {
     const file = e.target.files[0];
@@ -144,79 +122,52 @@ const PremiumHomeFeed = ({ searchQuery }) => {
       const token = await getAccessTokenSilently();
       const postData = {
         text: postText,
-        authorName: user?.nickname || user?.name || "Anonymous",
+        authorName: user?.nickname || user?.name || "Drifter",
         authorAvatar: user?.picture || "",
         authorId: user?.sub, 
         media: selectedPostMedia,
         mediaType: mediaType
       };
-
       await axios.post(`${API_URL}/api/posts`, postData, {
-        headers: { 
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
       });
-
-      setPostText("");
-      setSelectedPostMedia(null);
-      setMediaFile(null);
-      setMediaType(null);
+      setPostText(""); setSelectedPostMedia(null); setMediaFile(null);
       fetchPosts(); 
     } catch (err) {
-      console.error("Post Error:", err.response?.data || err);
-      alert("Broadcast failed: " + (err.response?.data?.message || "Check connection"));
+      alert("Broadcast failed.");
     }
-  };
-
-  const handleImageChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => setSelectedImage(reader.result);
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const handleUpload = () => {
-    const newStory = {
-      id: Date.now(),
-      img: selectedImage,
-      name: user?.nickname || "You",
-      timestamp: Date.now(),
-      filterClass: filters.find(f => f.name === activeFilter).class,
-    };
-    const updatedStories = [newStory, ...stories];
-    setStories(updatedStories);
-    localStorage.setItem('user_stories', JSON.stringify(updatedStories));
-    setIsModalOpen(false);
-    setSelectedImage(null);
   };
 
   return (
-    <div className="w-full min-h-screen bg-transparent space-y-4 md:space-y-6 pb-24 overflow-x-hidden relative">
+    <div className="w-full min-h-screen bg-black text-white pb-24 overflow-x-hidden selection:bg-cyan-500/30">
       
-      {/* মোবাইল হেডার - শুধু লোগো রাখা হয়েছে, মেনু বাটন রিমুভ করা হয়েছে */}
-      <div className="md:hidden flex justify-center items-center px-4 pt-4">
-        <h1 className="text-xl font-black text-white italic tracking-tighter">ONYX<span className="text-cyan-400">DRIFT</span></h1>
-      </div>
+      {/* ১. টপ হেডার (Unique Minimal) */}
+      <header className="sticky top-0 z-[100] bg-black/80 backdrop-blur-xl border-b border-[#1A1A1A] px-5 py-4 flex items-center justify-between">
+        <h1 className="text-2xl font-black italic tracking-tighter uppercase">
+          ONYX<span className="text-cyan-400">DRIFT</span>
+        </h1>
+        <div className="flex items-center gap-4">
+          <button className="w-10 h-10 rounded-full bg-[#111] flex items-center justify-center text-gray-400 border border-[#222]">
+            <FaSearch size={16} />
+          </button>
+          <img src={user?.picture} className="w-9 h-9 rounded-full border border-cyan-500/50" alt="me" />
+        </div>
+      </header>
 
-      {/* মোবাইল সাইডবার এবং সাইডবার বাটন কোড এখান থেকে রিমুভ করা হয়েছে */}
-
-      {/* স্টোরি সেকশন */}
-      <section className="px-3 md:px-4 pt-2 md:pt-4">
-        <div className="flex gap-4 md:gap-5 overflow-x-auto pb-4 no-scrollbar items-center">
-          <div onClick={() => setIsModalOpen(true)} className="flex-shrink-0 flex flex-col items-center gap-2 cursor-pointer">
-            <div className="w-14 h-14 md:w-16 md:h-16 rounded-full border-2 border-dashed border-cyan-500/50 flex items-center justify-center bg-cyan-500/5 hover:bg-cyan-500/20">
-              <FaPlus className="text-cyan-400 text-lg md:text-xl" />
+      {/* ২. স্টোরি সেকশন (Minimal Circular) */}
+      <section className="py-6 border-b border-[#1A1A1A]">
+        <div className="flex gap-5 overflow-x-auto px-5 no-scrollbar items-center">
+          <div onClick={() => setIsModalOpen(true)} className="flex-shrink-0 flex flex-col items-center gap-2">
+            <div className="w-16 h-16 rounded-full border-2 border-dashed border-[#333] flex items-center justify-center bg-[#050505] hover:border-cyan-500 transition-colors">
+              <FaPlus className="text-gray-500" />
             </div>
-            <span className="text-[10px] font-bold uppercase text-cyan-400 mt-1">Story</span>
+            <span className="text-[10px] font-bold text-gray-500 uppercase tracking-tighter">Your Story</span>
           </div>
           {stories.map((s) => (
-            <div key={s.id} onClick={() => setViewingStory(s)} className="flex-shrink-0 flex flex-col items-center gap-2 cursor-pointer group">
-              <div className="w-14 h-14 md:w-16 md:h-16 rounded-full p-[2px] bg-gradient-to-tr from-cyan-400 to-pink-500">
-                <div className="w-full h-full rounded-full border-2 border-[#020617] overflow-hidden bg-gray-900">
-                  <img src={s.img} className={`w-full h-full object-cover ${s.filterClass}`} alt="" />
+            <div key={s.id} onClick={() => setViewingStory(s)} className="flex-shrink-0 flex flex-col items-center gap-2 cursor-pointer">
+              <div className="w-16 h-16 rounded-full p-[2.5px] bg-gradient-to-tr from-cyan-400 to-purple-600">
+                <div className="w-full h-full rounded-full border-2 border-black overflow-hidden">
+                  <img src={s.img} className="w-full h-full object-cover" alt="" />
                 </div>
               </div>
               <span className="text-[10px] font-medium text-gray-400">{s.name}</span>
@@ -225,65 +176,63 @@ const PremiumHomeFeed = ({ searchQuery }) => {
         </div>
       </section>
 
-      {/* পোস্ট ইনপুট বক্স */}
-      <section className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-[1.5rem] md:rounded-[2rem] p-4 md:p-5 mx-3 md:mx-4">
-        <div className="flex items-start gap-3 md:gap-4 mb-4">
-          <div className="w-10 h-10 md:w-12 md:h-12 rounded-xl md:rounded-2xl overflow-hidden border border-white/10 shrink-0">
-            <img src={user?.picture || "https://i.pravatar.cc/150"} className="w-full h-full object-cover" alt="Profile" />
-          </div>
+      {/* ৩. পোস্ট ইনপুট বক্স (Image style matching) */}
+      <section className="m-4 bg-[#0A0A0A] border border-[#1A1A1A] rounded-[2.5rem] p-6 shadow-2xl">
+        <div className="flex gap-4">
+          <img src={user?.picture} className="w-12 h-12 rounded-2xl object-cover" alt="" />
           <div className="flex-1">
             <div className="relative">
               <textarea
                 value={postText}
                 onChange={(e) => setPostText(e.target.value)}
-                placeholder={`What's on your mind?`}
-                className="w-full bg-white/5 rounded-xl md:rounded-2xl border border-white/10 px-4 py-3 text-xs md:text-sm text-white placeholder-gray-500 outline-none focus:border-cyan-500/50 transition-all resize-none min-h-[50px] pr-10"
+                placeholder="What's on your mind?"
+                className="w-full bg-transparent text-[15px] text-white placeholder-[#444] outline-none resize-none min-h-[60px]"
               />
-              <button 
-                onClick={handleAICaption}
-                disabled={aiLoading}
-                className="absolute right-3 top-3 text-cyan-400 hover:text-cyan-300 active:scale-90 transition-all disabled:opacity-50"
-                title="AI Viral Caption"
-              >
-                <HiOutlineSparkles size={20} className={aiLoading ? "animate-spin" : ""} />
+              <button onClick={handleAICaption} className="absolute right-0 bottom-0 p-2 text-cyan-400 hover:scale-110 transition-transform">
+                <HiOutlineSparkles size={22} className={aiLoading ? "animate-spin" : ""} />
               </button>
             </div>
-
+            
             <AnimatePresence>
               {selectedPostMedia && (
-                <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} 
-                  className="mt-3 relative rounded-xl overflow-hidden border border-white/10 aspect-video w-full max-w-sm bg-black">
-                  <button onClick={() => {setSelectedPostMedia(null); setMediaFile(null);}} className="absolute top-2 right-2 z-10 p-2 bg-black/60 rounded-full text-white"><FaTimes size={10}/></button>
-                  {mediaType === 'video' ? <video src={selectedPostMedia} className="w-full h-full object-cover" controls /> : <img src={selectedPostMedia} className="w-full h-full object-cover" alt="" />}
+                <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="mt-4 relative rounded-3xl overflow-hidden border border-[#222]">
+                  <button onClick={() => setSelectedPostMedia(null)} className="absolute top-3 right-3 p-2 bg-black/60 rounded-full text-white backdrop-blur-md"><FaTimes size={12}/></button>
+                  {mediaType === 'video' ? <video src={selectedPostMedia} className="w-full max-h-[300px] object-cover" controls /> : <img src={selectedPostMedia} className="w-full max-h-[300px] object-cover" alt="" />}
                 </motion.div>
               )}
             </AnimatePresence>
           </div>
         </div>
 
-        <div className="flex flex-col sm:flex-row items-center justify-between pt-3 border-t border-white/5 gap-3">
-          <input type="file" ref={postFileInputRef} onChange={handlePostMediaChange} accept="image/*,video/*" hidden />
-          <div className="flex gap-2 w-full justify-between sm:justify-start">
-            <button onClick={() => postFileInputRef.current.click()} className="flex items-center gap-2 text-[10px] font-bold text-orange-400 p-2 rounded-xl hover:bg-orange-400/10"><FaImage /> Photo</button>
-            <button onClick={() => postFileInputRef.current.click()} className="flex items-center gap-2 text-[10px] font-bold text-cyan-400 p-2 rounded-xl hover:bg-cyan-400/10"><FaVideo /> Video</button>
-            <button className="flex items-center gap-2 text-[10px] font-bold text-purple-400 p-2 rounded-xl hover:bg-purple-400/10"><FaRegSmile /> Feeling</button>
+        <div className="flex items-center justify-between mt-6 pt-5 border-t border-[#1A1A1A]">
+          <div className="flex gap-2">
+            <button onClick={() => postFileInputRef.current.click()} className="flex items-center gap-2 px-4 py-2 bg-[#111] rounded-full text-[11px] font-bold text-gray-400 hover:text-white transition-colors">
+              <FaImage className="text-orange-500" /> Photo
+            </button>
+            <button onClick={() => postFileInputRef.current.click()} className="flex items-center gap-2 px-4 py-2 bg-[#111] rounded-full text-[11px] font-bold text-gray-400 hover:text-white transition-colors">
+              <FaVideo className="text-cyan-500" /> Video
+            </button>
           </div>
-
+          <input type="file" ref={postFileInputRef} onChange={handlePostMediaChange} hidden accept="image/*,video/*" />
+          
           <button 
-            disabled={(!postText.trim() && !mediaFile) || aiLoading}
+            disabled={!postText.trim() && !mediaFile}
             onClick={handlePostSubmit}
-            className="w-full sm:w-auto bg-cyan-500 text-black text-[10px] font-black uppercase px-6 py-2 rounded-xl shadow-lg active:scale-95 disabled:opacity-30 flex items-center justify-center gap-2"
+            className="bg-cyan-500 text-black px-6 py-2.5 rounded-full text-[11px] font-black uppercase tracking-widest shadow-[0_0_20px_rgba(34,211,238,0.3)] active:scale-90 disabled:opacity-20 transition-all"
           >
-            Post <FaPaperPlane size={10}/>
+            Post <FaPaperPlane className="inline ml-1" size={10}/>
           </button>
         </div>
       </section>
 
-      {/* পোস্ট ফিড */}
-      <section className="space-y-4 md:space-y-6 px-3 md:px-4">
-        <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-cyan-400 px-2">Neural Feed</h2>
+      {/* ৪. পোস্ট ফিড (Neural Feed) */}
+      <section className="px-4 space-y-6">
+        <h2 className="text-[10px] font-black uppercase tracking-[0.4em] text-[#444] px-2 mb-4">Neural Broadcasts</h2>
         {loading ? (
-          <div className="text-center py-10 text-gray-500 text-[10px] animate-pulse font-black uppercase tracking-[0.3em]">Connecting...</div>
+          <div className="flex flex-col items-center py-20 gap-4">
+             <div className="w-8 h-8 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin"></div>
+             <p className="text-[10px] font-black uppercase tracking-widest text-gray-600">Syncing Feed...</p>
+          </div>
         ) : (
           posts.map(post => (
             <PostCard 
@@ -298,51 +247,41 @@ const PremiumHomeFeed = ({ searchQuery }) => {
         )}
       </section>
 
-      {/* মোডাল এবং স্টোরি ভিউয়ার */}
+      {/* ৫. স্টোরি ভিউয়ার এবং মোডাল (Black Blur) */}
       <AnimatePresence>
         {isModalOpen && (
-          <div className="fixed inset-0 z-[1500] flex items-center justify-center bg-black/95 backdrop-blur-2xl p-4">
-              <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} 
-                className="relative w-full max-sm:max-w-[90%] max-w-sm aspect-[9/16] bg-[#0b1120] rounded-[2.5rem] overflow-hidden border border-white/10 flex flex-col">
-              <div className="relative flex-1 bg-black flex items-center justify-center">
-                {selectedImage ? (
-                  <>
-                    <img src={selectedImage} className={`w-full h-full object-cover ${filters.find(f => f.name === activeFilter).class}`} alt="" />
-                    <div className="absolute right-4 top-1/2 -translate-y-1/2 flex flex-col gap-4 z-50 bg-black/20 p-3 rounded-full border border-white/5">
-                      <button onClick={() => {
-                        const nextIdx = (filters.findIndex(f => f.name === activeFilter) + 1) % filters.length;
-                        setActiveFilter(filters[nextIdx].name);
-                      }} className="p-2 text-white"><FaMagic /></button>
-                    </div>
-                  </>
-                ) : (
-                  <div onClick={() => fileInputRef.current.click()} className="flex flex-col items-center gap-4 cursor-pointer">
-                    <FaCloudUploadAlt className="text-4xl text-cyan-500" />
-                    <p className="text-[10px] font-black text-gray-500 uppercase">Select Signal</p>
-                  </div>
-                )}
-              </div>
-              <input type="file" ref={fileInputRef} onChange={handleImageChange} hidden accept="image/*" />
-              <div className="p-6 flex items-center gap-4 bg-[#0b1120] border-t border-white/5">
-                <button onClick={() => setIsModalOpen(false)} className="flex-1 text-[10px] font-black uppercase text-gray-400">Abort</button>
-                <button onClick={handleUpload} disabled={!selectedImage} className="flex-1 py-4 bg-cyan-500 rounded-2xl text-[10px] font-black uppercase text-black">Broadcast</button>
-              </div>
-            </motion.div>
+          <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/95 backdrop-blur-xl p-6">
+              <motion.div initial={{ y: 50, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="relative w-full max-w-sm aspect-[9/16] bg-[#050505] rounded-[3rem] overflow-hidden border border-[#222] flex flex-col">
+                <div className="flex-1 flex items-center justify-center relative">
+                   {selectedImage ? (
+                      <img src={selectedImage} className="w-full h-full object-cover" />
+                   ) : (
+                      <div onClick={() => fileInputRef.current.click()} className="flex flex-col items-center gap-4 cursor-pointer group">
+                        <div className="w-20 h-20 rounded-full bg-[#111] flex items-center justify-center border border-[#222] group-hover:border-cyan-500 transition-colors">
+                           <FaPlus className="text-2xl text-gray-500" />
+                        </div>
+                        <p className="text-[11px] font-bold text-gray-600 uppercase">Select Signal</p>
+                      </div>
+                   )}
+                </div>
+                <input type="file" ref={fileInputRef} onChange={(e) => {
+                   const file = e.target.files[0];
+                   if(file) {
+                     const reader = new FileReader();
+                     reader.onload = () => setSelectedImage(reader.result);
+                     reader.readAsDataURL(file);
+                   }
+                }} hidden />
+                <div className="p-8 flex gap-4 bg-black">
+                   <button onClick={() => {setIsModalOpen(false); setSelectedImage(null);}} className="flex-1 text-[11px] font-bold uppercase text-gray-500">Abort</button>
+                   <button onClick={() => {
+                     const newSt = { id: Date.now(), img: selectedImage, name: "You", timestamp: Date.now() };
+                     setStories([newSt, ...stories]);
+                     setIsModalOpen(false);
+                   }} disabled={!selectedImage} className="flex-1 py-4 bg-white text-black rounded-2xl text-[11px] font-black uppercase tracking-widest disabled:opacity-10">Broadcast</button>
+                </div>
+              </motion.div>
           </div>
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {viewingStory && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[2000] bg-black flex flex-col items-center justify-center">
-            <div className="relative w-full max-w-md h-full bg-black">
-              <div className="absolute top-6 inset-x-4 h-1 bg-white/20 rounded-full overflow-hidden z-[620]">
-                <motion.div initial={{ width: 0 }} animate={{ width: "100%" }} transition={{ duration: 5, ease: "linear" }} onAnimationComplete={() => setViewingStory(null)} className="h-full bg-cyan-400" />
-              </div>
-              <button onClick={() => setViewingStory(null)} className="absolute top-10 right-6 z-[620] p-2 bg-white/10 rounded-full text-white"><FaTimes /></button>
-              <img src={viewingStory.img} className={`w-full h-full object-cover ${viewingStory.filterClass}`} alt="" />
-            </div>
-          </motion.div>
         )}
       </AnimatePresence>
     </div>

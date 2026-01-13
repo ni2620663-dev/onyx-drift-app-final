@@ -1,58 +1,56 @@
 import React from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
-// স্ক্রিনশটের মতো আউটলাইন আইকনের জন্য Lucide React ব্যবহার করা হয়েছে
+// ছবির মতো আউটলাইন আইকনের জন্য Lucide React ব্যবহার করা হয়েছে
 import { Home, Play, Plus, MessageSquare, Users } from "lucide-react"; 
 
-const MobileNav = ({ userAuth0Id }) => {
+const MobileNav = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
   const navItems = [
-    { icon: <Home size={24} />, path: "/feed", id: "home" },
-    { icon: <Play size={24} />, path: "/reels", id: "reels" }, // স্ক্রিনশটের মতো Reels আইকন
-    { icon: <Plus size={24} />, path: "/create", isMain: true },
-    { icon: <MessageSquare size={24} />, path: "/messages", id: "messages" },
-    { icon: <Users size={24} />, path: "/following", id: "following" }, // প্রোফাইলের বদলে ফলোয়িং আইকন
+    { icon: <Home size={22} />, path: "/feed", id: "home" },
+    { icon: <Play size={22} />, path: "/reels", id: "reels" },
+    { icon: <Plus size={26} />, path: "/create", isMain: true },
+    { icon: <MessageSquare size={22} />, path: "/messages", id: "messages" },
+    { icon: <Users size={22} />, path: "/following", id: "following" },
   ];
 
-  const isActive = (path) => location.pathname === path;
+ const isActive = (path) => location.pathname === path;
 
   return (
-    <div className="md:hidden fixed bottom-6 left-0 right-0 px-6 z-[999]">
-      <motion.div 
-        initial={{ y: 100, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        className="bg-[#0f172a]/90 backdrop-blur-2xl border border-white/10 h-16 rounded-[2.5rem] flex items-center justify-around px-2 shadow-[0_20px_50px_rgba(0,0,0,0.8)]"
-      >
+    <div className="md:hidden fixed bottom-0 left-0 right-0 z-[999] bg-[#000000] border-t border-white/[0.03] pt-2 pb-6 px-6">
+      <div className="flex items-center justify-between max-w-md mx-auto h-12">
         {navItems.map((item, idx) => (
           <button
             key={idx}
             onClick={() => navigate(item.path)}
-            className="relative flex flex-col items-center justify-center w-12 h-12 outline-none"
+            className="flex-1 flex items-center justify-center outline-none"
           >
             {item.isMain ? (
-              <motion.div 
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.9 }}
-                className="bg-gradient-to-tr from-cyan-500 to-purple-600 p-4 rounded-full -translate-y-8 shadow-lg shadow-cyan-500/40 border-[6px] border-[#020617] flex items-center justify-center"
-              >
-                <Plus className="text-white" size={24} strokeWidth={3} />
-              </motion.div>
+              /* ছবির মতো ডার্ক স্কয়ার প্লাস বাটন */
+              <div className="w-12 h-10 rounded-xl bg-white/[0.05] border border-white/[0.08] flex items-center justify-center text-white/40 active:scale-95 transition-all">
+                <Plus size={22} strokeWidth={2.5} />
+              </div>
             ) : (
-              <div className={`transition-all duration-300 ${isActive(item.path) ? 'text-cyan-400 scale-110' : 'text-gray-400 opacity-70'}`}>
-                {item.icon}
-                {isActive(item.path) && (
-                  <motion.div 
-                    layoutId="mobileNavTab"
-                    className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-1.5 h-1.5 bg-cyan-400 rounded-full shadow-[0_0_10px_#22d3ee]"
-                  />
-                )}
+              /* হালকা সাদা আইকন যা একটিভ হলে উজ্জ্বল হবে */
+              <div 
+                className={`transition-all duration-300 ${
+                  isActive(item.path) 
+                    ? 'text-white scale-110' 
+                    : 'text-white/20 hover:text-white/40'
+                }`}
+              >
+                {/* আইকনটি একটিভ থাকলে Fill হবে */}
+                {React.cloneElement(item.icon, { 
+                    fill: isActive(item.path) ? "currentColor" : "none",
+                    strokeWidth: isActive(item.path) ? 2.5 : 2
+                })}
               </div>
             )}
           </button>
         ))}
-      </motion.div>
+      </div>
     </div>
   );
 };
