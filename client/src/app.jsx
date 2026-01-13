@@ -89,6 +89,7 @@ export default function App() {
     </div>
   );
 
+  // ফুল উইডথ পেজ চেকার
   const isFullWidthPage = ["/messenger", "/settings", "/", "/join"].includes(location.pathname) || 
                           location.pathname.startsWith("/messenger") || 
                           location.pathname.startsWith("/call/");
@@ -99,25 +100,25 @@ export default function App() {
       <Toaster />
       <CustomCursor />
 
-      {/* ১. প্রধান নেভিগেশন বার - শুধুমাত্র একবার এখানে থাকবে */}
+      {/* ১. প্রধান নেভিগেশন বার - ফিক্সড পজিশনে রাখার জন্য pt-২০ অ্যাড করা হয়েছে নিচে */}
       {isAuthenticated && (
         <Navbar user={user} socket={socket} setSearchQuery={setSearchQuery} />
       )}
       
-      {/* ২. লেআউট স্ট্রাকচার সংশোধন */}
-      <div className={`flex justify-center w-full transition-all duration-500 ${isAuthenticated ? "pt-20" : "pt-0"}`}>
-        <div className={`flex w-full ${isFullWidthPage ? "max-w-full" : "max-w-[1440px] px-2 lg:px-6"} gap-6`}>
+      {/* ২. মেইন লেআউট স্ট্রাকচার */}
+      <div className={`flex justify-center w-full transition-all duration-500 ${isAuthenticated ? "pt-16 lg:pt-20" : "pt-0"}`}>
+        <div className={`flex w-full ${isFullWidthPage ? "max-w-full" : "max-w-[1440px] px-0 lg:px-6"} gap-6`}>
           
-          {/* লেফট সাইডবার */}
+          {/* লেফট সাইডবার - শুধুমাত্র ডেস্কটপে দেখা যাবে */}
           {isAuthenticated && !isFullWidthPage && (
             <aside className="hidden lg:block w-[280px] sticky top-[95px] h-[calc(100vh-115px)]">
               <Sidebar />
             </aside>
           )}
           
-          {/* ফিড কন্টেন্ট এরিয়া - স্ক্রিনশট অনুযায়ী উইডথ কন্ট্রোল করা হয়েছে */}
-          <main className="flex-1 flex justify-center pb-24 lg:pb-10 min-h-[calc(100vh-100px)]">
-            <div className={`${isFullWidthPage ? "w-full" : "w-full max-w-[650px]"}`}>
+          {/* ফিড কন্টেন্ট এরিয়া - মোবাইলে ফেসবুকের মতো ফুল উইডথ (px-0) */}
+          <main className={`flex-1 flex justify-center pb-24 lg:pb-10 min-h-[calc(100vh-100px)]`}>
+            <div className={`${isFullWidthPage ? "w-full" : "w-full lg:max-w-[650px] max-w-full"}`}>
               <AnimatePresence mode="wait">
                 <Routes location={location} key={location.pathname}>
                   <Route path="/" element={isAuthenticated ? <Navigate to="/feed" /> : <Landing />} />
@@ -139,15 +140,16 @@ export default function App() {
             </div>
           </main>
 
-          {/* রাইট সাইডবার (ডেস্কটপের জন্য ঐচ্ছিক) */}
+          {/* রাইট সাইডবার (শুধুমাত্র বড় স্ক্রিনে) */}
           {isAuthenticated && !isFullWidthPage && (
-            <aside className="hidden xl:block w-[300px] sticky top-[95px] h-[calc(100vh-115px)]">
-              {/* Trending বা Suggestions এখানে দিতে পারেন */}
+            <aside className="hidden xl:block w-[320px] sticky top-[95px] h-[calc(100vh-115px)]">
+               {/* এখানে চাইলে সাজেস্টেড ইউজার বা ট্রেন্ডিং সেকশন দিতে পারেন */}
             </aside>
           )}
         </div>
       </div>
 
+      {/* মোবাইল নেভিগেশন (ফুটার) */}
       {isAuthenticated && <MobileNav userAuth0Id={user?.sub} />}
     </div>
   );
