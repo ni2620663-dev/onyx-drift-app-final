@@ -2,19 +2,19 @@ import React from 'react';
 import { NavLink } from 'react-router-dom';
 import {
   FaHome, FaEnvelope, FaCompass, FaCog, FaSignOutAlt, FaRocket, FaUserPlus, FaFire
-} from 'react-icons/fa'; // FaFire আইকনটি ভাইরাল ফিডের জন্য যোগ করা হয়েছে
+} from 'react-icons/fa'; 
 import { HiOutlineChartBar } from 'react-icons/hi2';
 import { useAuth0 } from '@auth0/auth0-react';
 
 const Sidebar = () => {
-  const { logout } = useAuth0();
+  const { logout, user } = useAuth0(); // ইউজার আইডি প্রোফাইল লিঙ্কের জন্য লাগবে
 
   const menuItems = [
     { name: 'Feed', icon: <FaHome />, path: '/feed' },
-    { name: 'For You', icon: <FaFire />, path: '/viral' }, // নতুন ভাইরাল ফিড অপশন এখানে যোগ করা হয়েছে
+    { name: 'For You', icon: <FaFire />, path: '/reels' }, // App.js এর সাথে সামঞ্জস্য রেখে /reels করা হয়েছে
     { name: 'Following', icon: <FaUserPlus />, path: '/following' }, 
     { name: 'Analytics', icon: <HiOutlineChartBar />, path: '/analytics' },
-    { name: 'Messages', icon: <FaEnvelope />, path: '/messenger' },
+    { name: 'Messages', icon: <FaEnvelope />, path: '/messages' }, // path: '/messenger' থেকে '/messages' এ পরিবর্তন
     { name: 'Explore', icon: <FaCompass />, path: '/explorer' },
     { name: 'Settings', icon: <FaCog />, path: '/settings' },
   ];
@@ -64,7 +64,7 @@ const Sidebar = () => {
         </div>
 
         <button 
-          onClick={() => logout({ returnTo: window.location.origin })}
+          onClick={() => logout({ logoutParams: { returnTo: window.location.origin } })}
           className="w-full flex items-center gap-4 px-6 py-4 text-rose-500/70 hover:text-rose-400 hover:bg-rose-500/5 rounded-2xl transition-all duration-300 font-bold text-xs uppercase italic"
         >
           <FaSignOutAlt size={18} />

@@ -1,19 +1,19 @@
 import React from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { FaHome, FaVideo, FaPlus, FaUserAlt, FaRegCommentDots } from "react-icons/fa"; // FaRegCommentDots যোগ করা হয়েছে
 import { motion } from "framer-motion";
+// স্ক্রিনশটের মতো আউটলাইন আইকনের জন্য Lucide React ব্যবহার করা হয়েছে
+import { Home, Play, Plus, MessageSquare, Users } from "lucide-react"; 
 
 const MobileNav = ({ userAuth0Id }) => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // ৫টি বাটন সেট করা হয়েছে যাতে ব্যালেন্স ঠিক থাকে
   const navItems = [
-    { icon: <FaHome />, path: "/feed", id: "home" },
-    { icon: <FaVideo />, path: "/reels", id: "reels" },
-    { icon: <FaPlus />, path: "/create", isMain: true },
-    { icon: <FaRegCommentDots />, path: "/messages", id: "messages" }, // মেসেঞ্জার এখন নিচে
-    { icon: <FaUserAlt />, path: `/profile/${userAuth0Id}`, id: "profile" },
+    { icon: <Home size={24} />, path: "/feed", id: "home" },
+    { icon: <Play size={24} />, path: "/reels", id: "reels" }, // স্ক্রিনশটের মতো Reels আইকন
+    { icon: <Plus size={24} />, path: "/create", isMain: true },
+    { icon: <MessageSquare size={24} />, path: "/messages", id: "messages" },
+    { icon: <Users size={24} />, path: "/following", id: "following" }, // প্রোফাইলের বদলে ফলোয়িং আইকন
   ];
 
   const isActive = (path) => location.pathname === path;
@@ -23,7 +23,7 @@ const MobileNav = ({ userAuth0Id }) => {
       <motion.div 
         initial={{ y: 100, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
-        className="bg-black/80 backdrop-blur-2xl border border-white/10 h-16 rounded-[2.5rem] flex items-center justify-around px-2 shadow-[0_20px_50px_rgba(0,0,0,0.8)]"
+        className="bg-[#0f172a]/90 backdrop-blur-2xl border border-white/10 h-16 rounded-[2.5rem] flex items-center justify-around px-2 shadow-[0_20px_50px_rgba(0,0,0,0.8)]"
       >
         {navItems.map((item, idx) => (
           <button
@@ -37,10 +37,10 @@ const MobileNav = ({ userAuth0Id }) => {
                 whileTap={{ scale: 0.9 }}
                 className="bg-gradient-to-tr from-cyan-500 to-purple-600 p-4 rounded-full -translate-y-8 shadow-lg shadow-cyan-500/40 border-[6px] border-[#020617] flex items-center justify-center"
               >
-                <FaPlus className="text-white text-xl" />
+                <Plus className="text-white" size={24} strokeWidth={3} />
               </motion.div>
             ) : (
-              <div className={`text-xl transition-all duration-300 ${isActive(item.path) ? 'text-cyan-400 scale-110' : 'text-gray-400'}`}>
+              <div className={`transition-all duration-300 ${isActive(item.path) ? 'text-cyan-400 scale-110' : 'text-gray-400 opacity-70'}`}>
                 {item.icon}
                 {isActive(item.path) && (
                   <motion.div 

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FaSearch, FaBell, FaCheckCircle, FaSignOutAlt, FaRegCommentDots } from 'react-icons/fa'; 
+import { FaSearch, FaBell, FaCheckCircle, FaSignOutAlt } from 'react-icons/fa'; // FaRegCommentDots রিমুভ করা হয়েছে
 import { useNavigate } from 'react-router-dom';
 import { useAuth0 } from "@auth0/auth0-react";
 import axios from 'axios';
@@ -150,15 +150,7 @@ const Navbar = ({ user, setSearchQuery }) => {
       {/* 3. Right Action Buttons */}
       <div className="flex items-center gap-2 sm:gap-5 min-w-fit">
         
-        {/* 💬 Messenger Button */}
-        <motion.button 
-          whileTap={{ scale: 0.9 }}
-          onClick={() => navigate('/messages')} 
-          className="p-2 text-gray-400 hover:text-cyan-400 transition-all"
-          title="Messages"
-        >
-          <FaRegCommentDots size={22} className="drop-shadow-[0_0_8px_rgba(34,211,238,0.4)]" />
-        </motion.button>
+        {/* 💬 Messenger Button - REMOVED AS PER RED MARK */}
 
         {/* 🔔 Notifications Button */}
         <div className="relative">
