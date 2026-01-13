@@ -40,7 +40,7 @@ export default function App() {
   const socket = useRef(null); 
   const [searchQuery, setSearchQuery] = useState("");
   
-  // মডাল স্টেট: যা Navbar এবং HomeFeed এর মধ্যে কাজ করবে
+  // মডাল স্টেট: Navbar এবং HomeFeed এর মধ্যে কাজ করবে
   const [isPostModalOpen, setIsPostModalOpen] = useState(false);
 
   useEffect(() => {
@@ -97,41 +97,42 @@ export default function App() {
                           location.pathname.startsWith("/call/");
 
   return (
-    <div className="min-h-screen bg-[#020617] text-gray-200 overflow-x-hidden font-sans relative">
+    <div className="min-h-screen bg-[#020617] text-gray-200 font-sans relative">
       <div className="bg-grainy" />
       <Toaster />
       <CustomCursor />
 
-      {/* ১. Navbar: যেখানে সার্চ কোয়েরি এবং মডাল ফাংশন পাস করা হয়েছে */}
+      {/* ১. Navbar: এটি এখন sticky নয়, স্ক্রলের সাথে ওপরে উঠে যাবে */}
       {isAuthenticated && (
-        <Navbar 
-          user={user} 
-          socket={socket} 
-          setSearchQuery={setSearchQuery} 
-          setIsPostModalOpen={setIsPostModalOpen} 
-        />
+        <header className="w-full">
+          <Navbar 
+            user={user} 
+            socket={socket} 
+            setSearchQuery={setSearchQuery} 
+            setIsPostModalOpen={setIsPostModalOpen} 
+          />
+        </header>
       )}
       
-      {/* ২. মেইন কন্টেনার: মার্জিন ফিক্স করা হয়েছে (pt-16 ডেস্কটপের জন্য, pt-14 মোবাইলের জন্য) */}
-      <div className={`flex justify-center w-full transition-all duration-500 ${isAuthenticated ? "pt-[60px] lg:pt-[70px]" : "pt-0"}`}>
+      {/* ২. মেইন লেআউট স্ট্রাকচার: pt (padding-top) রিমুভ করা হয়েছে যাতে গ্যাপ না থাকে */}
+      <div className="flex justify-center w-full transition-all duration-500">
         <div className={`flex w-full ${isFullWidthPage ? "max-w-full" : "max-w-[1440px] px-0 lg:px-6"} gap-6`}>
           
-          {/* লেফট সাইডবার */}
+          {/* লেফট সাইডবার: এটি শুধুমাত্র ডেস্কটপে ফিক্সড থাকবে */}
           {isAuthenticated && !isFullWidthPage && (
-            <aside className="hidden lg:block w-[280px] sticky top-[95px] h-[calc(100vh-115px)]">
+            <aside className="hidden lg:block w-[280px] sticky top-4 h-[calc(100vh-20px)]">
               <Sidebar />
             </aside>
           )}
           
-          {/* ফিড কন্টেন্ট এরিয়া: px-0 করা হয়েছে ফেসবুক স্টাইল ফুল উইডথের জন্য */}
-          <main className={`flex-1 flex justify-center pb-24 lg:pb-10 min-h-[calc(100vh-100px)]`}>
+          {/* ফিড কন্টেন্ট এরিয়া */}
+          <main className="flex-1 flex justify-center pb-24 lg:pb-10">
             <div className={`${isFullWidthPage ? "w-full" : "w-full lg:max-w-[650px] max-w-full"}`}>
               <AnimatePresence mode="wait">
                 <Routes location={location} key={location.pathname}>
                   <Route path="/" element={isAuthenticated ? <Navigate to="/feed" /> : <Landing />} />
                   <Route path="/join" element={<JoinPage />} /> 
                   
-                  {/* PremiumHomeFeed এ মডাল স্টেট পাস করা হয়েছে */}
                   <Route 
                     path="/feed" 
                     element={
@@ -165,14 +166,14 @@ export default function App() {
 
           {/* রাইট সাইডবার */}
           {isAuthenticated && !isFullWidthPage && (
-            <aside className="hidden xl:block w-[320px] sticky top-[95px] h-[calc(100vh-115px)]">
-               {/* ট্রেন্ডিং বা সাজেস্টেড সেকশন */}
+            <aside className="hidden xl:block w-[320px] sticky top-4 h-[calc(100vh-20px)]">
+               {/* ট্রেন্ডিং সেকশন */}
             </aside>
           )}
         </div>
       </div>
 
-      {/* ৩. মোবাইল নেভিগেশন (ফুটার) */}
+      {/* ৩. মোবাইল নেভিগেশন (ফুটার): এটি নিচে ফিক্সড থাকবে */}
       {isAuthenticated && <MobileNav userAuth0Id={user?.sub} />}
     </div>
   );

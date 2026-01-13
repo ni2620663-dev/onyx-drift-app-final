@@ -55,7 +55,7 @@ const Navbar = ({ setSearchQuery, setIsPostModalOpen }) => {
   }, [localSearch, getAccessTokenSilently, API_URL]);
 
   return (
-    <nav className="fixed top-0 left-0 w-full h-[60px] bg-[#030303]/90 backdrop-blur-xl border-b border-white/[0.05] z-[1000] flex items-center justify-between px-4 lg:px-8">
+    <nav className="w-full h-[60px] bg-[#030303]/90 backdrop-blur-xl border-b border-white/[0.05] z-[1000] flex items-center justify-between px-4 lg:px-8">
       
       {/* ১. লোগো সেকশন */}
       <div className="flex items-center gap-3">
@@ -70,30 +70,30 @@ const Navbar = ({ setSearchQuery, setIsPostModalOpen }) => {
         </div>
       </div>
 
-      {/* ২. সেন্টার পোস্ট বার (মাঝখানে নতুন ডিজাইন) */}
-      <div className="flex-1 max-w-[300px] mx-4 relative">
+      {/* ২. সেন্টার পোস্ট বার (Broadcast Signal) */}
+      <div className="flex-1 max-w-[400px] mx-4 relative">
         <div 
           onClick={() => setIsPostModalOpen(true)}
-          className="bg-white/5 border border-white/10 rounded-full px-4 py-2 flex items-center gap-3 cursor-pointer hover:bg-white/10 hover:border-cyan-500/30 transition-all group"
+          className="bg-white/5 border border-white/10 rounded-full px-4 py-2 flex items-center justify-between cursor-pointer hover:bg-white/10 hover:border-cyan-500/30 transition-all group"
         >
-          <div className="w-2 h-2 rounded-full bg-cyan-500 animate-pulse" />
-          <span className="text-gray-500 text-[10px] font-black uppercase tracking-[2px] group-hover:text-gray-300">
-            Broadcast Signal...
-          </span>
+          <div className="flex items-center gap-3">
+            <div className="w-1.5 h-1.5 rounded-full bg-cyan-500 animate-pulse" />
+            <span className="text-gray-500 text-[9px] font-black uppercase tracking-[2px] group-hover:text-gray-300">
+              Broadcast Signal...
+            </span>
+          </div>
+          <FaSearch size={12} className="text-gray-600 group-hover:text-cyan-500 transition-colors" />
         </div>
       </div>
 
       {/* ৩. রাইট অ্যাকশন বাটনসমূহ */}
       <div className="flex items-center gap-3 lg:gap-6">
         
-        {/* সার্চ আইকন (মোবাইল) */}
-        <FaSearch className="text-gray-400 sm:hidden cursor-pointer hover:text-white" size={16} />
-
         {/* নোটিফিকেশন */}
         <div className="relative cursor-pointer group">
           <FaRegBell size={18} className="text-gray-400 group-hover:text-cyan-400 transition-colors" />
           {hasNewNotification && (
-            <span className="absolute -top-1 -right-1 w-2 h-2 bg-cyan-500 rounded-full border border-[#030303] animate-pulse"></span>
+            <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-cyan-500 rounded-full border border-[#030303] animate-pulse"></span>
           )}
         </div>
 
@@ -121,7 +121,7 @@ const Navbar = ({ setSearchQuery, setIsPostModalOpen }) => {
                   initial={{ opacity: 0, scale: 0.95, y: 10 }} 
                   animate={{ opacity: 1, scale: 1, y: 0 }} 
                   exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                  className="absolute right-0 mt-3 w-44 bg-[#0A0A0A] border border-white/10 rounded-2xl p-2 shadow-2xl overflow-hidden"
+                  className="absolute right-0 mt-3 w-44 bg-[#0A0A0A] border border-white/10 rounded-2xl p-2 shadow-2xl overflow-hidden z-[1001]"
                 >
                   <button 
                     onClick={() => { navigate(`/profile/${user?.sub}`); setShowDropdown(false); }}

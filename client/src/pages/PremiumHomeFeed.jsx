@@ -21,7 +21,7 @@ const PremiumHomeFeed = ({ searchQuery = "", isPostModalOpen, setIsPostModalOpen
   const postMediaRef = useRef(null);
   const socketRef = useRef(null);
 
-  // --- Socket.io ---
+  // --- Socket.io Connection ---
   useEffect(() => {
     if (isAuthenticated) {
       socketRef.current = io(API_URL, { transports: ["polling", "websocket"] });
@@ -45,13 +45,20 @@ const PremiumHomeFeed = ({ searchQuery = "", isPostModalOpen, setIsPostModalOpen
     }
   };
 
-  useEffect(() => { fetchPosts(); }, []);
+  useEffect(() => { 
+    fetchPosts(); 
+  }, []);
 
+  // --- Filtering Logic ---
   const filteredPosts = posts.filter((post) => {
     const term = searchQuery.toLowerCase();
-    return (post.authorName?.toLowerCase().includes(term) || post.text?.toLowerCase().includes(term));
+    return (
+      post.authorName?.toLowerCase().includes(term) || 
+      post.text?.toLowerCase().includes(term)
+    );
   });
 
+  // --- Submit Post ---
   const handlePostSubmit = async () => {
     if (!postText.trim() && !mediaFile) return;
     setIsSubmitting(true);
@@ -65,14 +72,18 @@ const PremiumHomeFeed = ({ searchQuery = "", isPostModalOpen, setIsPostModalOpen
       formData.append("auth0Id", user?.sub || "");
 
       await axios.post(`${API_URL}/api/posts`, formData, {
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "multipart/form-data" }
+        headers: { 
+          Authorization: `Bearer ${token}`, 
+          "Content-Type": "multipart/form-data" 
+        }
       });
 
+      // Reset State
       setPostText(""); 
       setMediaFile(null); 
       setMediaPreview(null);
-      setIsPostModalOpen(false); // পোস্ট সফল হলে মডাল বন্ধ হবে
-      fetchPosts(); 
+      setIsPostModalOpen(false); // ক্লোজ মডাল
+      fetchPosts(); // রিফ্রেশ ফিড
     } catch (err) { 
       console.error("Post Error:", err); 
     } finally { 
@@ -80,6 +91,7 @@ const PremiumHomeFeed = ({ searchQuery = "", isPostModalOpen, setIsPostModalOpen
     }
   };
 
+  // --- Media Handle ---
   const handleMediaSelect = (e) => {
     const file = e.target.files[0];
     if (file) {
@@ -93,16 +105,16 @@ const PremiumHomeFeed = ({ searchQuery = "", isPostModalOpen, setIsPostModalOpen
   return (
     <div className="w-full min-h-screen bg-transparent text-white pt-2 pb-24">
       
-      {/* ১. স্টোরি সেকশন রিমুভ করা হয়েছে (আপনার চাহিদা অনুযায়ী) */}
-
-      {/* ২. ফিড হেডার */}
+      {/* ১. ফিড হেডার */}
       <section className="flex flex-col px-4">
         <div className="flex items-center gap-4 mb-6 opacity-60">
-          <h3 className="text-[9px] font-black text-gray-400 uppercase tracking-[0.5em] whitespace-nowrap">Neural Feed</h3>
+          <h3 className="text-[9px] font-black text-gray-400 uppercase tracking-[0.5em] whitespace-nowrap">
+            Neural Feed
+          </h3>
           <div className="h-[1px] w-full bg-gradient-to-r from-white/10 to-transparent"></div>
         </div>
 
-        {/* ৩. পোস্ট লিস্ট */}
+        {/* ২. পোস্ট লিস্ট */}
         {loading ? (
           <div className="flex flex-col items-center py-20 gap-4">
             <div className="w-6 h-6 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin"></div>
@@ -116,21 +128,27 @@ const PremiumHomeFeed = ({ searchQuery = "", isPostModalOpen, setIsPostModalOpen
           </div>
         ) : (
           <div className="flex flex-col items-center py-32 opacity-20">
-            <p className="italic text-[10px] tracking-[0.3em] uppercase font-bold text-center">Empty Drift — No Signals Detected</p>
+            <p className="italic text-[10px] tracking-[0.3em] uppercase font-bold text-center">
+              Empty Drift — No Signals Detected
+            </p>
           </div>
         )}
       </section>
 
-      {/* ৪. পোস্ট মডাল (Pop-up Box) - যা নেভবার থেকে কন্ট্রোল হয় */}
+      {/* ৩. পোস্ট মডাল (Popup) */}
       <AnimatePresence>
         {isPostModalOpen && (
           <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4">
+            {/* Backdrop */}
             <motion.div 
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              initial={{ opacity: 0 }} 
+              animate={{ opacity: 1 }} 
+              exit={{ opacity: 0 }}
               onClick={() => setIsPostModalOpen(false)}
               className="absolute inset-0 bg-black/80 backdrop-blur-xl"
             />
             
+            {/* Modal Content */}
             <motion.div 
               initial={{ scale: 0.95, y: 20, opacity: 0 }}
               animate={{ scale: 1, y: 0, opacity: 1 }}
@@ -162,7 +180,10 @@ const PremiumHomeFeed = ({ searchQuery = "", isPostModalOpen, setIsPostModalOpen
                 {mediaPreview && (
                   <div className="relative mt-2 rounded-xl overflow-hidden border border-white/10 max-h-[250px]">
                     <img src={mediaPreview} className="w-full h-full object-cover" alt="preview" />
-                    <button onClick={() => {setMediaPreview(null); setMediaFile(null);}} className="absolute top-2 right-2 bg-black/70 p-1.5 rounded-full text-white">
+                    <button 
+                      onClick={() => {setMediaPreview(null); setMediaFile(null);}} 
+                      className="absolute top-2 right-2 bg-black/70 p-1.5 rounded-full text-white"
+                    >
                       <FaTimes size={10}/>
                     </button>
                   </div>
@@ -174,13 +195,19 @@ const PremiumHomeFeed = ({ searchQuery = "", isPostModalOpen, setIsPostModalOpen
                       <FaImage size={18} />
                       <span className="text-[9px] font-black uppercase tracking-widest">Add Media</span>
                     </button>
-                    <input type="file" ref={postMediaRef} onChange={handleMediaSelect} hidden accept="image/*,video/*" />
+                    <input 
+                      type="file" 
+                      ref={postMediaRef} 
+                      onChange={handleMediaSelect} 
+                      hidden 
+                      accept="image/*,video/*" 
+                    />
                   </div>
 
                   <button 
                     disabled={isSubmitting || (!postText.trim() && !mediaFile)}
                     onClick={handlePostSubmit}
-                    className="bg-cyan-500 text-black px-8 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest disabled:opacity-20 transition-all"
+                    className="bg-cyan-500 text-black px-8 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest disabled:opacity-20 transition-all hover:bg-cyan-400"
                   >
                     {isSubmitting ? "Syncing..." : "Transmit"}
                   </button>
