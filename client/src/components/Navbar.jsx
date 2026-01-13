@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FaSearch, FaRegBell, FaSignOutAlt, FaUserCircle } from 'react-icons/fa'; 
-import { HiOutlineMenuAlt4 } from "react-icons/hi"; 
+import { FaSearch, FaRegBell, FaSignOutAlt, FaUserCircle, FaPlus } from 'react-icons/fa'; 
+import { HiOutlineMenuAlt4 } from "react-HI"; 
 import { useNavigate } from 'react-router-dom';
 import { useAuth0 } from "@auth0/auth0-react";
 import axios from 'axios';
 import webSocketService from "../services/WebSocketService"; 
 
-const Navbar = ({ setSearchQuery }) => {
+// setIsPostModalOpen প্রপস হিসেবে নেওয়া হয়েছে যাতে প্লাস বাটনে ক্লিক করলে মডাল খুলে
+const Navbar = ({ setSearchQuery, setIsPostModalOpen }) => { 
   const navigate = useNavigate();
   const { user, logout, getAccessTokenSilently, isAuthenticated } = useAuth0();
   const [showDropdown, setShowDropdown] = useState(false);
@@ -70,7 +71,7 @@ const Navbar = ({ setSearchQuery }) => {
         </div>
       </div>
 
-      {/* ২. সার্চ বার (ডেস্কটপে দৃশ্যমান, মোবাইলে আইকন হিসেবে কাজ করবে) */}
+      {/* ২. সার্চ বার (ডেস্কটপ) */}
       <div className="flex-1 max-w-md mx-4 relative hidden md:block">
         <div className="relative flex items-center bg-white/5 border border-white/10 rounded-2xl px-4 py-2 focus-within:border-cyan-500/50 transition-all">
           <FaSearch className="text-gray-500 text-sm" />
@@ -119,13 +120,19 @@ const Navbar = ({ setSearchQuery }) => {
         </AnimatePresence>
       </div>
 
-      {/* ৩. রাইট অ্যাকশন বাটনসমূহ (সার্চ, বেল, প্রোফাইল) */}
-      <div className="flex items-center gap-3 lg:gap-6">
+      {/* ৩. রাইট অ্যাকশন বাটনসমূহ */}
+      <div className="flex items-center gap-3 lg:gap-5">
         
-        {/* মোবাইলে সার্চ আইকন (যদি ইনপুট ফিল্ড হাইড থাকে) */}
+        {/* প্লাস বাটন - যা পোস্ট মডাল ওপেন করবে */}
+        <button 
+          onClick={() => setIsPostModalOpen(true)}
+          className="w-9 h-9 lg:w-11 lg:h-11 flex items-center justify-center bg-gradient-to-tr from-cyan-500 to-blue-600 rounded-full text-black shadow-lg shadow-cyan-500/20 active:scale-90 transition-all"
+        >
+          <FaPlus size={16} />
+        </button>
+
         <FaSearch className="text-gray-400 md:hidden cursor-pointer hover:text-white" size={18} />
 
-        {/* নোটিফিকেশন */}
         <div className="relative cursor-pointer group">
           <FaRegBell size={20} className="text-gray-400 group-hover:text-white transition-colors" />
           {hasNewNotification && (
@@ -152,9 +159,7 @@ const Navbar = ({ setSearchQuery }) => {
           <AnimatePresence>
             {showDropdown && (
               <>
-                {/* ড্রপডাউন বন্ধ করার জন্য ব্যাকড্রপ */}
                 <div className="fixed inset-0 z-[-1]" onClick={() => setShowDropdown(false)}></div>
-                
                 <motion.div 
                   initial={{ opacity: 0, scale: 0.95, y: 10 }} 
                   animate={{ opacity: 1, scale: 1, y: 0 }} 
