@@ -1,13 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FaSearch, FaRegBell, FaSignOutAlt, FaUserCircle, FaPlus } from 'react-icons/fa'; 
- import { HiOutlineMenuAlt4 } from "react-icons/hi"; // এটি সঠিক
+import { FaSearch, FaRegBell, FaSignOutAlt, FaUserCircle } from 'react-icons/fa'; 
+import { HiOutlineMenuAlt4 } from "react-icons/hi"; 
 import { useNavigate } from 'react-router-dom';
 import { useAuth0 } from "@auth0/auth0-react";
 import axios from 'axios';
 import webSocketService from "../services/WebSocketService"; 
 
-// setIsPostModalOpen প্রপস হিসেবে নেওয়া হয়েছে যাতে প্লাস বাটনে ক্লিক করলে মডাল খুলে
 const Navbar = ({ setSearchQuery, setIsPostModalOpen }) => { 
   const navigate = useNavigate();
   const { user, logout, getAccessTokenSilently, isAuthenticated } = useAuth0();
@@ -56,87 +55,45 @@ const Navbar = ({ setSearchQuery, setIsPostModalOpen }) => {
   }, [localSearch, getAccessTokenSilently, API_URL]);
 
   return (
-    <nav className="fixed top-0 left-0 w-full h-[70px] bg-[#030303]/80 backdrop-blur-xl border-b border-white/[0.05] z-[1000] flex items-center justify-between px-4 lg:px-8">
+    <nav className="fixed top-0 left-0 w-full h-[60px] bg-[#030303]/90 backdrop-blur-xl border-b border-white/[0.05] z-[1000] flex items-center justify-between px-4 lg:px-8">
       
-      {/* ১. লোগো এবং মেনু সেকশন */}
-      <div className="flex items-center gap-3 lg:gap-4">
-        <HiOutlineMenuAlt4 size={24} className="text-gray-400 lg:hidden cursor-pointer" />
+      {/* ১. লোগো সেকশন */}
+      <div className="flex items-center gap-3">
+        <HiOutlineMenuAlt4 size={22} className="text-gray-400 lg:hidden cursor-pointer hover:text-cyan-400 transition-colors" />
         <div className="flex items-center gap-2 cursor-pointer" onClick={() => navigate('/feed')}>
-          <div className="w-8 h-8 lg:w-10 lg:h-10 bg-gradient-to-tr from-cyan-400 to-purple-600 rounded-lg lg:rounded-xl flex items-center justify-center shadow-lg shadow-cyan-500/20">
-            <span className="text-black font-black text-xs lg:text-lg italic tracking-tighter">OX</span>
+          <div className="w-8 h-8 bg-gradient-to-tr from-cyan-400 to-purple-600 rounded-lg flex items-center justify-center shadow-lg shadow-cyan-500/20">
+            <span className="text-black font-black text-xs italic tracking-tighter">OX</span>
           </div>
-          <h1 className="text-lg lg:text-xl font-black text-white italic tracking-tighter uppercase hidden xs:block">
+          <h1 className="text-lg font-black text-white italic tracking-tighter uppercase hidden sm:block">
             ONYX<span className="text-cyan-500">DRIFT</span>
           </h1>
         </div>
       </div>
 
-      {/* ২. সার্চ বার (ডেস্কটপ) */}
-      <div className="flex-1 max-w-md mx-4 relative hidden md:block">
-        <div className="relative flex items-center bg-white/5 border border-white/10 rounded-2xl px-4 py-2 focus-within:border-cyan-500/50 transition-all">
-          <FaSearch className="text-gray-500 text-sm" />
-          <input
-            type="text"
-            value={localSearch}
-            placeholder="Search creators..."
-            className="bg-transparent border-none outline-none px-3 text-[13px] w-full text-white placeholder-gray-600"
-            onChange={(e) => {
-              setLocalSearch(e.target.value);
-              if (setSearchQuery) setSearchQuery(e.target.value);
-            }}
-            onFocus={() => localSearch.length > 0 && setShowResults(true)}
-          />
+      {/* ২. সেন্টার পোস্ট বার (মাঝখানে নতুন ডিজাইন) */}
+      <div className="flex-1 max-w-[300px] mx-4 relative">
+        <div 
+          onClick={() => setIsPostModalOpen(true)}
+          className="bg-white/5 border border-white/10 rounded-full px-4 py-2 flex items-center gap-3 cursor-pointer hover:bg-white/10 hover:border-cyan-500/30 transition-all group"
+        >
+          <div className="w-2 h-2 rounded-full bg-cyan-500 animate-pulse" />
+          <span className="text-gray-500 text-[10px] font-black uppercase tracking-[2px] group-hover:text-gray-300">
+            Broadcast Signal...
+          </span>
         </div>
-
-        {/* সার্চ রেজাল্ট ড্রপডাউন */}
-        <AnimatePresence>
-          {showResults && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 10 }}
-              className="absolute top-full left-0 mt-3 w-full bg-[#0A0A0A] border border-white/10 rounded-2xl shadow-2xl overflow-hidden z-[1100]"
-            >
-              <div className="p-3 border-b border-white/5 text-[9px] font-black text-gray-500 uppercase flex justify-between">
-                <span>Search Results</span>
-                <span className="text-cyan-500">{loading ? "Scanning..." : "Syncing"}</span>
-              </div>
-              <div className="max-h-[300px] overflow-y-auto no-scrollbar">
-                {searchResults.length > 0 ? searchResults.map((result) => (
-                  <div 
-                    key={result._id} 
-                    onClick={() => { navigate(`/profile/${result.auth0Id || result._id}`); setShowResults(false); setLocalSearch(""); }} 
-                    className="flex items-center gap-4 p-3 hover:bg-white/5 cursor-pointer border-b border-white/5 last:border-none group"
-                  >
-                    <img src={result.avatar || result.picture} className="w-9 h-9 rounded-xl object-cover border border-white/10" alt="" />
-                    <p className="text-[12px] font-bold text-white uppercase tracking-tighter">{result.nickname || result.name}</p>
-                  </div>
-                )) : (
-                    <div className="p-4 text-center text-gray-600 text-xs italic tracking-widest">No Signals Found</div>
-                )}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
       </div>
 
       {/* ৩. রাইট অ্যাকশন বাটনসমূহ */}
-      <div className="flex items-center gap-3 lg:gap-5">
+      <div className="flex items-center gap-3 lg:gap-6">
         
-        {/* প্লাস বাটন - যা পোস্ট মডাল ওপেন করবে */}
-        <button 
-          onClick={() => setIsPostModalOpen(true)}
-          className="w-9 h-9 lg:w-11 lg:h-11 flex items-center justify-center bg-gradient-to-tr from-cyan-500 to-blue-600 rounded-full text-black shadow-lg shadow-cyan-500/20 active:scale-90 transition-all"
-        >
-          <FaPlus size={16} />
-        </button>
+        {/* সার্চ আইকন (মোবাইল) */}
+        <FaSearch className="text-gray-400 sm:hidden cursor-pointer hover:text-white" size={16} />
 
-        <FaSearch className="text-gray-400 md:hidden cursor-pointer hover:text-white" size={18} />
-
+        {/* নোটিফিকেশন */}
         <div className="relative cursor-pointer group">
-          <FaRegBell size={20} className="text-gray-400 group-hover:text-white transition-colors" />
+          <FaRegBell size={18} className="text-gray-400 group-hover:text-cyan-400 transition-colors" />
           {hasNewNotification && (
-            <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-cyan-500 rounded-full border-2 border-[#030303] animate-pulse"></span>
+            <span className="absolute -top-1 -right-1 w-2 h-2 bg-cyan-500 rounded-full border border-[#030303] animate-pulse"></span>
           )}
         </div>
 
@@ -144,15 +101,15 @@ const Navbar = ({ setSearchQuery, setIsPostModalOpen }) => {
         <div className="relative">
           <div 
             onClick={() => setShowDropdown(!showDropdown)}
-            className="flex items-center gap-2 bg-white/5 p-1 lg:pr-3 rounded-full border border-white/10 cursor-pointer hover:bg-white/10 transition-all active:scale-95"
+            className="flex items-center gap-2 bg-white/5 p-1 lg:pr-3 rounded-full border border-white/10 cursor-pointer hover:bg-white/10 transition-all"
           >
             <img 
               src={user?.picture} 
-              className="w-8 h-8 lg:w-9 lg:h-9 rounded-full border border-cyan-500/30 object-cover" 
+              className="w-7 h-7 lg:w-8 lg:h-8 rounded-full border border-cyan-500/30 object-cover" 
               alt="Avatar" 
             />
-            <span className="hidden lg:block text-[10px] font-black text-white uppercase tracking-widest">
-              {user?.nickname?.substring(0, 10)}
+            <span className="hidden lg:block text-[9px] font-black text-white uppercase tracking-widest">
+              {user?.nickname?.substring(0, 8)}
             </span>
           </div>
 
@@ -164,20 +121,20 @@ const Navbar = ({ setSearchQuery, setIsPostModalOpen }) => {
                   initial={{ opacity: 0, scale: 0.95, y: 10 }} 
                   animate={{ opacity: 1, scale: 1, y: 0 }} 
                   exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                  className="absolute right-0 mt-3 w-48 bg-[#0A0A0A] border border-white/10 rounded-2xl p-2 shadow-[0_20px_50px_rgba(0,0,0,0.5)] overflow-hidden"
+                  className="absolute right-0 mt-3 w-44 bg-[#0A0A0A] border border-white/10 rounded-2xl p-2 shadow-2xl overflow-hidden"
                 >
                   <button 
                     onClick={() => { navigate(`/profile/${user?.sub}`); setShowDropdown(false); }}
-                    className="w-full flex items-center gap-3 px-4 py-3 text-[10px] font-black text-gray-400 hover:text-white hover:bg-white/5 rounded-xl uppercase transition-all"
+                    className="w-full flex items-center gap-3 px-4 py-3 text-[9px] font-black text-gray-400 hover:text-white hover:bg-white/5 rounded-xl uppercase transition-all"
                   >
-                    <FaUserCircle size={14} /> View Profile
+                    <FaUserCircle size={14} /> Profile
                   </button>
                   <div className="h-[1px] bg-white/5 my-1"></div>
                   <button 
                     onClick={() => logout({ logoutParams: { returnTo: window.location.origin } })}
-                    className="w-full flex items-center gap-3 px-4 py-3 text-[10px] font-black text-rose-500 hover:bg-rose-500/10 rounded-xl uppercase transition-all"
+                    className="w-full flex items-center gap-3 px-4 py-3 text-[9px] font-black text-rose-500 hover:bg-rose-500/10 rounded-xl uppercase transition-all"
                   >
-                    <FaSignOutAlt size={14} /> Sign Out
+                    <FaSignOutAlt size={14} /> Log Out
                   </button>
                 </motion.div>
               </>

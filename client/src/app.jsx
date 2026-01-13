@@ -40,7 +40,7 @@ export default function App() {
   const socket = useRef(null); 
   const [searchQuery, setSearchQuery] = useState("");
   
-  // নিউ স্টেট: প্লাস বাটন এবং মডাল কন্ট্রোল করার জন্য
+  // মডাল স্টেট: যা Navbar এবং HomeFeed এর মধ্যে কাজ করবে
   const [isPostModalOpen, setIsPostModalOpen] = useState(false);
 
   useEffect(() => {
@@ -102,7 +102,7 @@ export default function App() {
       <Toaster />
       <CustomCursor />
 
-      {/* ১. প্রধান নেভিগেশন বার - মডাল স্টেট পাস করা হয়েছে */}
+      {/* ১. Navbar: যেখানে সার্চ কোয়েরি এবং মডাল ফাংশন পাস করা হয়েছে */}
       {isAuthenticated && (
         <Navbar 
           user={user} 
@@ -112,8 +112,8 @@ export default function App() {
         />
       )}
       
-      {/* ২. মেইন লেআউট স্ট্রাকচার */}
-      <div className={`flex justify-center w-full transition-all duration-500 ${isAuthenticated ? "pt-16 lg:pt-20" : "pt-0"}`}>
+      {/* ২. মেইন কন্টেনার: মার্জিন ফিক্স করা হয়েছে (pt-16 ডেস্কটপের জন্য, pt-14 মোবাইলের জন্য) */}
+      <div className={`flex justify-center w-full transition-all duration-500 ${isAuthenticated ? "pt-[60px] lg:pt-[70px]" : "pt-0"}`}>
         <div className={`flex w-full ${isFullWidthPage ? "max-w-full" : "max-w-[1440px] px-0 lg:px-6"} gap-6`}>
           
           {/* লেফট সাইডবার */}
@@ -123,13 +123,15 @@ export default function App() {
             </aside>
           )}
           
-          {/* ফিড কন্টেন্ট এরিয়া */}
+          {/* ফিড কন্টেন্ট এরিয়া: px-0 করা হয়েছে ফেসবুক স্টাইল ফুল উইডথের জন্য */}
           <main className={`flex-1 flex justify-center pb-24 lg:pb-10 min-h-[calc(100vh-100px)]`}>
             <div className={`${isFullWidthPage ? "w-full" : "w-full lg:max-w-[650px] max-w-full"}`}>
               <AnimatePresence mode="wait">
                 <Routes location={location} key={location.pathname}>
                   <Route path="/" element={isAuthenticated ? <Navigate to="/feed" /> : <Landing />} />
                   <Route path="/join" element={<JoinPage />} /> 
+                  
+                  {/* PremiumHomeFeed এ মডাল স্টেট পাস করা হয়েছে */}
                   <Route 
                     path="/feed" 
                     element={
@@ -144,6 +146,7 @@ export default function App() {
                       />
                     } 
                   />
+
                   <Route path="/reels" element={<ProtectedRoute component={ViralFeed} />} />
                   <Route path="/viral" element={<ProtectedRoute component={ViralFeed} />} />
                   <Route path="/profile/:userId" element={<ProtectedRoute component={Profile} />} />
@@ -163,13 +166,13 @@ export default function App() {
           {/* রাইট সাইডবার */}
           {isAuthenticated && !isFullWidthPage && (
             <aside className="hidden xl:block w-[320px] sticky top-[95px] h-[calc(100vh-115px)]">
-               {/* সাজেস্টেড কন্টেন্ট এর জন্য খালি রাখা হয়েছে */}
+               {/* ট্রেন্ডিং বা সাজেস্টেড সেকশন */}
             </aside>
           )}
         </div>
       </div>
 
-      {/* মোবাইল নেভিগেশন (ফুটার) */}
+      {/* ৩. মোবাইল নেভিগেশন (ফুটার) */}
       {isAuthenticated && <MobileNav userAuth0Id={user?.sub} />}
     </div>
   );
