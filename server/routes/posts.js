@@ -49,58 +49,53 @@ router.get("/", async (req, res) => {
 });
 
 /* ==========================================================
-    🚀 2. CREATE POST / REEL (POST /api/posts)
+    🚀 2. CREATE POST / REEL / STORY (POST /api/posts)
 ========================================================== */
 router.post("/", auth, upload.single("media"), async (req, res) => {
   try {
-    // ১. ফাইল চেক
     if (!req.file) {
       return res.status(400).json({ msg: "No media file detected. Signal lost." });
     }
 
-    // ২. ইউজার আইডি নিশ্চিত করা (Auth মিডলওয়্যার থেকে)
     const currentUserId = req.user?.sub || req.user?.id;
     if (!currentUserId) {
       return res.status(401).json({ msg: "Unauthorized: Neural Identity Missing" });
     }
 
-    // ৩. ইউজার প্রোফাইল ডাটাবেস থেকে খোঁজা
     const userProfile = await User.findOne({ auth0Id: currentUserId }).lean();
 
-    // ৪. মিডিয়া টাইপ ডিটেকশন
     const isVideo = req.file.mimetype ? req.file.mimetype.includes("video") : false;
     let detectedType = isVideo ? "video" : "image";
     
-    // রিলস চেক
-    if (req.body.isReel === "true" && isVideo) {
+    // --- STORY & REEL DETECTION ---
+    if (req.body.isStory === "true") {
+      detectedType = "story";
+    } else if (req.body.isReel === "true" && isVideo) {
       detectedType = "reel";
     }
 
-    // ৫. ডাটা অবজেক্ট তৈরি
     const postData = {
-      author: currentUserId, // যদি Post মডেলে author: String থাকে তবে কাজ করবে            
+      author: currentUserId, 
       authorAuth0Id: currentUserId,    
       authorName: userProfile?.name || "Drifter",
       authorAvatar: userProfile?.avatar || "",
       text: req.body.text || "",
       media: req.file.path, 
-      mediaType: detectedType,         
+      mediaType: detectedType,
+      filter: req.body.filter || "none", // ফিল্টার সেভ করার জন্য
       likes: [],
       comments: [],
       views: 0
     };
 
-    // ৬. ডাটাবেসে সেভ
     const post = await Post.create(postData);
     res.status(201).json(post);
 
   } catch (err) {
     console.error("🔥 POST_CREATION_CRASH:", err);
-    // ৫০০ এররের আসল কারণ যাতে আপনি কনসোলে দেখতে পারেন
     res.status(500).json({ 
       msg: "Internal Neural Breakdown", 
-      error: err.message,
-      stack: process.env.NODE_ENV === 'development' ? err.stack : undefined 
+      error: err.message
     });
   }
 });
@@ -119,6 +114,23 @@ router.get("/reels/all", async (req, res) => {
     res.json(reels);
   } catch (err) {
     res.status(500).json({ msg: "Failed to fetch neural reels" });
+  }
+});
+
+/* ==========================================================
+    📸 3.5. STORIES ENGINE (GET /api/posts/stories/all)
+========================================================== */
+router.get("/stories/all", async (req, res) => {
+  try {
+    // গত ২৪ ঘণ্টার স্টোরি দেখানোর জন্য (অপশনাল)
+    // const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const stories = await Post.find({ mediaType: "story" })
+      .sort({ createdAt: -1 })
+      .limit(50)
+      .lean();
+    res.json(stories);
+  } catch (err) {
+    res.status(500).json({ msg: "Failed to fetch neural stories" });
   }
 });
 
