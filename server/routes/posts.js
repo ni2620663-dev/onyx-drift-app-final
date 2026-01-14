@@ -9,6 +9,39 @@ import dotenv from "dotenv";
 
 dotenv.config();
 const router = express.Router();
+/* ==========================================================
+    💬 8. ADD COMMENT (POST /api/posts/:id/comment)
+========================================================== */
+router.post("/:id/comment", auth, async (req, res) => {
+  try {
+    const { text } = req.body;
+    if (!text) return res.status(400).json({ msg: "Comment text is required" });
+
+    const currentUserId = req.user?.sub || req.user?.id;
+    const userProfile = await User.findOne({ auth0Id: currentUserId }).lean();
+
+    const comment = {
+      text,
+      userId: currentUserId,
+      userName: userProfile?.name || "Drifter",
+      userAvatar: userProfile?.avatar || "",
+      createdAt: new Date()
+    };
+
+    const post = await Post.findByIdAndUpdate(
+      req.params.id,
+      { $push: { comments: comment } },
+      { new: true }
+    );
+
+    if (!post) return res.status(404).json({ msg: "Post not found" });
+
+    res.json(post);
+  } catch (err) {
+    console.error("Comment Error:", err);
+    res.status(500).json({ msg: "Neural Feedback Failure", error: err.message });
+  }
+});
 
 /* ==========================================================
     ☁️ Cloudinary & Multer Configuration

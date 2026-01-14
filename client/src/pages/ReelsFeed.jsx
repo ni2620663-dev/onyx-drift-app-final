@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth0 } from "@auth0/auth0-react";
 import axios from 'axios';
 
-// --- হেল্পার কম্পোনেন্ট: কমেন্ট সেকশন (এখন কাজ করবে) ---
+// --- হেল্পার কম্পোনেন্ট: কমেন্ট সেকশন ---
 const CommentSheet = ({ reel, onClose, API_URL }) => {
   const [comments, setComments] = useState(reel.comments || []);
   const [newComment, setNewComment] = useState("");
@@ -85,7 +85,7 @@ const ReelsFeed = () => {
   }, [API_URL]);
 
   return (
-    <div className="h-screen w-full bg-black overflow-y-scroll snap-y snap-mandatory hide-scrollbar">
+    <div className="h-[100dvh] w-full bg-black overflow-y-scroll snap-y snap-mandatory hide-scrollbar">
       {loading ? (
         <div className="h-screen flex flex-col items-center justify-center gap-4 bg-black">
           <div className="w-10 h-10 border-4 border-cyan-500/20 border-t-cyan-500 rounded-full animate-spin"></div>
@@ -97,7 +97,7 @@ const ReelsFeed = () => {
   );
 };
 
-// --- রিল আইটেম কম্পোনেন্ট (TikTok Style) ---
+// --- রিল আইটেম কম্পোনেন্ট (Fixed Mobile Screen) ---
 const ReelItem = ({ reel, API_URL }) => {
   const videoRef = useRef(null);
   const navigate = useNavigate();
@@ -136,7 +136,7 @@ const ReelItem = ({ reel, API_URL }) => {
   };
 
   return (
-    <div className="h-screen w-full snap-start relative bg-black flex flex-col items-center justify-center">
+    <div className="h-[100dvh] w-full snap-start relative bg-black flex flex-col items-center justify-center overflow-hidden">
       {/* হার্ট এনিমেশন */}
       <AnimatePresence>
         {showHeart && (
@@ -146,6 +146,7 @@ const ReelItem = ({ reel, API_URL }) => {
         )}
       </AnimatePresence>
 
+      {/* ভিডিওটি এখন প্রপারলি মোবাইল স্ক্রিন কভার করবে */}
       <video
         ref={videoRef} src={reel.media} loop playsInline
         className="w-full h-full object-cover"
@@ -153,32 +154,36 @@ const ReelItem = ({ reel, API_URL }) => {
         onClick={() => videoRef.current?.paused ? videoRef.current.play() : videoRef.current.pause()}
       />
 
-      {/* কন্টেন্ট এবং একশন বাটন (TikTok Style) */}
-      <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/70 flex items-end p-4 pb-24">
-        <div className="flex w-full justify-between items-end">
+      {/* কন্টেন্ট এবং একশন বাটন (TikTok Style UI Positioning) */}
+      <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/80 flex items-end p-4 pb-20 pointer-events-none">
+        <div className="flex w-full justify-between items-end pointer-events-auto">
           
-          {/* প্রোফাইল এবং টেক্সট */}
-          <div className="flex-1 text-white space-y-3">
+          {/* প্রোফাইল এবং টেক্সট (নিচের দিকে) */}
+          <div className="flex-1 text-white space-y-3 pr-4">
             <div className="flex items-center gap-3">
-              <img src={reel.authorAvatar} className="w-12 h-12 rounded-full border-2 border-cyan-500" onClick={() => navigate(`/profile/${reel.authorAuth0Id}`)} />
+              <img 
+                src={reel.authorAvatar} 
+                className="w-10 h-10 rounded-full border-2 border-cyan-500" 
+                onClick={() => navigate(`/profile/${reel.authorAuth0Id}`)} 
+              />
               <div>
-                <h4 className="font-black text-sm tracking-tighter cursor-pointer">@{reel.authorName}</h4>
-                <p className="text-[10px] text-cyan-400 uppercase font-black tracking-widest">Neural Link Active</p>
+                <h4 className="font-black text-xs tracking-tighter cursor-pointer">@{reel.authorName}</h4>
+                <p className="text-[8px] text-cyan-400 uppercase font-black tracking-widest">Neural Link Active</p>
               </div>
             </div>
-            <p className="text-sm opacity-90 max-w-[80%] line-clamp-2">{reel.text}</p>
-            <div className="flex items-center gap-2 bg-white/10 w-fit px-3 py-1 rounded-full backdrop-blur-md">
-              <Music size={12} className="animate-spin-slow" />
-              <span className="text-[8px] font-bold uppercase tracking-widest">Original Audio - {reel.authorName}</span>
+            <p className="text-[12px] opacity-90 max-w-[90%] line-clamp-2 leading-tight">{reel.text}</p>
+            <div className="flex items-center gap-2 bg-white/10 w-fit px-2 py-0.5 rounded-full backdrop-blur-md">
+              <Music size={10} className="animate-spin-slow" />
+              <span className="text-[7px] font-bold uppercase tracking-widest">Original Audio - {reel.authorName}</span>
             </div>
           </div>
 
-          {/* সাইড একশন বার */}
-          <div className="flex flex-col gap-5 items-center">
+          {/* সাইড একশন বার (টিকটকের মতো ডান দিকে) */}
+          <div className="flex flex-col gap-4 items-center">
             <SideBtn icon={<Heart fill={isLiked ? "#00f7ff" : "none"} className={isLiked ? "text-cyan-400" : "text-white"} />} label={likesCount} onClick={handleLike} />
-            <SideBtn icon={<MessageCircle />} label={reel.comments?.length || 0} onClick={() => setIsCommentOpen(true)} />
-            <SideBtn icon={<Share2 />} label="Share" />
-            <div className="w-10 h-10 rounded-full border border-cyan-500/30 p-1 animate-spin-slow">
+            <SideBtn icon={<MessageCircle className="text-white" />} label={reel.comments?.length || 0} onClick={() => setIsCommentOpen(true)} />
+            <SideBtn icon={<Share2 className="text-white" />} label="Share" />
+            <div className="w-8 h-8 rounded-full border border-cyan-500/30 p-0.5 animate-spin-slow mt-2">
               <img src={reel.authorAvatar} className="w-full h-full rounded-full object-cover" />
             </div>
           </div>
@@ -189,16 +194,23 @@ const ReelItem = ({ reel, API_URL }) => {
       <AnimatePresence>
         {isCommentOpen && <CommentSheet reel={reel} API_URL={API_URL} onClose={() => setIsCommentOpen(false)} />}
       </AnimatePresence>
+
+      <style jsx>{`
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        .animate-spin-slow { animation: spin 4s linear infinite; }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+      `}</style>
     </div>
   );
 };
 
 const SideBtn = ({ icon, label, onClick }) => (
-  <div className="flex flex-col items-center gap-1">
-    <button onClick={onClick} className="w-12 h-12 rounded-full flex items-center justify-center active:scale-75 transition-all">
-      {React.cloneElement(icon, { size: 30 })}
+  <div className="flex flex-col items-center gap-0.5">
+    <button onClick={onClick} className="w-10 h-10 rounded-full flex items-center justify-center active:scale-75 transition-all bg-black/20 backdrop-blur-sm">
+      {React.cloneElement(icon, { size: 26 })}
     </button>
-    <span className="text-[10px] font-black text-white">{label}</span>
+    <span className="text-[9px] font-black text-white drop-shadow-md">{label}</span>
   </div>
 );
 
