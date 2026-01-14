@@ -24,13 +24,11 @@ const upload = multer({ storage });
 
 /* ==========================================================
     🔥 REELS ENGINE 
-    এন্ডপয়েন্ট: GET /api/posts/reels/all
+    আপনার মডেল অনুযায়ী mediaType: 'video' ফিল্টার করা হয়েছে
 ========================================================== */
 router.get("/reels/all", async (req, res) => {
   try {
-    const reels = await Post.find({
-      $or: [{ postType: "reels" }, { mediaType: "video" }],
-    })
+    const reels = await Post.find({ mediaType: "video" })
       .sort({ createdAt: -1 })
       .limit(20)
       .lean();
@@ -55,7 +53,7 @@ router.get("/", async (req, res) => {
 });
 
 /* =========================
-    2️⃣ Create Post / Reel (Resolved 500 Error)
+    2️⃣ Create Post / Reel (Schema Validation Fixed)
 ========================= */
 router.post("/", auth, upload.single("media"), async (req, res) => {
   try {
@@ -63,28 +61,35 @@ router.post("/", auth, upload.single("media"), async (req, res) => {
       return res.status(400).json({ msg: "No media file detected" });
     }
 
-    const { text, mediaType, postType } = req.body;
-    // Auth0 sub বা সাধারণ ID হ্যান্ডলিং
+    const { text } = req.body;
     const currentUserId = req.user.id || req.user.sub; 
 
     const userProfile = await User.findOne({ auth0Id: currentUserId });
 
+    // মডেলের enum অনুযায়ী টাইপ সেট করা (image অথবা video)
+    let detectedType = "image";
+    if (req.file.mimetype.includes("video")) {
+      detectedType = "video";
+    }
+
     const postData = {
-      text: text || "",
-      media: req.file.path, // Cloudinary URL
-      mediaType: mediaType || (req.file.mimetype.includes("video") ? "video" : "image"),
-      postType: postType || (req.file.mimetype.includes("video") ? "reels" : "post"),
+      author: currentUserId,
+      authorAuth0Id: currentUserId,
       authorName: userProfile?.name || "Drifter",
       authorAvatar: userProfile?.avatar || "",
-      authorAuth0Id: currentUserId,
-      author: currentUserId,
+      text: text || "",
+      media: req.file.path, // Cloudinary URL
+      mediaType: detectedType, // মডেলের enum এর সাথে মিল রাখা হয়েছে
+      likes: [],
+      comments: [],
+      views: 0
     };
 
     const post = await Post.create(postData);
     res.status(201).json(post);
   } catch (err) {
-    console.error("Critical Upload Error:", err);
-    res.status(500).json({ msg: "Internal Neural Breakdown", error: err.message });
+    console.error("Critical Upload Error:", err.message);
+    res.status(500).json({ msg: "Neural Upload Failed", error: err.message });
   }
 });
 
@@ -154,7 +159,7 @@ router.get("/viral-feed", auth, async (req, res) => {
       posts.map(async (post) => {
         const authorProfile = await User.findOne({ auth0Id: post.authorAuth0Id || post.author }).lean();
 
-        let engagementScore = post.likes.length * 1 + (post.comments?.length || 0) * 3;
+        let engagementScore = (post.likes?.length || 0) * 1 + (post.comments?.length || 0) * 3;
 
         if (authorProfile) {
           const accountAgeInDays = (now - new Date(authorProfile.createdAt)) / (1000 * 60 * 60 * 24);
@@ -180,7 +185,6 @@ router.get("/viral-feed", auth, async (req, res) => {
 
 /* =========================
     📡 PULSE ENGINE (Engagement Tracker)
-    এই অংশটি আপনার কনসোলের 404 এরর ফিক্স করবে
 ========================= */
 router.post("/:id/pulse", async (req, res) => {
   try {

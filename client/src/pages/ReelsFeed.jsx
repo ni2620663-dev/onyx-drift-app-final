@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Heart, MessageCircle, Share2, Music, UserPlus } from 'lucide-react';
-import { useNavigate } from 'react-router-dom'; // নেভিগেশনের জন্য
+import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
 const ReelsFeed = () => {
@@ -9,10 +9,9 @@ const ReelsFeed = () => {
   const [loading, setLoading] = useState(true);
   const containerRef = useRef(null);
 
-  // আপনার ব্যাকএন্ড ইউআরএল
+  // ব্যাকএন্ড ইউআরএল কনফিগারেশন
   const API_URL = (import.meta.env.VITE_API_BASE_URL || "https://onyx-drift-app-final.onrender.com").replace(/\/$/, "");
 
-  // ডাটাবেজ থেকে রিলস ফেচ করা
   useEffect(() => {
     const fetchReels = async () => {
       try {
@@ -51,13 +50,14 @@ const ReelsFeed = () => {
   );
 };
 
-// প্রতিটি একক ভিডিও আইটেম
 const ReelItem = ({ reel, API_URL }) => {
   const videoRef = useRef(null);
-  const navigate = useNavigate(); // হুক কল
+  const navigate = useNavigate();
   const [isLiked, setIsLiked] = useState(false);
   const [showHeart, setShowHeart] = useState(false);
+  const [likesCount, setLikesCount] = useState(reel.likes?.length || 0);
 
+  // এনগেজমেন্ট ট্র্যাক (Pulse)
   const handleEngagement = async () => {
     try {
       await axios.post(`${API_URL}/api/posts/${reel._id}/pulse`);
@@ -66,7 +66,7 @@ const ReelItem = ({ reel, API_URL }) => {
     }
   };
 
-  // শেয়ার ফাংশনালিটি
+  // শেয়ার লজিক
   const handleShare = (postId) => {
     const shareUrl = `${window.location.origin}/post/${postId}`;
     if (navigator.share) {
@@ -80,17 +80,17 @@ const ReelItem = ({ reel, API_URL }) => {
     }
   };
 
-  // অটো-প্লে এবং পজ লজিক
+  // অটো-প্লে এবং ইন্টারসেকশন অবজারভার
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
           if (entry.isIntersecting) {
             videoRef.current?.play().catch(() => {});
-            // ৫ সেকেন্ড দেখলে এনগেজমেন্ট পাঠানো
-            setTimeout(() => {
-              if(entry.isIntersecting) handleEngagement();
+            const timer = setTimeout(() => {
+              if (entry.isIntersecting) handleEngagement();
             }, 5000);
+            return () => clearTimeout(timer);
           } else {
             videoRef.current?.pause();
             if (videoRef.current) videoRef.current.currentTime = 0;
@@ -104,13 +104,18 @@ const ReelItem = ({ reel, API_URL }) => {
     return () => observer.disconnect();
   }, []);
 
+  const handleLikeToggle = () => {
+    setIsLiked(!isLiked);
+    setLikesCount(prev => isLiked ? prev - 1 : prev + 1);
+    // এখানে আপনার লাইক API কল যোগ করতে পারেন
+  };
+
   const handleDoubleTap = () => {
-    setIsLiked(true);
+    if (!isLiked) handleLikeToggle();
     setShowHeart(true);
     setTimeout(() => setShowHeart(false), 800);
   };
 
-  // অ্যাভাটার এরর হ্যান্ডলিং (via.placeholder এর বদলে ui-avatars)
   const avatarUrl = reel.authorAvatar && !reel.authorAvatar.includes("placeholder") 
     ? reel.authorAvatar 
     : `https://ui-avatars.com/api/?name=${reel.authorName || 'D'}&background=random&color=fff`;
@@ -120,6 +125,7 @@ const ReelItem = ({ reel, API_URL }) => {
       className="h-screen w-full snap-start relative flex items-center justify-center bg-black overflow-hidden"
       onDoubleClick={handleDoubleTap}
     >
+      {/* হার্ট এনিমেশন */}
       <AnimatePresence>
         {showHeart && (
           <motion.div
@@ -142,15 +148,17 @@ const ReelItem = ({ reel, API_URL }) => {
         onClick={() => videoRef.current?.paused ? videoRef.current.play() : videoRef.current.pause()}
       />
 
+      {/* কন্টেন্ট লেয়ার */}
       <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-black/90 flex flex-col justify-end p-5 pb-28">
         <div className="flex justify-between items-end w-full">
           
           <div className="flex-1 pr-12 text-white space-y-4">
+            {/* প্রোফাইল সেকশন */}
             <div className="flex items-center gap-3">
-              <div className="relative group cursor-pointer" onClick={() => navigate(`/profile/${reel.authorAuth0Id || reel.authorId}`)}>
+              <div className="relative cursor-pointer" onClick={() => navigate(`/profile/${reel.authorAuth0Id || reel.authorId}`)}>
                 <img 
                   src={avatarUrl} 
-                  className="w-11 h-11 rounded-full border-2 border-cyan-500/50 shadow-[0_0_10px_rgba(6,182,212,0.3)] object-cover" 
+                  className="w-11 h-11 rounded-full border-2 border-cyan-500/50 object-cover" 
                   alt="author" 
                 />
                 <div className="absolute -bottom-1 -right-1 bg-cyan-500 rounded-full p-0.5 text-black border-2 border-black">
@@ -166,24 +174,26 @@ const ReelItem = ({ reel, API_URL }) => {
               </div>
             </div>
 
-            <p className="text-sm leading-relaxed line-clamp-2 opacity-90 font-medium max-w-[80%]">
+            <p className="text-sm leading-relaxed line-clamp-2 opacity-90 font-medium max-w-[85%]">
               {reel.text || reel.content}
             </p>
 
-            <div className="flex items-center gap-2 py-1 px-3 bg-white/5 backdrop-blur-md rounded-full w-fit border border-white/10">
-              <Music size={12} className="animate-spin-slow text-cyan-400" />
-              <div className="overflow-hidden w-32 relative">
-                 <p className="text-[9px] font-bold uppercase tracking-widest whitespace-nowrap animate-marquee">
-                    {reel.authorName} • Original Neural Audio Track
-                 </p>
+            {/* মিউজিক মারকিউ */}
+            <div className="flex items-center gap-2 py-1 px-3 bg-white/5 backdrop-blur-md rounded-full w-fit border border-white/10 overflow-hidden">
+              <Music size={12} className="animate-spin-slow text-cyan-400 shrink-0" />
+              <div className="w-32 overflow-hidden relative">
+                <p className="text-[9px] font-bold uppercase tracking-widest whitespace-nowrap inline-block animate-marquee-text">
+                   {reel.authorName} • Original Neural Audio Track • {reel.authorName} • Original Neural Audio Track
+                </p>
               </div>
             </div>
           </div>
 
+          {/* সাইডবার অ্যাকশন বাটন */}
           <div className="flex flex-col gap-6 items-center z-[999]">
             <div className="flex flex-col items-center gap-1">
               <button 
-                onClick={(e) => { e.stopPropagation(); setIsLiked(!isLiked); }} 
+                onClick={(e) => { e.stopPropagation(); handleLikeToggle(); }} 
                 className="w-12 h-12 rounded-full bg-white/5 backdrop-blur-md flex items-center justify-center border border-white/10 active:scale-75 transition-all"
               >
                 <Heart 
@@ -192,14 +202,14 @@ const ReelItem = ({ reel, API_URL }) => {
                   className={isLiked ? "text-cyan-400" : "text-white opacity-80"} 
                 />
               </button>
-              <span className="text-[10px] font-black text-white">{reel.likes?.length || 0}</span>
+              <span className="text-[10px] font-black text-white">{likesCount}</span>
             </div>
 
             <div className="flex flex-col items-center gap-1">
               <button className="w-12 h-12 rounded-full bg-white/5 backdrop-blur-md flex items-center justify-center border border-white/10">
                 <MessageCircle size={26} className="text-white opacity-80" />
               </button>
-              <span className="text-[10px] font-black text-white">0</span>
+              <span className="text-[10px] font-black text-white">{reel.comments?.length || 0}</span>
             </div>
 
             <div className="flex flex-col items-center gap-1">
@@ -213,7 +223,7 @@ const ReelItem = ({ reel, API_URL }) => {
             </div>
 
             <div 
-              className="w-10 h-10 rounded-full border-2 border-cyan-500/30 p-1 animate-spin-slow mt-2 shadow-[0_0_15px_rgba(6,182,212,0.2)] cursor-pointer"
+              className="w-10 h-10 rounded-full border-2 border-cyan-500/30 p-1 animate-spin-slow mt-2 cursor-pointer shadow-[0_0_15px_rgba(6,182,212,0.2)]"
               onClick={() => navigate(`/profile/${reel.authorAuth0Id || reel.authorId}`)}
             >
               <img src={avatarUrl} className="w-full h-full rounded-full object-cover" alt="disc" />
