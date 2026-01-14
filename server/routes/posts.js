@@ -24,7 +24,7 @@ const upload = multer({ storage });
 
 /* ==========================================================
     🔥 REELS ENGINE 
-    আপনার মডেল অনুযায়ী mediaType: 'video' ফিল্টার করা হয়েছে
+    আপনার মডেল অনুযায়ী mediaType: 'video' ফিল্টার করা হয়েছে
 ========================================================== */
 router.get("/reels/all", async (req, res) => {
   try {
@@ -53,10 +53,11 @@ router.get("/", async (req, res) => {
 });
 
 /* =========================
-    2️⃣ Create Post / Reel (Schema Validation Fixed)
+    2️⃣ Create Post / Reel (Optimized for 500 Error Fix)
 ========================= */
 router.post("/", auth, upload.single("media"), async (req, res) => {
   try {
+    // ফাইল চেক
     if (!req.file) {
       return res.status(400).json({ msg: "No media file detected" });
     }
@@ -64,32 +65,39 @@ router.post("/", auth, upload.single("media"), async (req, res) => {
     const { text } = req.body;
     const currentUserId = req.user.id || req.user.sub; 
 
+    // ইউজার প্রোফাইল খোঁজা
     const userProfile = await User.findOne({ auth0Id: currentUserId });
 
-    // মডেলের enum অনুযায়ী টাইপ সেট করা (image অথবা video)
+    // মডেলের enum অনুযায়ী টাইপ সেট করা (অবশ্যই 'image' অথবা 'video' হতে হবে)
     let detectedType = "image";
     if (req.file.mimetype.includes("video")) {
       detectedType = "video";
     }
 
     const postData = {
-      author: currentUserId,
-      authorAuth0Id: currentUserId,
-      authorName: userProfile?.name || "Drifter",
+      author: currentUserId,           // Schema required: true
+      authorAuth0Id: currentUserId,    // Schema required: true
+      authorName: userProfile?.name || "Unknown Drifter",
       authorAvatar: userProfile?.avatar || "",
       text: text || "",
-      media: req.file.path, // Cloudinary URL
-      mediaType: detectedType, // মডেলের enum এর সাথে মিল রাখা হয়েছে
+      media: req.file.path,            // Cloudinary URL
+      mediaType: detectedType,         // Enum matching: image/video
       likes: [],
       comments: [],
       views: 0
     };
 
+    // ডাটাবেসে সেভ করা
     const post = await Post.create(postData);
     res.status(201).json(post);
+
   } catch (err) {
-    console.error("Critical Upload Error:", err.message);
-    res.status(500).json({ msg: "Neural Upload Failed", error: err.message });
+    console.error("🔥 POST CREATION FAILED:", err);
+    res.status(500).json({ 
+      msg: "Neural Upload Failed", 
+      error: err.message,
+      stack: process.env.NODE_ENV === 'development' ? err.stack : undefined 
+    });
   }
 });
 
