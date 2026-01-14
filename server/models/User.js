@@ -38,31 +38,31 @@ const userSchema = new mongoose.Schema(
     isPremium: { type: Boolean, default: false }, 
     creatorLevel: { type: Number, default: 1 }, 
 
-    // 🚀 STEP 10: VIRAL GROWTH & RANKING (নতুন যোগ করা হয়েছে)
+    // 🚀 STEP 10: VIRAL GROWTH & RANKING
     inviteCode: { 
       type: String, 
       unique: true, 
-      sparse: true,
-      index: true 
-    }, // ইউজারের নিজস্ব ইনভাইট কোড
+      sparse: true 
+      // 🔥 FIX: এখান থেকে index: true মুছে ফেলা হয়েছে কারণ নিচে schema.index আছে
+    }, 
     referredBy: { 
       type: String, 
       default: null,
       index: true 
-    }, // কে তাকে ইনভাইট করেছে (Auth0 ID)
+    }, 
     inviteCount: { 
       type: Number, 
       default: 0 
-    }, // সে কতজনকে ইনভাইট করেছে
+    }, 
     isGenesisMember: { 
       type: Boolean, 
       default: false 
-    }, // প্রথম ১০০০০ ইউজারের জন্য স্পেশাল ব্যাজ
+    }, 
     neuralRank: { 
       type: String, 
       enum: ["Neophyte", "Voyager", "Zenith", "Overlord"], 
       default: "Neophyte" 
-    }, // গ্যামিফাইড র‍্যাঙ্কিং সিস্টেম
+    }, 
 
     // 💰 REVENUE & ANALYTICS
     revenueWallet: { type: Number, default: 0 }, 
@@ -84,6 +84,7 @@ const userSchema = new mongoose.Schema(
     ],
 
     // 📡 CONNECTIONS
+    // 🔥 Optimization: এগুলোর টাইপ String রাখা ঠিক আছে যেহেতু আপনি Auth0 ID ব্যবহার করছেন
     followers: [{ type: String, index: true }], 
     following: [{ type: String, index: true }],
     friends: [{ type: String }],
@@ -96,13 +97,13 @@ const userSchema = new mongoose.Schema(
 /* ==========================================================
     🚀 OPTIMIZED INDEXING (Search & Ranking)
 ========================================================== */
-// গ্লোবাল সার্চ ফাস্ট করার জন্য টেক্সট ইনডেক্স
+// ১. গ্লোবাল সার্চ ফাস্ট করার জন্য টেক্সট ইনডেক্স
 userSchema.index({ name: 'text', nickname: 'text', bio: 'text' });
 
-// ভাইরাল রিচ এবং ইনভাইট সিস্টেম ফাস্ট করার জন্য ইনডেক্স
+// ২. ভাইরাল রিচ এবং ইনভাইট সিস্টেম ফাস্ট করার জন্য ইনডেক্স
 userSchema.index({ createdAt: -1, isVerified: -1 });
 userSchema.index({ inviteCode: 1 });
-userSchema.index({ inviteCount: -1 }); // লিডারবোর্ডের জন্য
+userSchema.index({ inviteCount: -1 }); 
 
 const User = mongoose.model("User", userSchema);
 export default User;

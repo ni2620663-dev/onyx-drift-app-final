@@ -2,26 +2,28 @@ import mongoose from 'mongoose';
 
 const postSchema = new mongoose.Schema(
   {
-    // এটি Auth0 'sub' আইডি স্টোর করবে
-    author: { type: String, required: true }, 
+    // Auth0 'sub' আইডি স্টোর করবে (Required for Data Integrity)
+    author: { type: String, required: true, index: true }, 
     
-    // ফ্রন্টএন্ড নেভিগেশনের জন্য এই ফিল্ডটি যোগ করা হলো
-    authorAuth0Id: { type: String, required: true }, 
+    // ডুপ্লিকেট হিসেবে থাকলেও এটি ফ্রন্টএন্ড কুয়েরির জন্য নিরাপদ
+    authorAuth0Id: { type: String, required: true, index: true }, 
 
-    authorName: { type: String },
-    authorAvatar: { type: String },
-    text: { type: String },
+    authorName: { type: String, default: "Drifter" },
+    authorAvatar: { type: String, default: "" },
+    text: { type: String, trim: true },
     
-    // মাল্টিমিডিয়া সেটিংস
-    media: { type: String }, // Cloudinary বা Base64 URL
+    // Cloudinary বা Neural Storage URL
+    media: { type: String }, 
+    
     mediaType: { 
       type: String, 
-      enum: ['image', 'video', 'reel', 'text', 'none'], 
+      enum: ['image', 'video', 'text', 'none'], // 🔥 'reel' বাদ দেওয়া হয়েছে কারণ এটি 'video' এর অংশ
       default: 'none' 
     },
     
-    // সোশাল ফিচারস (আইডিগুলো String হিসেবে থাকবে)
-    likes: [{ type: String }],
+    // সোশ্যাল ইন্টারঅ্যাকশন
+    likes: [{ type: String }], // Auth0 IDs
+    
     comments: [{
       author: { type: String },
       authorName: { type: String },
@@ -29,14 +31,14 @@ const postSchema = new mongoose.Schema(
       createdAt: { type: Date, default: Date.now }
     }],
     
+    // ভাইরাল এনালিটিক্স
     views: { type: Number, default: 0 }
   },
   { timestamps: true }
 );
 
-// ইন্ডেক্সিং (সার্চ এবং নেভিগেশন ফাস্ট করার জন্য)
-postSchema.index({ author: 1, createdAt: -1 });
-postSchema.index({ authorAuth0Id: 1 }); // নতুন ইন্ডেক্স
+// কম্পাউন্ড ইন্ডেক্সিং: ইউজারের লেটেস্ট পোস্ট দ্রুত লোড করার জন্য
+postSchema.index({ authorAuth0Id: 1, createdAt: -1 });
 
 const Post = mongoose.model('Post', postSchema);
 export default Post;
