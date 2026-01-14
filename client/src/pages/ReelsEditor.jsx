@@ -1,11 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-// প্রয়োজনীয় সব আইকন নিশ্চিত করা হয়েছে
 import { 
   Scissors, Wand2, Type, Music4, Sparkles, Repeat, BarChart3, 
   Play, Pause, Plus, X, Sparkle, AudioLines, Palette, Users, 
   LineChart, FastForward, Info, LayoutTemplate, MoreHorizontal,
-  RotateCcw 
+  RotateCcw, Upload, Volume2
 } from 'lucide-react';
 
 const ReelsEditor = () => {
@@ -17,21 +16,58 @@ const ReelsEditor = () => {
   const [isExporting, setIsExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState(0);
   
-  const totalDuration = 30.00; // ৩০ সেকেন্ডের প্রফেশনাল রিল টাইমলাইন
+  // --- VIDEO & EDITING STATES ---
+  const [videoSrc, setVideoSrc] = useState(null);
+  const [audioSrc, setAudioSrc] = useState(null); // অডিওর জন্য
+  const [overlayText, setOverlayText] = useState("VIRAL HOOK ⚡"); // টেক্সট এর জন্য
+  const [filter, setFilter] = useState('none');
+  const [trimStart, setTrimStart] = useState(0);
 
-  // --- PLAYHEAD LOGIC ---
+  const videoRef = useRef(null);
+  const audioRef = useRef(null); // অডিও রেফারেন্স
+  const fileInputRef = useRef(null);
+  const audioInputRef = useRef(null); // অডিও ফাইল ইনপুট
+  
+  const totalDuration = 30.00;
+
+  // --- VIDEO UPLOAD HANDLER ---
+  const handleVideoUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const url = URL.createObjectURL(file);
+      setVideoSrc(url);
+      setIsPlaying(false);
+      setCurrentTime(0);
+    }
+  };
+
+  // --- AUDIO UPLOAD HANDLER ---
+  const handleAudioUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setAudioSrc(URL.createObjectURL(file));
+    }
+  };
+
+  // --- SYNC PLAYHEAD LOGIC ---
   useEffect(() => {
     let interval;
     if (isPlaying) {
+      if (videoRef.current) videoRef.current.play();
+      if (audioRef.current) audioRef.current.play();
+      
       interval = setInterval(() => {
-        setCurrentTime((prev) => {
-          if (prev >= totalDuration) {
+        if (videoRef.current) {
+          setCurrentTime(videoRef.current.currentTime);
+          if (videoRef.current.ended) {
             setIsPlaying(false);
-            return 0;
+            setCurrentTime(0);
           }
-          return prev + 0.05;
-        });
+        }
       }, 50);
+    } else {
+      if (videoRef.current) videoRef.current.pause();
+      if (audioRef.current) audioRef.current.pause();
     }
     return () => clearInterval(interval);
   }, [isPlaying]);
@@ -50,25 +86,34 @@ const ReelsEditor = () => {
     setIsExporting(true);
     let p = 0;
     const interval = setInterval(() => {
-      p += 2;
+      p += 5;
       setExportProgress(p);
       if (p >= 100) {
         clearInterval(interval);
         setTimeout(() => { setIsExporting(false); setExportProgress(0); }, 800);
       }
-    }, 50);
+    }, 100);
   };
 
   return (
     <div className="fixed inset-0 bg-[#050505] flex flex-col overflow-hidden text-white font-sans select-none">
       
-      {/* --- TOP HUD (Analytics & Export) --- */}
+      {/* TOP HUD */}
       <div className="relative z-[100] p-4 flex justify-between items-center bg-gradient-to-b from-black/90 via-black/40 to-transparent">
         <div className="flex gap-2">
           <div className="flex items-center gap-2 bg-white/5 backdrop-blur-2xl p-2 rounded-2xl border border-white/10 shadow-xl">
             <BarChart3 size={14} className="text-cyan-400" />
-            <span className="text-[9px] font-black uppercase tracking-tighter">98% Viral Potential</span>
+            <span className="text-[9px] font-black uppercase tracking-tighter">98% Retention</span>
           </div>
+          <button 
+            onClick={() => fileInputRef.current.click()}
+            className="flex items-center gap-2 bg-white/10 hover:bg-white/20 p-2 rounded-2xl border border-white/10 transition-all"
+          >
+            <Upload size={14} className="text-white" />
+            <span className="text-[9px] font-black uppercase tracking-tighter">Upload Video</span>
+          </button>
+          <input type="file" ref={fileInputRef} onChange={handleVideoUpload} accept="video/*" className="hidden" />
+          <input type="file" ref={audioInputRef} onChange={handleAudioUpload} accept="audio/*" className="hidden" />
         </div>
         <button 
           onClick={handleExport} 
@@ -78,190 +123,170 @@ const ReelsEditor = () => {
         </button>
       </div>
 
-      {/* --- MAIN ENGINE (Preview & Right Sidebar) --- */}
+      {/* MAIN ENGINE */}
       <div className="flex-1 flex flex-row relative overflow-hidden">
-        
-        {/* PREVIEW CONTAINER */}
         <div className="flex-1 relative flex items-center justify-center p-4">
-          <div className="w-full max-w-[280px] aspect-[9/16] bg-zinc-900 rounded-[2.5rem] shadow-2xl border border-white/5 overflow-hidden relative group">
+          <div className="w-full max-w-[300px] aspect-[9/16] bg-zinc-900 rounded-[2.5rem] shadow-2xl border border-white/5 overflow-hidden relative group">
              
-             {/* Fake Video Canvas */}
-             <div className="absolute inset-0 bg-gradient-to-br from-zinc-800 to-black flex items-center justify-center">
-                <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-20"></div>
+             {/* Preview Surface */}
+             <div className="absolute inset-0 bg-black flex flex-col items-center justify-center">
+                {videoSrc ? (
+                  <video 
+                    ref={videoRef}
+                    src={videoSrc}
+                    className="w-full h-full object-cover"
+                    style={{ filter: filter }}
+                  />
+                ) : (
+                  <div className="text-zinc-600 font-black text-[10px] tracking-widest uppercase">No Media Selected</div>
+                )}
+
+                {/* Text Overlay */}
                 <motion.div 
-                  animate={isPlaying ? { scale: [1, 1.02, 1] } : {}}
+                  animate={isPlaying ? { scale: [1, 1.1, 1] } : {}}
                   transition={{ repeat: Infinity, duration: 2 }}
-                  className="z-10 bg-yellow-400 text-black px-4 py-2 font-black italic text-xl uppercase skew-x-[-10deg]"
+                  className="absolute z-20 bg-yellow-400 text-black px-6 py-2 font-black italic text-2xl uppercase skew-x-[-12deg] shadow-2xl"
                 >
-                  PREVIEW FRAME
+                  {overlayText}
                 </motion.div>
+                
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full bg-[radial-gradient(circle,transparent_20%,black_150%)] pointer-events-none opacity-50" />
              </div>
 
-             {/* Frame Rate & Time Indicator */}
-             <div className="absolute top-6 left-6 z-20 bg-black/50 backdrop-blur-md px-2 py-1 rounded border border-white/10 font-mono text-[8px] text-cyan-400">
-               FRM: {Math.floor(currentTime * 24)} | 4K 60FPS
-             </div>
-
-             {/* Center Play Button Overlay */}
-             <button 
-               onClick={() => setIsPlaying(!isPlaying)}
-               className="absolute inset-0 z-30 flex items-center justify-center bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity"
-             >
-               <div className="p-5 bg-white/10 backdrop-blur-3xl rounded-full border border-white/20 shadow-2xl">
+             {/* Play Overlay */}
+             <div className="absolute inset-0 z-30 flex items-center justify-center">
+               <button 
+                 onClick={() => videoSrc && setIsPlaying(!isPlaying)}
+                 className={`p-6 bg-white/10 backdrop-blur-3xl rounded-full border border-white/20 shadow-2xl transition-all duration-300 ${isPlaying ? 'opacity-0 scale-50 group-hover:opacity-100 group-hover:scale-100' : 'opacity-100 scale-100'}`}
+               >
                  {isPlaying ? <Pause size={32} fill="white" /> : <Play size={32} fill="white" className="ml-1" />}
-               </div>
-             </button>
+               </button>
+             </div>
+
+             {/* Hidden Audio Element */}
+             {audioSrc && <audio ref={audioRef} src={audioSrc} />}
           </div>
         </div>
 
-        {/* --- PRO VERTICAL TOOLBAR (Right Side) --- */}
-        <div className="w-20 bg-black/40 border-l border-white/5 flex flex-col items-center py-6 gap-6 overflow-y-auto hide-scrollbar z-[50]">
+        {/* SIDEBAR */}
+        <div className="w-20 bg-black/60 border-l border-white/5 flex flex-col items-center py-8 gap-8 overflow-y-auto hide-scrollbar z-[150]">
           {editTools.map((tool) => (
             <button 
               key={tool.id} 
-              onClick={() => { setActiveTab(tool.id); setShowSubMenu(tool.id); }} 
-              className={`flex flex-col items-center gap-1 transition-all ${activeTab === tool.id ? 'scale-110' : 'opacity-40 hover:opacity-100'}`}
+              onClick={() => { setActiveTab(tool.id); setShowSubMenu(tool.label); }} 
+              className={`flex flex-col items-center gap-2 transition-all duration-300 ${activeTab === tool.id ? 'scale-110' : 'opacity-40 hover:opacity-100 hover:scale-105'}`}
             >
-              <div className={`p-3.5 rounded-2xl ${activeTab === tool.id ? `${tool.color} shadow-lg shadow-white/10` : 'bg-zinc-900'}`}>
-                {tool.icon}
+              <div className={`p-4 rounded-2xl transition-shadow ${activeTab === tool.id ? `${tool.color} shadow-[0_0_20px_rgba(255,255,255,0.2)]` : 'bg-zinc-900 hover:bg-zinc-800'}`}>
+                {React.cloneElement(tool.icon, { size: 22, className: "text-white" })}
               </div>
-              <span className="text-[7px] font-black uppercase tracking-widest">{tool.label}</span>
+              <span className="text-[8px] font-black uppercase tracking-[0.1em]">{tool.label}</span>
             </button>
           ))}
-          <div className="mt-auto p-3 bg-white/5 rounded-full"><MoreHorizontal size={16}/></div>
         </div>
       </div>
 
-      {/* --- PRECISION TIMELINE ENGINE --- */}
-      <div className="relative z-[100] bg-[#080808] border-t border-white/10 p-5 pb-10">
-        <div className="flex justify-between items-center mb-4">
+      {/* TIMELINE */}
+      <div className="relative z-[100] bg-[#080808] border-t border-white/10 p-6 pb-12">
+        <div className="flex justify-between items-center mb-5">
            <div className="flex items-center gap-4">
-              <span className="text-xl font-mono font-bold text-white tracking-tighter">
+              <span className="text-2xl font-mono font-bold text-white tracking-tighter w-24">
                 00:{currentTime.toFixed(2).padStart(5, '0')}
               </span>
-              <span className="text-zinc-600 text-[10px] font-bold">/ 00:30:00</span>
+              <div className="h-4 w-[1px] bg-white/10" />
+              <span className="text-zinc-500 text-[10px] font-bold tracking-widest uppercase">00:30:00</span>
            </div>
-           <div className="flex gap-4">
-              <Plus size={18} className="text-cyan-400 cursor-pointer hover:scale-110 transition-transform" />
-              <RotateCcw 
-                size={18} 
-                className="text-zinc-500 cursor-pointer hover:text-white transition-colors" 
-                onClick={() => setCurrentTime(0)} 
-              />
-           </div>
+           <RotateCcw size={20} className="text-zinc-500 cursor-pointer" onClick={() => { if(videoRef.current) videoRef.current.currentTime = 0; }} />
         </div>
 
-        {/* Timeline Tracks Area */}
-        <div className="relative h-24 bg-black rounded-xl border border-white/5 overflow-hidden shadow-inner">
-          {/* Vertical Playhead (Red Line) */}
-          <div 
-            className="absolute top-0 bottom-0 w-[2px] bg-red-500 z-50 shadow-[0_0_10px_rgba(239,68,68,0.8)] pointer-events-none"
-            style={{ left: `${(currentTime / totalDuration) * 100}%` }}
-          />
-
-          {/* Track 1: Video Clip */}
-          <div className="absolute top-2 left-[10%] w-[70%] h-8 bg-blue-600/20 border-x-4 border-blue-500 rounded-lg flex items-center px-3 group">
-             <div className="w-full h-[1px] bg-blue-500/20" />
-             <span className="absolute left-3 text-[8px] font-black uppercase opacity-60">Main_Sequence.mp4</span>
+        <div className="relative h-20 bg-black/50 rounded-2xl border border-white/5 overflow-hidden">
+          <div className="absolute top-0 bottom-0 w-[2px] bg-red-500 z-50 shadow-[0_0_15px_red]" style={{ left: `${(currentTime / totalDuration) * 100}%` }} />
+          <div className="absolute top-2 left-0 w-full h-7 bg-blue-600/10 border-y border-blue-500/30 flex items-center px-4">
+             <span className="text-[7px] font-black uppercase opacity-40">Main_Video_Track</span>
           </div>
-
-          {/* Track 2: Audio Waveform */}
-          <div className="absolute top-12 left-0 w-full h-8 flex items-center px-4 gap-[2px]">
-             {[...Array(50)].map((_, i) => (
-               <div key={i} className="flex-1 bg-pink-500/30 rounded-full" style={{ height: `${Math.random() * 80 + 20}%` }} />
+          <div className={`absolute top-11 left-0 w-full h-7 flex items-center px-4 gap-[1.5px] ${audioSrc ? 'bg-pink-500/10 border-y border-pink-500/20' : ''}`}>
+             {[...Array(60)].map((_, i) => (
+               <div key={i} className={`flex-1 rounded-full ${audioSrc ? 'bg-pink-500' : 'bg-white/5'}`} style={{ height: `${Math.random() * 80 + 20}%` }} />
              ))}
-             <div className="absolute left-[30%] w-1.5 h-1.5 bg-white rounded-full shadow-[0_0_5px_white]" />
-             <div className="absolute left-[60%] w-1.5 h-1.5 bg-white rounded-full shadow-[0_0_10px_white]" />
           </div>
         </div>
       </div>
 
-      {/* --- SUB-MENU (CapCut Style) --- */}
+      {/* SUB-MENU ENGINE */}
       <AnimatePresence>
         {showSubMenu && (
-          <div className="fixed inset-0 z-[200]">
-            <motion.div 
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-black/80 backdrop-blur-sm" 
-              onClick={() => setShowSubMenu(null)} 
-            />
-            <motion.div 
-              initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
-              transition={{ type: "spring", damping: 30, stiffness: 300 }}
-              className="absolute bottom-0 left-0 right-0 bg-[#0f0f0f] rounded-t-[3rem] p-8 border-t border-white/10 shadow-2xl max-h-[60vh] overflow-y-auto hide-scrollbar"
-            >
-              <div className="flex justify-between items-center mb-8">
-                <h3 className="text-xl font-black italic uppercase tracking-tighter flex items-center gap-2">
-                   <Sparkle className="text-cyan-400" size={20} /> {showSubMenu} Studio
+          <div className="fixed inset-0 z-[250] flex items-end">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/80 backdrop-blur-md" onClick={() => setShowSubMenu(null)} />
+            <motion.div initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
+              className="relative w-full bg-[#0f0f0f] rounded-t-[3.5rem] p-10 border-t border-white/10 max-h-[70vh] overflow-y-auto">
+              
+              <div className="flex justify-between items-center mb-10">
+                <h3 className="text-2xl font-black italic uppercase tracking-tighter flex items-center gap-3">
+                  <Sparkle className="text-cyan-400" /> {showSubMenu} Studio
                 </h3>
-                <button onClick={() => setShowSubMenu(null)} className="p-2 bg-white/5 rounded-full hover:bg-white/10 transition-colors">
-                  <X size={20}/>
-                </button>
+                <button onClick={() => setShowSubMenu(null)} className="p-3 bg-white/5 rounded-full"><X size={24}/></button>
               </div>
 
-              {showSubMenu === 'ai' ? (
-                <div className="space-y-4">
-                  <div className="p-5 bg-purple-600/10 border border-purple-500/30 rounded-[2rem] flex items-center justify-between">
-                     <div>
-                        <h4 className="text-[12px] font-black uppercase tracking-tight">Auto-Sync to Beats</h4>
-                        <p className="text-[8px] text-zinc-500 mt-1 uppercase">AI scanning harmonics...</p>
-                     </div>
-                     <div className="flex gap-1">
-                        {[1,2,3,4].map(i => <div key={i} className="w-1.5 h-1.5 bg-purple-500 rounded-full animate-pulse" />)}
-                     </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    {['Neural Slow-Mo', 'AI Upscale', 'Smart Cut', 'Voice Isolate'].map(t => (
-                      <button key={t} className="p-4 bg-white/5 border border-white/5 rounded-2xl text-[9px] font-black uppercase hover:border-purple-500/50 transition-all">{t}</button>
-                    ))}
-                  </div>
+              {/* Sub Menu Dynamic Logic */}
+              {showSubMenu === 'Text' ? (
+                <div className="space-y-6">
+                  <input 
+                    type="text" 
+                    value={overlayText} 
+                    onChange={(e) => setOverlayText(e.target.value.toUpperCase())}
+                    className="w-full bg-white/5 border border-white/10 p-6 rounded-3xl text-xl font-black italic outline-none focus:border-yellow-400"
+                    placeholder="ENTER TEXT..."
+                  />
+                  <p className="text-[10px] text-zinc-500 uppercase font-black">Edit directly on the preview screen above</p>
+                </div>
+              ) : showSubMenu === 'Beats' ? (
+                <div className="space-y-6 text-center">
+                  <button 
+                    onClick={() => audioInputRef.current.click()}
+                    className="w-full p-10 border-2 border-dashed border-white/10 rounded-[3rem] flex flex-col items-center gap-4 hover:bg-pink-500/5 transition-all"
+                  >
+                    <Music4 size={48} className="text-pink-500" />
+                    <span className="text-xs font-black uppercase tracking-widest">
+                      {audioSrc ? 'Change Soundtrack' : 'Upload Audio File'}
+                    </span>
+                  </button>
+                  {audioSrc && <div className="text-pink-500 flex items-center justify-center gap-2 animate-pulse font-black text-[10px]"><Volume2 size={16}/> AUDIO LOADED</div>}
+                </div>
+              ) : showSubMenu === 'Grade' ? (
+                <div className="grid grid-cols-3 gap-4">
+                  {[{name: 'None', val: 'none'}, {name: 'Retro', val: 'sepia(0.8)'}, {name: 'B&W', val: 'grayscale(1)'}, {name: 'Cinematic', val: 'contrast(1.5) brightness(0.8)'}].map(f => (
+                    <button key={f.name} onClick={() => setFilter(f.val)} className={`p-4 rounded-2xl border ${filter === f.val ? 'border-orange-500 bg-orange-500/10' : 'border-white/5'} text-[9px] font-black uppercase`}>{f.name}</button>
+                  ))}
                 </div>
               ) : (
-                <div className="grid grid-cols-2 gap-4">
-                  {['Precision Edit', 'Smart Filter', 'Color Grading', 'Motion Blur'].map(t => (
-                    <button key={t} className="p-5 bg-white/5 border border-white/5 rounded-3xl text-[10px] font-black uppercase text-center hover:bg-white/10 active:scale-95 transition-all">
-                      {t}
-                    </button>
+                <div className="grid grid-cols-2 gap-5">
+                  {['Precision Cut', 'Split', 'AI Enhance', 'Upscale'].map(t => (
+                    <button key={t} className="p-6 bg-white/5 border border-white/5 rounded-[2rem] text-xs font-black uppercase hover:bg-white/10">{t}</button>
                   ))}
                 </div>
               )}
 
-              <button 
-                onClick={() => setShowSubMenu(null)} 
-                className="w-full mt-10 bg-white text-black py-5 rounded-2xl font-black uppercase tracking-[0.3em] shadow-[0_10px_30px_rgba(255,255,255,0.1)] active:scale-[0.98] transition-all"
-              >
-                Render Changes
-              </button>
+              <button onClick={() => setShowSubMenu(null)} className="w-full mt-10 bg-white text-black py-6 rounded-3xl font-black uppercase tracking-[0.4em]">Save Changes</button>
             </motion.div>
           </div>
         )}
       </AnimatePresence>
 
-      {/* --- EXPORT LOADING SCREEN --- */}
+      {/* EXPORT SCREEN */}
       <AnimatePresence>
         {isExporting && (
-          <motion.div 
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black z-[1000] flex flex-col items-center justify-center p-10"
-          >
-            <div className="relative w-64 h-64 flex items-center justify-center">
-              <motion.div 
-                animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1.5, ease: "linear" }}
-                className="absolute inset-0 border-t-2 border-cyan-500 rounded-full shadow-[0_0_50px_rgba(6,182,212,0.3)]" 
-              />
-              <div className="text-center">
-                <h1 className="text-6xl font-black italic tracking-tighter">{exportProgress}%</h1>
-                <p className="text-[10px] font-black text-cyan-400 tracking-[0.5em] uppercase mt-2">Encoding 4K Master</p>
-              </div>
-            </div>
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black z-[1000] flex flex-col items-center justify-center">
+            <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1.5, ease: "linear" }}
+                className="w-64 h-64 border-t-2 border-cyan-500 rounded-full shadow-[0_0_60px_rgba(6,182,212,0.4)] absolute" />
+            <h1 className="text-7xl font-black italic tracking-tighter z-10">{exportProgress}%</h1>
           </motion.div>
         )}
       </AnimatePresence>
 
       <style jsx>{`
         .hide-scrollbar::-webkit-scrollbar { display: none; }
-        .custom-scrollbar::-webkit-scrollbar { width: 3px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
+        .inner-shadow { box-shadow: inset 0 2px 10px rgba(0,0,0,0.5); }
       `}</style>
     </div>
   );
