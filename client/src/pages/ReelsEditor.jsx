@@ -18,17 +18,28 @@ const ReelsEditor = () => {
   
   // --- VIDEO & EDITING STATES ---
   const [videoSrc, setVideoSrc] = useState(null);
-  const [audioSrc, setAudioSrc] = useState(null); // অডিওর জন্য
-  const [overlayText, setOverlayText] = useState("VIRAL HOOK ⚡"); // টেক্সট এর জন্য
+  const [audioSrc, setAudioSrc] = useState(null);
+  const [overlayText, setOverlayText] = useState("VIRAL HOOK ⚡");
   const [filter, setFilter] = useState('none');
   const [trimStart, setTrimStart] = useState(0);
 
   const videoRef = useRef(null);
-  const audioRef = useRef(null); // অডিও রেফারেন্স
+  const audioRef = useRef(null);
   const fileInputRef = useRef(null);
-  const audioInputRef = useRef(null); // অডিও ফাইল ইনপুট
+  const audioInputRef = useRef(null);
   
   const totalDuration = 30.00;
+
+  // --- HANDLERS FOR BUTTONS ---
+  const handleSubMenuAction = (action) => {
+    console.log(`Action Triggered: ${action}`);
+    // এখানে আপনি ভবিষ্যতে আপনার স্পেসিফিক লজিক যোগ করতে পারবেন
+    if (action === 'Split') {
+      alert(`Clip split at ${currentTime.toFixed(2)} seconds`);
+    } else {
+      alert(`${action} activated!`);
+    }
+  };
 
   // --- VIDEO UPLOAD HANDLER ---
   const handleVideoUpload = (e) => {
@@ -195,7 +206,7 @@ const ReelsEditor = () => {
               <div className="h-4 w-[1px] bg-white/10" />
               <span className="text-zinc-500 text-[10px] font-bold tracking-widest uppercase">00:30:00</span>
            </div>
-           <RotateCcw size={20} className="text-zinc-500 cursor-pointer" onClick={() => { if(videoRef.current) videoRef.current.currentTime = 0; }} />
+           <RotateCcw size={20} className="text-zinc-500 cursor-pointer hover:text-white transition-colors" onClick={() => { if(videoRef.current) videoRef.current.currentTime = 0; setCurrentTime(0); }} />
         </div>
 
         <div className="relative h-20 bg-black/50 rounded-2xl border border-white/5 overflow-hidden">
@@ -255,18 +266,24 @@ const ReelsEditor = () => {
               ) : showSubMenu === 'Grade' ? (
                 <div className="grid grid-cols-3 gap-4">
                   {[{name: 'None', val: 'none'}, {name: 'Retro', val: 'sepia(0.8)'}, {name: 'B&W', val: 'grayscale(1)'}, {name: 'Cinematic', val: 'contrast(1.5) brightness(0.8)'}].map(f => (
-                    <button key={f.name} onClick={() => setFilter(f.val)} className={`p-4 rounded-2xl border ${filter === f.val ? 'border-orange-500 bg-orange-500/10' : 'border-white/5'} text-[9px] font-black uppercase`}>{f.name}</button>
+                    <button key={f.name} onClick={() => setFilter(f.val)} className={`p-4 rounded-2xl border ${filter === f.val ? 'border-orange-500 bg-orange-500/10' : 'border-white/5'} text-[9px] font-black uppercase transition-all active:scale-95`}>{f.name}</button>
                   ))}
                 </div>
               ) : (
                 <div className="grid grid-cols-2 gap-5">
                   {['Precision Cut', 'Split', 'AI Enhance', 'Upscale'].map(t => (
-                    <button key={t} className="p-6 bg-white/5 border border-white/5 rounded-[2rem] text-xs font-black uppercase hover:bg-white/10">{t}</button>
+                    <button 
+                      key={t} 
+                      onClick={() => handleSubMenuAction(t)} // এখানে ফাংশনালিটি যোগ করা হয়েছে
+                      className="p-6 bg-white/5 border border-white/5 rounded-[2rem] text-xs font-black uppercase hover:bg-white/10 transition-all active:scale-95"
+                    >
+                      {t}
+                    </button>
                   ))}
                 </div>
               )}
 
-              <button onClick={() => setShowSubMenu(null)} className="w-full mt-10 bg-white text-black py-6 rounded-3xl font-black uppercase tracking-[0.4em]">Save Changes</button>
+              <button onClick={() => setShowSubMenu(null)} className="w-full mt-10 bg-white text-black py-6 rounded-3xl font-black uppercase tracking-[0.4em] active:bg-zinc-200 transition-colors">Save Changes</button>
             </motion.div>
           </div>
         )}
