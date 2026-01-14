@@ -23,7 +23,7 @@ const storage = new CloudinaryStorage({
 const upload = multer({ storage });
 
 /* ==========================================================
-    🔥 REELS ENGINE (এটিই আপনার 404 এরর ফিক্স করবে)
+    🔥 REELS ENGINE 
     এন্ডপয়েন্ট: GET /api/posts/reels/all
 ========================================================== */
 router.get("/reels/all", async (req, res) => {
@@ -55,21 +55,26 @@ router.get("/", async (req, res) => {
 });
 
 /* =========================
-    2️⃣ Create Post / Reel
+    2️⃣ Create Post / Reel (Resolved 500 Error)
 ========================= */
 router.post("/", auth, upload.single("media"), async (req, res) => {
   try {
+    if (!req.file) {
+      return res.status(400).json({ msg: "No media file detected" });
+    }
+
     const { text, mediaType, postType } = req.body;
-    const currentUserId = req.user.id;
+    // Auth0 sub বা সাধারণ ID হ্যান্ডলিং
+    const currentUserId = req.user.id || req.user.sub; 
 
     const userProfile = await User.findOne({ auth0Id: currentUserId });
 
     const postData = {
-      text,
-      media: req.file?.path || null,
-      mediaType: mediaType || (req.file?.mimetype?.includes("video") ? "video" : "image"),
-      postType: postType || (req.file?.mimetype?.includes("video") ? "reels" : "post"),
-      authorName: userProfile?.name || "Unknown Drifter",
+      text: text || "",
+      media: req.file.path, // Cloudinary URL
+      mediaType: mediaType || (req.file.mimetype.includes("video") ? "video" : "image"),
+      postType: postType || (req.file.mimetype.includes("video") ? "reels" : "post"),
+      authorName: userProfile?.name || "Drifter",
       authorAvatar: userProfile?.avatar || "",
       authorAuth0Id: currentUserId,
       author: currentUserId,
@@ -78,8 +83,8 @@ router.post("/", auth, upload.single("media"), async (req, res) => {
     const post = await Post.create(postData);
     res.status(201).json(post);
   } catch (err) {
-    console.error("Post Creation Error:", err);
-    res.status(500).json({ msg: "Transmission failed", error: err.message });
+    console.error("Critical Upload Error:", err);
+    res.status(500).json({ msg: "Internal Neural Breakdown", error: err.message });
   }
 });
 
@@ -104,7 +109,7 @@ router.get("/user/:userId", auth, async (req, res) => {
 ========================= */
 router.put("/:id/like", auth, async (req, res) => {
   try {
-    const userId = req.user.id;
+    const userId = req.user.id || req.user.sub;
     const post = await Post.findById(req.params.id);
     if (!post) return res.status(404).json({ msg: "Post not found" });
 
@@ -126,7 +131,8 @@ router.delete("/:id", auth, async (req, res) => {
     const post = await Post.findById(req.params.id);
     if (!post) return res.status(404).json({ msg: "Post not found" });
 
-    if (post.author !== req.user.id && post.authorAuth0Id !== req.user.id)
+    const userId = req.user.id || req.user.sub;
+    if (post.author !== userId && post.authorAuth0Id !== userId)
       return res.status(401).json({ msg: "Unauthorized" });
 
     await post.deleteOne();
@@ -136,9 +142,9 @@ router.delete("/:id", auth, async (req, res) => {
   }
 });
 
-/* ==========================================================
+/* =========================
     📡 THE VIRAL ENGINE
-========================================================== */
+========================= */
 router.get("/viral-feed", auth, async (req, res) => {
   try {
     const posts = await Post.find().lean();
@@ -173,11 +179,29 @@ router.get("/viral-feed", auth, async (req, res) => {
 });
 
 /* =========================
+    📡 PULSE ENGINE (Engagement Tracker)
+    এই অংশটি আপনার কনসোলের 404 এরর ফিক্স করবে
+========================= */
+router.post("/:id/pulse", async (req, res) => {
+  try {
+    const post = await Post.findByIdAndUpdate(
+      req.params.id,
+      { $inc: { views: 1 } },
+      { new: true }
+    );
+    if (!post) return res.status(404).json({ msg: "Post not found" });
+    res.status(200).json({ msg: "Neural pulse recorded" });
+  } catch (err) {
+    res.status(500).json({ msg: "Pulse recording failed" });
+  }
+});
+
+/* =========================
     6️⃣ Friend Requests
 ========================= */
 router.post("/friend-request/:targetUserId", auth, async (req, res) => {
   try {
-    const senderId = req.user.id;
+    const senderId = req.user.id || req.user.sub;
     const { targetUserId } = req.params;
 
     if (senderId === targetUserId) return res.status(400).json({ msg: "Cannot add yourself" });
