@@ -1,25 +1,10 @@
-const express = require('express');
+import express from 'express';
 const router = express.Router();
-const Post = require('../models/Post'); 
-const authMiddleware = require('../middleware/authMiddleware');
-
-// আপনার কন্ট্রোলার থেকে ফাংশনগুলো ইমপোর্ট করুন (যদি কন্ট্রোলার আলাদা থাকে)
-// যদি আপনি সব লজিক এই রাউট ফাইলেই রাখতে চান, তবে নিচের কোডটি হুবহু কপি করুন:
+import Post from '../models/Post.js'; // নিশ্চিত করুন ফাইলের এক্সটেনশন .js আছে
+import authMiddleware from '../middleware/authMiddleware.js';
 
 /* ==========================================================
-    ১. সব পোস্ট গেট করা (Public Feed)
-========================================================== */
-router.get('/', async (req, res) => {
-    try {
-        const posts = await Post.find().sort({ createdAt: -1 });
-        res.json(posts);
-    } catch (err) {
-        res.status(500).json({ message: "Server Error", error: err.message });
-    }
-});
-
-/* ==========================================================
-    ২. সব রিলস গেট করা (এটিই আপনার ৪০৪ এরর ফিক্স করবে)
+    ১. সব রিলস গেট করা (এটি সবার উপরে রাখুন কনফ্লিক্ট এড়াতে)
     এন্ডপয়েন্ট: GET /api/posts/reels/all
 ========================================================== */
 router.get('/reels/all', async (req, res) => {
@@ -36,6 +21,18 @@ router.get('/reels/all', async (req, res) => {
     } catch (err) {
         console.error("Neural Reels Fetch Error:", err);
         res.status(500).json({ message: "Failed to fetch neural reels" });
+    }
+});
+
+/* ==========================================================
+    ২. সব পোস্ট গেট করা (Public Feed)
+========================================================== */
+router.get('/', async (req, res) => {
+    try {
+        const posts = await Post.find().sort({ createdAt: -1 });
+        res.json(posts);
+    } catch (err) {
+        res.status(500).json({ message: "Server Error", error: err.message });
     }
 });
 
@@ -96,7 +93,7 @@ router.post('/reels', authMiddleware, async (req, res) => {
         const newReel = new Post({
             text,
             media: mediaUrl,
-            mediaUrl: mediaUrl, // সেফটির জন্য দুটিই রাখা হলো
+            mediaUrl: mediaUrl, 
             mediaType: 'video',
             postType: 'reels', 
             authorName,
@@ -153,4 +150,4 @@ router.delete('/:id', authMiddleware, async (req, res) => {
     }
 });
 
-module.exports = router;
+export default router; // CommonJS এর বদলে ES Module এক্সপোর্ট

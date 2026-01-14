@@ -22,15 +22,32 @@ const storage = new CloudinaryStorage({
 
 const upload = multer({ storage });
 
+/* ==========================================================
+    🔥 REELS ENGINE (এটিই আপনার 404 এরর ফিক্স করবে)
+    এন্ডপয়েন্ট: GET /api/posts/reels/all
+========================================================== */
+router.get("/reels/all", async (req, res) => {
+  try {
+    const reels = await Post.find({
+      $or: [{ postType: "reels" }, { mediaType: "video" }],
+    })
+      .sort({ createdAt: -1 })
+      .limit(20)
+      .lean();
+
+    res.json(reels);
+  } catch (err) {
+    console.error("Neural Reels Fetch Error:", err);
+    res.status(500).json({ msg: "Failed to fetch neural reels" });
+  }
+});
+
 /* =========================
-   1️⃣ Get All Posts (Global Feed)
+    1️⃣ Get All Posts (Global Feed)
 ========================= */
 router.get("/", async (req, res) => {
   try {
-    const posts = await Post.find()
-      .sort({ createdAt: -1 })
-      .limit(30)
-      .lean(); // পারফরম্যান্সের জন্য lean() ব্যবহার করা হয়েছে
+    const posts = await Post.find().sort({ createdAt: -1 }).limit(30).lean();
     res.json(posts);
   } catch (err) {
     res.status(500).json({ msg: "Server error", error: err.message });
@@ -38,24 +55,23 @@ router.get("/", async (req, res) => {
 });
 
 /* =========================
-   2️⃣ Create Post (ID Mapping Fixed)
+    2️⃣ Create Post / Reel
 ========================= */
 router.post("/", auth, upload.single("media"), async (req, res) => {
   try {
-    const { text, mediaType } = req.body;
-    const currentUserId = req.user.id; // Auth0 sub ID
+    const { text, mediaType, postType } = req.body;
+    const currentUserId = req.user.id;
 
-    // ১. ডাটাবেস থেকে ইউজারের লেটেস্ট তথ্য খুঁজে বের করা (নিরাপদ পদ্ধতি)
     const userProfile = await User.findOne({ auth0Id: currentUserId });
 
     const postData = {
       text,
       media: req.file?.path || null,
       mediaType: mediaType || (req.file?.mimetype?.includes("video") ? "video" : "image"),
-      // ইউজারের তথ্য প্রোফাইল থেকে নেওয়া হচ্ছে, ফ্রন্টএন্ডের ওপর নির্ভরতা কমানো হলো
+      postType: postType || (req.file?.mimetype?.includes("video") ? "reels" : "post"),
       authorName: userProfile?.name || "Unknown Drifter",
       authorAvatar: userProfile?.avatar || "",
-      authorAuth0Id: currentUserId, // এটিই ফ্রন্টএন্ডে লিঙ্কিং এর কাজ করবে
+      authorAuth0Id: currentUserId,
       author: currentUserId,
     };
 
@@ -68,13 +84,13 @@ router.post("/", auth, upload.single("media"), async (req, res) => {
 });
 
 /* =========================
-   3️⃣ Get User Specific Posts
+    3️⃣ Get User Specific Posts
 ========================= */
 router.get("/user/:userId", auth, async (req, res) => {
   try {
     const decodedId = decodeURIComponent(req.params.userId);
-    const posts = await Post.find({ 
-      $or: [{ authorAuth0Id: decodedId }, { author: decodedId }] 
+    const posts = await Post.find({
+      $or: [{ authorAuth0Id: decodedId }, { author: decodedId }],
     }).sort({ createdAt: -1 });
 
     res.json(posts || []);
@@ -84,7 +100,7 @@ router.get("/user/:userId", auth, async (req, res) => {
 });
 
 /* =========================
-   4️⃣ Like / Unlike Logic
+    4️⃣ Like / Unlike Logic
 ========================= */
 router.put("/:id/like", auth, async (req, res) => {
   try {
@@ -103,7 +119,7 @@ router.put("/:id/like", auth, async (req, res) => {
 });
 
 /* =========================
-   5️⃣ Delete Post
+    5️⃣ Delete Post
 ========================= */
 router.delete("/:id", auth, async (req, res) => {
   try {
@@ -119,60 +135,54 @@ router.delete("/:id", auth, async (req, res) => {
     res.status(500).json({ msg: "Delete failed" });
   }
 });
+
 /* ==========================================================
-    🔥 THE VIRAL ENGINE (Updated & Fixed)
+    📡 THE VIRAL ENGINE
 ========================================================== */
 router.get("/viral-feed", auth, async (req, res) => {
   try {
-    // ১. সব পোস্ট নিয়ে আসা (authorAuth0Id ব্যবহার করে)
     const posts = await Post.find().lean();
     const now = new Date();
 
-    const viralPosts = await Promise.all(posts.map(async (post) => {
-      // authorAuth0Id দিয়ে ইউজার ডাটা খুঁজে বের করা (যেহেতু populate কাজ নাও করতে পারে)
-      const authorProfile = await User.findOne({ auth0Id: post.authorAuth0Id || post.author }).lean();
-      
-      let engagementScore = (post.likes.length * 1) + ((post.comments?.length || 0) * 3);
+    const viralPosts = await Promise.all(
+      posts.map(async (post) => {
+        const authorProfile = await User.findOne({ auth0Id: post.authorAuth0Id || post.author }).lean();
 
-      // নিউ ইউজার বুস্ট
-      if (authorProfile) {
-        const accountAgeInDays = (now - new Date(authorProfile.createdAt)) / (1000 * 60 * 60 * 24);
-        if (accountAgeInDays < 30) engagementScore += 50; 
-        if (authorProfile.isVerified) engagementScore += 20;
-      }
+        let engagementScore = post.likes.length * 1 + (post.comments?.length || 0) * 3;
 
-      // টাইম ডিকে (Time Decay)
-      const postAgeInHours = (now - new Date(post.createdAt)) / (1000 * 60 * 60);
-      const gravity = 1.8;
-      const finalScore = engagementScore / Math.pow((postAgeInHours + 2), gravity);
+        if (authorProfile) {
+          const accountAgeInDays = (now - new Date(authorProfile.createdAt)) / (1000 * 60 * 60 * 24);
+          if (accountAgeInDays < 30) engagementScore += 50;
+          if (authorProfile.isVerified) engagementScore += 20;
+        }
 
-      return { ...post, authorData: authorProfile, viralRank: finalScore };
-    }));
+        const postAgeInHours = (now - new Date(post.createdAt)) / (1000 * 60 * 60);
+        const gravity = 1.8;
+        const finalScore = engagementScore / Math.pow(postAgeInHours + 2, gravity);
 
-    // র‍্যাঙ্ক অনুযায়ী সর্ট করা
+        return { ...post, authorData: authorProfile, viralRank: finalScore };
+      })
+    );
+
     viralPosts.sort((a, b) => b.viralRank - a.viralRank);
     res.json(viralPosts.slice(0, 20));
-
   } catch (err) {
     console.error("Viral Engine Error:", err);
     res.status(500).json({ msg: "Neural Uplink Failure" });
   }
 });
+
 /* =========================
-   6️⃣ Friend Requests Logic
+    6️⃣ Friend Requests
 ========================= */
 router.post("/friend-request/:targetUserId", auth, async (req, res) => {
   try {
     const senderId = req.user.id;
     const { targetUserId } = req.params;
 
-    if (senderId === targetUserId)
-      return res.status(400).json({ msg: "Cannot add yourself" });
+    if (senderId === targetUserId) return res.status(400).json({ msg: "Cannot add yourself" });
 
-    await User.updateOne(
-      { auth0Id: targetUserId }, 
-      { $addToSet: { friendRequests: senderId } }
-    );
+    await User.updateOne({ auth0Id: targetUserId }, { $addToSet: { friendRequests: senderId } });
 
     res.json({ msg: "Signal sent successfully" });
   } catch (err) {
