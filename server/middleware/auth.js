@@ -4,40 +4,45 @@ import { auth } from 'express-oauth2-jwt-bearer';
  * Auth0 JWT Validation Configuration
  */
 const checkJwt = auth({
-  audience: 'https://onyx-drift-api.com', 
+  // 🔥 পরিবর্তন: ফ্রন্টএন্ডের main.jsx এর সাথে মিল রেখে এটি পরিবর্তন করা হলো
+  audience: 'https://onyx-drift-app-final.onrender.com', 
   issuerBaseURL: 'https://dev-6d0nxccsaycctfl1.us.auth0.com/', 
   tokenSigningAlg: 'RS256'
 });
 
 /**
- * 🚀 Smart Auth Middleware (Viral-Ready)
- * এটি টোকেন থাকলে ভেরিফাই করবে, আর না থাকলে 'Guest' হিসেবে গণ্য করবে।
- * এতে আপনার অ্যাপের "Low Friction" ভিশন সফল হবে।
+ * 🚀 Smart Auth Middleware
  */
 const authMiddleware = (req, res, next) => {
   const authHeader = req.headers.authorization;
 
-  // ১. যদি টোকেন একেবারেই না থাকে (লগইন ছাড়া ইউজার)
+  // ১. যদি টোকেন না থাকে (Guest)
   if (!authHeader) {
     req.user = { isGuest: true, id: null };
-    return next(); // ভাইরাল ফিড দেখার জন্য গেস্টকে অ্যালাউ করছি
+    return next();
   }
 
-  // ২. যদি টোকেন থাকে, তবে ভেরিফাই করো
+  // ২. টোকেন থাকলে ভেরিফাই করো
   checkJwt(req, res, (err) => {
     if (err) {
-      // যদি টোকেন ভুল বা এক্সপায়ারড হয়, তবে গেস্ট হিসেবে ট্রিট করো অথবা এরর দাও
-      console.warn("⚠️ Token Invalid, treating as guest:", err.message);
+      // টোকেন ভুল হলে বা Audience না মিললে এখানে এরর আসবে
+      console.warn("⚠️ Token Invalid:", err.message);
+      
+      // পোস্ট করার সময় যদি টোকেন ইনভ্যালিড হয়, তবে আমরা চাই ইউজার জানুক (৪০১ এরর)
+      if (req.method === "POST") {
+         return res.status(401).json({ msg: "Session expired or invalid token. Please login again." });
+      }
+      
       req.user = { isGuest: true, id: null };
       return next();
     }
     
-    // ৩. টোকেন ভ্যালিড হলে ইউজার আইডি সেট করো
+    // ৩. টোকেন ভ্যালিড হলে
     if (req.auth && req.auth.payload) {
       req.user = {
         id: req.auth.payload.sub,
         sub: req.auth.payload.sub,
-        isGuest: false // রেজিস্টার্ড ইউজার
+        isGuest: false
       };
       next();
     } else {
