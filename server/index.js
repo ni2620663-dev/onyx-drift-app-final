@@ -5,24 +5,31 @@ import cors from "cors";
 import dotenv from "dotenv";
 import Redis from "ioredis"; 
 import { v2 as cloudinary } from 'cloudinary';
-import https from 'https'; // Self-ping এর জন্য
+import https from 'https';
 
-// ১. কনফিগারেশন ও ডাটাবেস লোড
+// ১. কনফিগারেশন লোড (সবার আগে)
 dotenv.config();
-import connectDB from "./config/db.js"; 
-import User from "./models/User.js"; 
-import Message from "./models/Message.js"; 
 
-// রাুট ইম্পোর্ট
+// ২. ডাটাবেস ও ক্লাউডিনারি কানেকশন (রাউট ইম্পোর্টের আগে হওয়া নিরাপদ)
+import connectDB from "./config/db.js"; 
+connectDB();
+
+cloudinary.config({ 
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME, 
+  api_key: process.env.CLOUDINARY_API_KEY, 
+  api_secret: process.env.CLOUDINARY_API_SECRET 
+});
+
+// ৩. রাউট ইম্পোর্ট
 import profileRoutes from "./src/routes/profile.js"; 
 import postRoutes from "./routes/posts.js";
 import userRoutes from './routes/users.js'; 
-import messageRoutes from "./routes/messages.js";          
+import messageRoutes from "./routes/messages.js";
 
 const app = express();
 const server = http.createServer(app);
 
-// ২. CORS কনফিগারেশন (Strict & Updated)
+// ৪. CORS কনফিগারেশন
 const allowedOrigins = [
     "http://localhost:5173", 
     "https://onyx-drift-app-final.onrender.com",
@@ -39,63 +46,51 @@ const corsOptions = {
         }
     },
     credentials: true,
-    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"]
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"]
 };
 
 app.use(cors(corsOptions));
 app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ limit: "50mb", extended: true })); // ফর্ম ডাটার জন্য যোগ করা হলো
 
-// ৩. সকেট আইও কনফিগারেশন (Stability Optimized)
+// ৫. সকেট আইও কনফিগারেশন
 const io = new Server(server, {
     cors: corsOptions,
-    transports: ['polling', 'websocket'], // Polling-কে আগে দিলে কানেকশন ফেইলর কমে
+    transports: ['polling', 'websocket'],
     pingTimeout: 60000,
-    pingInterval: 25000,
-    connectTimeout: 45000,
-    allowEIO3: true // Compatibility-র জন্য
+    pingInterval: 25000
 });
 
-// ৪. ডাটাবেস ও ক্লাউডিনারি কানেকশন
-connectDB();
-cloudinary.config({ 
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME, 
-  api_key: process.env.CLOUDINARY_API_KEY, 
-  api_secret: process.env.CLOUDINARY_API_SECRET 
-});
-
-// ৫. Redis Setup (Error Handling Enhanced)
+// ৬. Redis Setup
 const redis = process.env.REDIS_URL ? new Redis(process.env.REDIS_URL, {
     maxRetriesPerRequest: null,
     enableReadyCheck: false,
     retryStrategy: (times) => Math.min(times * 50, 2000),
 }) : null;
 
-if(redis) {
-    redis.on("connect", () => console.log("✅ Neural Cache Online"));
-    redis.on("error", (err) => console.log("❌ Redis Error:", err));
-}
-
-// ৬. রাুট মাউন্টিং
+// ৭. রাউট মাউন্টিং
 app.use("/api/user", userRoutes); 
 app.use("/api/profile", profileRoutes); 
 app.use("/api/posts", postRoutes); 
 app.use("/api/messages", messageRoutes); 
 
-// ৭. Keep-Alive Mechanism (Render-এর সার্ভারকে জাগিয়ে রাখবে)
+// ৮. Keep-Alive Mechanism
 setInterval(() => {
     https.get('https://onyx-drift-app-final.onrender.com', (res) => {
-        // Just a ping to prevent spin-down
+        // Heartbeat pulse
     }).on('error', (err) => {
-        console.log('Keep-alive ping error');
+        console.log('Keep-alive ping failure');
     });
-}, 840000); // প্রতি ১৪ মিনিটে একবার
+}, 840000);
 
-// ৮. Global Error Handler
+// ৯. Global Error Handler
 app.use((err, req, res, next) => {
+    console.error("🔥 SYSTEM_ERROR:", err.message);
     if (err.message === 'Signal Blocked: CORS Security Policy') {
         res.status(403).json({ error: "Access Denied: Neural link rejected" });
     } else {
-        res.status(500).json({ error: "Internal Neural Breakdown" });
+        res.status(500).json({ error: "Internal Neural Breakdown", msg: err.message });
     }
 });
 
@@ -103,8 +98,6 @@ app.use((err, req, res, next) => {
     📡 REAL-TIME ENGINE (Socket.io Logic)
 ========================================================== */
 io.on("connection", (socket) => {
-    
-    // ১. অনলাইন ইউজার রেজিস্টার
     socket.on("addNewUser", async (userId) => {
         if (redis && userId) {
             await redis.hset("online_users", userId, socket.id);
@@ -113,40 +106,12 @@ io.on("connection", (socket) => {
         }
     });
 
-    // ২. মেসেজ হ্যান্ডলিং
     socket.on("sendMessage", async (data) => {
         const { receiverId } = data;
         const socketId = await redis?.hget("online_users", receiverId);
-        if (socketId) {
-            io.to(socketId).emit("getMessage", data);
-        }
+        if (socketId) io.to(socketId).emit("getMessage", data);
     });
 
-    // ৩. গ্লোবাল চ্যাট
-    socket.on("sendGlobalMessage", (data) => {
-        socket.broadcast.emit("getGlobalMessage", data);
-    });
-
-    // ৪. টাইপিং ও সিন স্ট্যাটাস
-    socket.on("typing", async ({ receiverId, senderId }) => {
-        const socketId = await redis?.hget("online_users", receiverId);
-        if (socketId) io.to(socketId).emit("displayTyping", { senderId });
-    });
-
-    socket.on("stopTyping", async ({ receiverId }) => {
-        const socketId = await redis?.hget("online_users", receiverId);
-        if (socketId) io.to(socketId).emit("hideTyping");
-    });
-
-    socket.on("messageSeen", async ({ messageId, senderId }) => {
-        try {
-            await Message.findByIdAndUpdate(messageId, { seen: true });
-            const socketId = await redis?.hget("online_users", senderId);
-            if (socketId) io.to(socketId).emit("messageSeenUpdate", { messageId });
-        } catch (err) { console.log("Seen Update Error:", err); }
-    });
-
-    // ৫. ডিসকানেক্ট লজিক
     socket.on("disconnect", async () => {
         if (redis) {
             const all = await redis.hgetall("online_users");
