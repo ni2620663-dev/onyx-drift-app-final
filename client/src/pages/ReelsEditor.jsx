@@ -33,7 +33,6 @@ const ReelsEditor = () => {
   // --- HANDLERS FOR BUTTONS ---
   const handleSubMenuAction = (action) => {
     console.log(`Action Triggered: ${action}`);
-    // এখানে আপনি ভবিষ্যতে আপনার স্পেসিফিক লজিক যোগ করতে পারবেন
     if (action === 'Split') {
       alert(`Clip split at ${currentTime.toFixed(2)} seconds`);
     } else {
@@ -41,7 +40,7 @@ const ReelsEditor = () => {
     }
   };
 
-  // --- VIDEO UPLOAD HANDLER ---
+  // --- VIDEO/PHOTO UPLOAD HANDLER ---
   const handleVideoUpload = (e) => {
     const file = e.target.files[0];
     if (file) {
@@ -109,6 +108,15 @@ const ReelsEditor = () => {
   return (
     <div className="fixed inset-0 bg-[#050505] flex flex-col overflow-hidden text-white font-sans select-none">
       
+      {/* Hidden File Input for Gallery */}
+      <input 
+        type="file" 
+        ref={fileInputRef} 
+        onChange={handleVideoUpload} 
+        accept="video/*, image/*" 
+        className="hidden" 
+      />
+
       {/* TOP HUD */}
       <div className="relative z-[100] p-4 flex justify-between items-center bg-gradient-to-b from-black/90 via-black/40 to-transparent">
         <div className="flex gap-2">
@@ -121,9 +129,8 @@ const ReelsEditor = () => {
             className="flex items-center gap-2 bg-white/10 hover:bg-white/20 p-2 rounded-2xl border border-white/10 transition-all"
           >
             <Upload size={14} className="text-white" />
-            <span className="text-[9px] font-black uppercase tracking-tighter">Upload Video</span>
+            <span className="text-[9px] font-black uppercase tracking-tighter">Upload</span>
           </button>
-          <input type="file" ref={fileInputRef} onChange={handleVideoUpload} accept="video/*" className="hidden" />
           <input type="file" ref={audioInputRef} onChange={handleAudioUpload} accept="audio/*" className="hidden" />
         </div>
         <button 
@@ -149,7 +156,9 @@ const ReelsEditor = () => {
                     style={{ filter: filter }}
                   />
                 ) : (
-                  <div className="text-zinc-600 font-black text-[10px] tracking-widest uppercase">No Media Selected</div>
+                  <div className="text-zinc-600 font-black text-[10px] tracking-widest uppercase text-center px-4">
+                    Tap the + button below to start editing
+                  </div>
                 )}
 
                 {/* Text Overlay */}
@@ -206,7 +215,18 @@ const ReelsEditor = () => {
               <div className="h-4 w-[1px] bg-white/10" />
               <span className="text-zinc-500 text-[10px] font-bold tracking-widest uppercase">00:30:00</span>
            </div>
-           <RotateCcw size={20} className="text-zinc-500 cursor-pointer hover:text-white transition-colors" onClick={() => { if(videoRef.current) videoRef.current.currentTime = 0; setCurrentTime(0); }} />
+           
+           <div className="flex items-center gap-4">
+             <RotateCcw size={20} className="text-zinc-500 cursor-pointer hover:text-white transition-colors" onClick={() => { if(videoRef.current) videoRef.current.currentTime = 0; setCurrentTime(0); }} />
+             
+             {/* --- গ্যালারি থেকে ভিডিও/ফটো সিলেক্ট করার জন্য নিচের + বাটন --- */}
+             <button 
+               onClick={() => fileInputRef.current.click()}
+               className="p-2 bg-cyan-500/20 hover:bg-cyan-500/40 rounded-full transition-all active:scale-90"
+             >
+               <Plus size={24} className="text-cyan-400" />
+             </button>
+           </div>
         </div>
 
         <div className="relative h-20 bg-black/50 rounded-2xl border border-white/5 overflow-hidden">
@@ -238,7 +258,7 @@ const ReelsEditor = () => {
                 <button onClick={() => setShowSubMenu(null)} className="p-3 bg-white/5 rounded-full"><X size={24}/></button>
               </div>
 
-              {/* Sub Menu Dynamic Logic */}
+              {/* Sub Menu Logic */}
               {showSubMenu === 'Text' ? (
                 <div className="space-y-6">
                   <input 
@@ -248,7 +268,6 @@ const ReelsEditor = () => {
                     className="w-full bg-white/5 border border-white/10 p-6 rounded-3xl text-xl font-black italic outline-none focus:border-yellow-400"
                     placeholder="ENTER TEXT..."
                   />
-                  <p className="text-[10px] text-zinc-500 uppercase font-black">Edit directly on the preview screen above</p>
                 </div>
               ) : showSubMenu === 'Beats' ? (
                 <div className="space-y-6 text-center">
@@ -274,7 +293,7 @@ const ReelsEditor = () => {
                   {['Precision Cut', 'Split', 'AI Enhance', 'Upscale'].map(t => (
                     <button 
                       key={t} 
-                      onClick={() => handleSubMenuAction(t)} // এখানে ফাংশনালিটি যোগ করা হয়েছে
+                      onClick={() => handleSubMenuAction(t)} 
                       className="p-6 bg-white/5 border border-white/5 rounded-[2rem] text-xs font-black uppercase hover:bg-white/10 transition-all active:scale-95"
                     >
                       {t}
@@ -283,13 +302,12 @@ const ReelsEditor = () => {
                 </div>
               )}
 
-              <button onClick={() => setShowSubMenu(null)} className="w-full mt-10 bg-white text-black py-6 rounded-3xl font-black uppercase tracking-[0.4em] active:bg-zinc-200 transition-colors">Save Changes</button>
+              <button onClick={() => setShowSubMenu(null)} className="w-full mt-10 bg-white text-black py-6 rounded-3xl font-black uppercase tracking-[0.4em]">Save Changes</button>
             </motion.div>
           </div>
         )}
       </AnimatePresence>
 
-      {/* EXPORT SCREEN */}
       <AnimatePresence>
         {isExporting && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
@@ -303,7 +321,6 @@ const ReelsEditor = () => {
 
       <style jsx>{`
         .hide-scrollbar::-webkit-scrollbar { display: none; }
-        .inner-shadow { box-shadow: inset 0 2px 10px rgba(0,0,0,0.5); }
       `}</style>
     </div>
   );
