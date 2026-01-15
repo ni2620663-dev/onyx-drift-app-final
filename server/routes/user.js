@@ -8,20 +8,15 @@ const router = express.Router();
 /* ==========================================================
     1️⃣ GET PROFILE BY ID (With Auto-Sync to fix 404 Error)
 ========================================================== */
-// এখানে ['/:id', '/profile/:id'] ব্যবহার করা হয়েছে যাতে দুই ধরণের URL-ই কাজ করে
 router.get(['/:id', '/profile/:id'], auth, async (req, res) => {
   try {
-    // ফ্রন্টএন্ড থেকে আসা আইডি ডিকোড করা
     const targetId = decodeURIComponent(req.params.id);
     
-    // ডাটাবেসে ইউজার খুঁজুন (auth0Id ফিল্ড দিয়ে)
     let user = await User.findOne({ auth0Id: targetId })
       .select("-__v")
       .lean();
     
-    // ✅ ফিক্স: যদি ইউজার ডাটাবেসে না থাকে
     if (!user) {
-      // যদি রিকোয়েস্ট করা আইডিটি লগইন করা ইউজারের নিজের হয়, তবে অটো-ক্রিয়েট হবে
       const myId = req.user.sub || req.user.id;
       
       if (targetId === myId) {
@@ -30,13 +25,14 @@ router.get(['/:id', '/profile/:id'], auth, async (req, res) => {
           name: req.user.name || "Drifter",
           nickname: req.user.nickname || "drifter",
           avatar: req.user.picture || "",
-          isVerified: false
+          isVerified: false,
+          followers: [],
+          following: []
         });
         const savedUser = await newUser.save();
         user = savedUser.toObject();
         console.log("🆕 New Neural Identity Synced:", targetId);
       } else {
-        // অন্য কারও প্রোফাইল হলে এবং সে ডাটাবেসে না থাকলে ৪MD৪ দিবে
         return res.status(404).json({ msg: "Drifter not found in neural network" });
       }
     }
@@ -92,7 +88,6 @@ router.get("/search", auth, async (req, res) => {
     const currentUserId = req.user.sub || req.user.id;
 
     if (!query) {
-       // কুয়েরি না থাকলে কিছু ইউজার রিটার্ন করা
        const all = await User.find({ auth0Id: { $ne: currentUserId } }).limit(10).lean();
        return res.json(all);
     }
@@ -117,7 +112,7 @@ router.get("/search", auth, async (req, res) => {
 });
 
 /* ==========================================================
-    4️⃣ FOLLOW / UNFOLLOW SYSTEM
+    4️⃣ FOLLOW / UNFOLLOW SYSTEM (Fixed Logic)
 ========================================================== */
 router.post("/follow/:targetId", auth, async (req, res) => {
   try {
@@ -129,22 +124,26 @@ router.post("/follow/:targetId", auth, async (req, res) => {
     const targetUser = await User.findOne({ auth0Id: targetId });
     if (!targetUser) return res.status(404).json({ msg: "Target not found" });
 
-    const isFollowing = targetUser.followers?.includes(myId);
+    //followers অ্যারে চেক করা (যদি না থাকে তবে খালি অ্যারে ধরে নেওয়া)
+    const isFollowing = targetUser.followers ? targetUser.followers.includes(myId) : false;
 
     if (isFollowing) {
+      // Unfollow Logic
       await Promise.all([
-        User.updateOne({ auth0Id: myId }, { $pull: { following: targetId } }),
-        User.updateOne({ auth0Id: targetId }, { $pull: { followers: myId } })
+        User.findOneAndUpdate({ auth0Id: myId }, { $pull: { following: targetId } }),
+        User.findOneAndUpdate({ auth0Id: targetId }, { $pull: { followers: myId } })
       ]);
       res.json({ followed: false });
     } else {
+      // Follow Logic
       await Promise.all([
-        User.updateOne({ auth0Id: myId }, { $addToSet: { following: targetId } }),
-        User.updateOne({ auth0Id: targetId }, { $addToSet: { followers: myId } })
+        User.findOneAndUpdate({ auth0Id: myId }, { $addToSet: { following: targetId } }),
+        User.findOneAndUpdate({ auth0Id: targetId }, { $addToSet: { followers: myId } })
       ]);
       res.json({ followed: true });
     }
   } catch (err) {
+    console.error("Follow Error:", err);
     res.status(500).json({ msg: "Connection failed" });
   }
 });
