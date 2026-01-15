@@ -49,6 +49,20 @@ router.get("/", async (req, res) => {
 });
 
 /* ==========================================================
+    📺 1.5. GET ALL REELS (Fixes 404 for /api/posts/reels/all)
+========================================================== */
+router.get("/reels/all", async (req, res) => {
+  try {
+    const reels = await Post.find({ 
+      mediaType: { $in: ["video", "reel"] } 
+    }).sort({ createdAt: -1 });
+    res.json(reels);
+  } catch (err) {
+    res.status(500).json({ msg: "Failed to fetch neural reels" });
+  }
+});
+
+/* ==========================================================
     🚀 2. CREATE POST / REEL / STORY (POST /api/posts)
 ========================================================== */
 router.post("/", auth, upload.single("media"), async (req, res) => {
@@ -76,7 +90,7 @@ router.post("/", auth, upload.single("media"), async (req, res) => {
       authorAvatar: userProfile?.avatar || req.user?.picture || "",
       text: req.body.text || "",
       media: req.file.path, 
-      mediaUrl: req.file.path, // Added for frontend consistency
+      mediaUrl: req.file.path, 
       mediaType: detectedType,
       likes: [],
       comments: [],
