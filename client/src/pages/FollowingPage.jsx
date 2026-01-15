@@ -33,7 +33,6 @@ const FollowingPage = () => {
       const token = await getAccessTokenSilently();
       const encodedId = encodeURIComponent(id);
 
-      // ব্যাকএন্ড এখন সরাসরি ইউজার অবজেক্ট দিচ্ছে
       const res = await axios.get(`${API_URL}/api/user/profile/${encodedId}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -42,7 +41,6 @@ const FollowingPage = () => {
         setUsers([res.data]); 
       }
 
-      // পোস্ট ফেচিং
       try {
           const postsRes = await axios.get(`${API_URL}/api/posts/user/${encodedId}`, {
               headers: { Authorization: `Bearer ${token}` }
@@ -68,7 +66,6 @@ const FollowingPage = () => {
       const token = await getAccessTokenSilently();
       const currentPage = isInitial ? 1 : page;
       
-      // আপনার ব্যাকএন্ডের /api/user/search এন্ডপয়েন্ট কল হচ্ছে
       const res = await axios.get(`${API_URL}/api/user/search`, {
         params: { query, page: currentPage, limit: 12 },
         headers: { Authorization: `Bearer ${token}` }
@@ -147,7 +144,7 @@ const FollowingPage = () => {
           <div className="relative w-full md:w-96">
             <input 
               type="text" 
-              placeholder="Search Identity Name..." 
+              placeholder="Search Identity Name or ID..." 
               className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-12 text-white text-xs outline-none focus:border-cyan-500/50 transition-all backdrop-blur-xl"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -177,6 +174,11 @@ const FollowingPage = () => {
               </div>
               <h3 className="text-white font-black text-lg md:text-xl mt-5 italic uppercase truncate w-full">{u.name}</h3>
               <p className="text-cyan-400/40 text-[9px] font-black tracking-widest mt-1 uppercase">{u.nickname || "PERMANENT DRIFTER"}</p>
+              
+              {/* --- ইউজার আইডি দেখানোর অংশ --- */}
+              <p className="mt-2 text-[8px] font-mono text-gray-500 bg-white/5 px-2 py-1 rounded-md border border-white/5">
+                ID: {u.auth0Id}
+              </p>
             </div>
             
             <div className="mt-8 grid grid-cols-3 gap-3">
@@ -239,7 +241,7 @@ const FollowingPage = () => {
         </div>
       )}
 
-      {/* Loading */}
+      {/* Loading Overlay */}
       {loading && (
         <div className="fixed inset-0 flex items-center justify-center bg-[#020617]/80 backdrop-blur-md z-50">
           <div className="text-center">

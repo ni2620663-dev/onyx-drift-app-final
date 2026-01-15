@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import axios from "axios";
+import { useAuth0 } from "@auth0/auth0-react";
 import {
   Play, Pause, Plus, X, Scissors, Type, Music4, Palette,
   Sparkles, Sticker, Gauge, RotateCcw, Check, Share2, Send, Download,
@@ -7,12 +9,14 @@ import {
 } from "lucide-react";
 
 const TikTokEditor = () => {
+  const { getAccessTokenSilently, user } = useAuth0();
   const videoRef = useRef(null);
   const audioRef = useRef(null);
   const fileInputRef = useRef(null);
   const audioInputRef = useRef(null);
 
   const [videoSrc, setVideoSrc] = useState(null);
+  const [videoFile, setVideoFile] = useState(null); // আপলোডের জন্য অরিজিনাল ফাইল রাখা
   const [audioSrc, setAudioSrc] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -21,8 +25,10 @@ const TikTokEditor = () => {
   const [effect, setEffect] = useState("none");
   const [overlayText, setOverlayText] = useState("");
   const [menu, setMenu] = useState(null);
+  const [isUploading, setIsUploading] = useState(false);
 
   const totalDuration = 30;
+  const API_URL = "https://onyx-drift-app-final.onrender.com";
 
   useEffect(() => {
     let timer;
@@ -52,6 +58,7 @@ const TikTokEditor = () => {
   const uploadVideo = (e) => {
     const file = e.target.files[0];
     if (file) {
+      setVideoFile(file); // ফাইলটি সেভ করে রাখা
       const url = URL.createObjectURL(file);
       setVideoSrc(url);
       setIsPlaying(false);
@@ -60,14 +67,40 @@ const TikTokEditor = () => {
     }
   };
 
-  const handleNext = (e) => {
-    e.stopPropagation(); // ভিডিও প্লে/পজ ইভেন্ট থামানোর জন্য
-    if (!videoSrc) {
+  const handleNext = async (e) => {
+    e.stopPropagation();
+    if (!videoFile) {
       alert("Please select a video first!");
       return;
     }
-    alert("Moving to the next step..."); 
-    // এখানে আপনি অন্য পেজে যাওয়ার লজিক দিতে পারেন
+
+    try {
+      setIsUploading(true);
+      const token = await getAccessTokenSilently();
+      
+      const formData = new FormData();
+      formData.append("video", videoFile);
+      formData.append("caption", overlayText || "Onyx Drift Reel");
+      formData.append("userId", user?.sub);
+
+      const res = await axios.post(`${API_URL}/api/reels/upload`, formData, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "multipart/form-data"
+        }
+      });
+
+      if (res.status === 201 || res.status === 200) {
+        alert("Reel Uploaded Successfully!");
+        setVideoSrc(null);
+        setVideoFile(null);
+      }
+    } catch (err) {
+      console.error("Upload failed", err);
+      alert("Upload failed. Please try again.");
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   const effects = {
@@ -103,12 +136,13 @@ const TikTokEditor = () => {
           <div className="bg-white/10 backdrop-blur-md px-4 py-1.5 rounded-full text-[12px] font-bold border border-white/10 flex items-center gap-2">
             <Music size={14} className="text-pink-500"/> Add Sound
           </div>
-          {/* NEXT BUTTON FIXED */}
+          
           <button 
             onClick={handleNext}
-            className="bg-[#fe2c55] px-4 py-1.5 rounded-md text-[13px] font-bold active:scale-95 transition-transform"
+            disabled={isUploading}
+            className={`${isUploading ? 'bg-gray-600' : 'bg-[#fe2c55]'} px-4 py-1.5 rounded-md text-[13px] font-bold active:scale-95 transition-transform`}
           >
-            Next
+            {isUploading ? "..." : "Next"}
           </button>
         </div>
 
@@ -156,8 +190,10 @@ const TikTokEditor = () => {
               <div className="flex flex-col items-center cursor-pointer" onClick={(e) => e.stopPropagation()}>
                 <div className="p-3 bg-zinc-800/80 rounded-full"><Share2 size={24}/></div>
               </div>
-              <div className="flex flex-col items-center cursor-pointer" onClick={(e) => e.stopPropagation()}>
-                <div className="p-3 bg-[#fe2c55] rounded-full shadow-[0_0_15px_rgba(254,44,85,0.4)]"><Send size={24}/></div>
+              <div className="flex flex-col items-center cursor-pointer" onClick={handleNext}>
+                <div className="p-3 bg-[#fe2c55] rounded-full shadow-[0_0_15px_rgba(254,44,85,0.4)]">
+                   {isUploading ? <RotateCcw className="animate-spin" size={24}/> : <Send size={24}/>}
+                </div>
               </div>
             </div>
           </div>
@@ -179,7 +215,7 @@ const TikTokEditor = () => {
               <div className="absolute top-0 bottom-0 bg-[#fe2c55]/40 border-x border-[#fe2c55] z-10" 
                    style={{left: '0%', width: `${(currentTime/totalDuration)*100}%`}} />
               <div className="w-full h-full flex items-center px-2 gap-1 opacity-20">
-                 {[...Array(20)].map((_,i) => <div key={i} className="flex-1 bg-white h-3 rounded-full" />)}
+                  {[...Array(20)].map((_,i) => <div key={i} className="flex-1 bg-white h-3 rounded-full" />)}
               </div>
             </div>
           </div>

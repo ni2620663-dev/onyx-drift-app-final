@@ -98,7 +98,8 @@ router.get("/search", auth, async (req, res) => {
       const searchRegex = new RegExp(query.trim(), "i");
       filter.$or = [
         { name: { $regex: searchRegex } },
-        { nickname: { $regex: searchRegex } }
+        { nickname: { $regex: searchRegex } },
+        { auth0Id: { $regex: searchRegex } } // এই লাইনটি মেসেঞ্জার ও আইডি সার্চের জন্য যোগ করা হয়েছে
       ];
     }
 
