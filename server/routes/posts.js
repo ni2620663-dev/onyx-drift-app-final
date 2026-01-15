@@ -11,40 +11,6 @@ dotenv.config();
 const router = express.Router();
 
 /* ==========================================================
-    💬 8. ADD COMMENT (POST /api/posts/:id/comment)
-========================================================== */
-router.post("/:id/comment", auth, async (req, res) => {
-  try {
-    const { text } = req.body;
-    if (!text) return res.status(400).json({ msg: "Comment text is required" });
-
-    const currentUserId = req.user?.sub || req.user?.id;
-    const userProfile = await User.findOne({ auth0Id: currentUserId }).lean();
-
-    const comment = {
-      text,
-      userId: currentUserId,
-      userName: userProfile?.name || req.user?.name || "Drifter",
-      userAvatar: userProfile?.avatar || req.user?.picture || "",
-      createdAt: new Date()
-    };
-
-    const post = await Post.findByIdAndUpdate(
-      req.params.id,
-      { $push: { comments: comment } },
-      { new: true }
-    );
-
-    if (!post) return res.status(404).json({ msg: "Post not found" });
-
-    res.json(post);
-  } catch (err) {
-    console.error("Comment Error:", err);
-    res.status(500).json({ msg: "Neural Feedback Failure", error: err.message });
-  }
-});
-
-/* ==========================================================
     ☁️ Cloudinary & Multer Configuration
 ========================================================== */
 cloudinary.config({
@@ -83,25 +49,20 @@ router.get("/", async (req, res) => {
 });
 
 /* ==========================================================
-    🚀 2. CREATE POST / REEL / STORY (POST /api/posts) - FIXED FOR 500 ERROR
+    🚀 2. CREATE POST / REEL / STORY (POST /api/posts)
 ========================================================== */
 router.post("/", auth, upload.single("media"), async (req, res) => {
   try {
     if (!req.file) {
-      return res.status(400).json({ msg: "No media file detected. Signal lost." });
+      return res.status(400).json({ msg: "No media file detected." });
     }
 
     const currentUserId = req.user?.sub || req.user?.id;
-    if (!currentUserId) {
-      return res.status(401).json({ msg: "Unauthorized: Neural Identity Missing" });
-    }
-
     const userProfile = await User.findOne({ auth0Id: currentUserId }).lean();
 
     const isVideo = req.file.mimetype ? req.file.mimetype.includes("video") : false;
     let detectedType = isVideo ? "video" : "image";
     
-    // স্টোরি এবং রিল ডিটেকশন লজিক আরও শক্তিশালী করা হয়েছে
     if (req.body.isStory === "true" || req.body.type === "story") {
       detectedType = "story";
     } else if ((req.body.isReel === "true" || req.body.type === "reel") && isVideo) {
@@ -115,97 +76,53 @@ router.post("/", auth, upload.single("media"), async (req, res) => {
       authorAvatar: userProfile?.avatar || req.user?.picture || "",
       text: req.body.text || "",
       media: req.file.path, 
+      mediaUrl: req.file.path, // Added for frontend consistency
       mediaType: detectedType,
-      filter: req.body.filter || "none",
       likes: [],
       comments: [],
-      views: 0
     };
 
     const post = await Post.create(postData);
     res.status(201).json(post);
-
   } catch (err) {
-    console.error("🔥 STORY_UPLOAD_CRASH:", err);
-    res.status(500).json({ 
-      msg: "Internal Neural Breakdown during upload", 
-      error: err.message
-    });
+    console.error("🔥 UPLOAD_ERROR:", err);
+    res.status(500).json({ msg: "Internal Neural Breakdown", error: err.message });
   }
 });
 
 /* ==========================================================
-    🔥 3. REELS ENGINE (GET /api/posts/reels/all)
+    💬 3. ADD COMMENT (POST /api/posts/:id/comment)
 ========================================================== */
-router.get("/reels/all", async (req, res) => {
+router.post("/:id/comment", auth, async (req, res) => {
   try {
-    const reels = await Post.find({ 
-      mediaType: { $in: ["video", "reel"] } 
-    })
-      .sort({ createdAt: -1 })
-      .limit(20)
-      .lean();
-    res.json(reels);
+    const { text } = req.body;
+    if (!text) return res.status(400).json({ msg: "Text required" });
+
+    const currentUserId = req.user?.sub || req.user?.id;
+    const userProfile = await User.findOne({ auth0Id: currentUserId }).lean();
+
+    const comment = {
+      text,
+      userId: currentUserId,
+      userName: userProfile?.name || req.user?.name || "Drifter",
+      userAvatar: userProfile?.avatar || req.user?.picture || "",
+      createdAt: new Date()
+    };
+
+    const post = await Post.findByIdAndUpdate(
+      req.params.id,
+      { $push: { comments: comment } },
+      { new: true }
+    );
+
+    res.json(post);
   } catch (err) {
-    res.status(500).json({ msg: "Failed to fetch neural reels" });
+    res.status(500).json({ msg: "Comment Failure", error: err.message });
   }
 });
 
 /* ==========================================================
-    📸 3.5. STORIES ENGINE (GET /api/posts/stories/all)
-========================================================== */
-router.get("/stories/all", async (req, res) => {
-  try {
-    const stories = await Post.find({ mediaType: "story" })
-      .sort({ createdAt: -1 })
-      .limit(50)
-      .lean();
-    res.json(stories);
-  } catch (err) {
-    res.status(500).json({ msg: "Failed to fetch neural stories" });
-  }
-});
-
-/* ==========================================================
-    📡 4. THE VIRAL ENGINE (GET /api/posts/viral-feed)
-========================================================== */
-router.get("/viral-feed", async (req, res) => {
-  try {
-    const posts = await Post.find().sort({ createdAt: -1 }).limit(50).lean();
-    const now = new Date();
-
-    const viralPosts = posts.map((post) => {
-      let engagementScore = (post.likes?.length || 0) * 1.5 + (post.comments?.length || 0) * 4;
-      const postAgeInHours = (now - new Date(post.createdAt)) / (1000 * 60 * 60);
-      const gravity = 1.8;
-      const finalScore = engagementScore / Math.pow(postAgeInHours + 2, gravity);
-      return { ...post, viralRank: finalScore };
-    });
-
-    viralPosts.sort((a, b) => b.viralRank - a.viralRank);
-    res.json(viralPosts.slice(0, 20));
-  } catch (err) {
-    res.status(500).json({ msg: "Neural Uplink Failure", error: err.message });
-  }
-});
-
-/* ==========================================================
-    👤 5. USER SPECIFIC POSTS (GET /api/posts/user/:userId)
-========================================================== */
-router.get("/user/:userId", async (req, res) => {
-  try {
-    const decodedId = decodeURIComponent(req.params.userId);
-    const posts = await Post.find({
-      $or: [{ authorAuth0Id: decodedId }, { author: decodedId }],
-    }).sort({ createdAt: -1 }).lean();
-    res.json(posts || []);
-  } catch (err) {
-    res.status(500).json({ msg: "Failed to fetch user posts" });
-  }
-});
-
-/* ==========================================================
-    ❤️ 6. LIKE / UNLIKE (CHANGED TO POST FOR FRONTEND SYNC)
+    ❤️ 4. LIKE / UNLIKE
 ========================================================== */
 router.post("/:id/like", auth, async (req, res) => {
   try {
@@ -224,7 +141,7 @@ router.post("/:id/like", auth, async (req, res) => {
 });
 
 /* ==========================================================
-    🗑️ 7. DELETE POST (DELETE /api/posts/:id)
+    🗑️ 5. DELETE POST
 ========================================================== */
 router.delete("/:id", auth, async (req, res) => {
   try {
