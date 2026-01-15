@@ -5,21 +5,18 @@ import { io } from "socket.io-client";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   HiOutlinePhone, HiOutlineVideoCamera, HiOutlinePaperAirplane, 
-  HiOutlineChatBubbleBottomCenterText, HiOutlineMicrophone, 
-  HiOutlineChevronLeft, HiPlus, HiXMark, 
-  HiOutlineMusicalNote, HiOutlinePaintBrush,
-  HiLanguage, HiCheck 
+  HiOutlineChatBubbleBottomCenterText, HiOutlineChevronLeft, HiPlus, HiXMark, 
+  HiOutlineMusicalNote, HiLanguage, HiCheck, HiOutlineMagnifyingGlass
 } from "react-icons/hi2";
-import { useNavigate } from "react-router-dom";
 
 const Messenger = () => {
   const { user, getAccessTokenSilently, isAuthenticated } = useAuth0();
-  const navigate = useNavigate();
   
   const [conversations, setConversations] = useState([]);
   const [currentChat, setCurrentChat] = useState(null);
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
   
   const [allStories, setAllStories] = useState([]); 
   const [viewingStory, setViewingStory] = useState(null);
@@ -27,11 +24,7 @@ const Messenger = () => {
   const [isStoryUploading, setIsStoryUploading] = useState(false);
   const [activeTool, setActiveTool] = useState(null); 
   const [storySettings, setStorySettings] = useState({
-    filter: "none",
-    text: "",
-    musicName: "",
-    musicUrl: "",
-    aiEnhance: false
+    filter: "none", text: "", musicName: "", musicUrl: "", aiEnhance: false
   });
 
   const socket = useRef();
@@ -46,16 +39,12 @@ const Messenger = () => {
     { name: "Metamorphosis", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3" },
   ];
 
-  // ১. স্টোরি লোড করা
   useEffect(() => {
     const fetchStories = async () => {
       try {
         const res = await axios.get(`${API_URL}/api/stories`);
-        // এখানে ফিল্টার করা হয়েছে যাতে শুধু মেসেঞ্জার স্টোরিগুলোই আসে
         setAllStories(res.data);
-      } catch (err) {
-        console.error("Error fetching stories", err);
-      }
+      } catch (err) { console.error("Error fetching stories", err); }
     };
     if (isAuthenticated) fetchStories();
   }, [isAuthenticated]);
@@ -64,7 +53,12 @@ const Messenger = () => {
     setViewingStory(story);
     if (story.musicUrl) {
       audioRef.current.src = story.musicUrl;
-      audioRef.current.play().catch(e => console.log("Audio play failed"));
+      audioRef.current.load();
+      // গান শোনার জন্য প্লে প্রমিজ হ্যান্ডেল করা হয়েছে
+      const playPromise = audioRef.current.play();
+      if (playPromise !== undefined) {
+        playPromise.catch(error => console.log("Audio play blocked by browser"));
+      }
     }
   };
 
@@ -85,8 +79,7 @@ const Messenger = () => {
       formData.append("musicName", storySettings.musicName);
       formData.append("musicUrl", storySettings.musicUrl);
       formData.append("filter", storySettings.filter);
-      formData.append("isStory", "true");
-      formData.append("onlyMessenger", "true"); // এটি পোস্ট সেকশনে যাওয়া বন্ধ করবে
+      formData.append("onlyMessenger", "true");
 
       const res = await axios.post(`${API_URL}/api/stories`, formData, {
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "multipart/form-data" }
@@ -94,12 +87,9 @@ const Messenger = () => {
 
       setAllStories([res.data, ...allStories]);
       setSelectedStoryFile(null);
-      setStorySettings({ filter: "none", text: "", musicName: "", musicUrl: "", aiEnhance: false });
-    } catch (err) {
-      console.error("Upload Failed", err);
-    } finally {
-      setIsStoryUploading(false);
-    }
+      setStorySettings({ filter: "none", text: "", musicName: "", musicUrl: "" });
+    } catch (err) { console.error("Upload Failed", err); }
+    finally { setIsStoryUploading(false); }
   };
 
   const handleSend = async () => {
@@ -113,14 +103,9 @@ const Messenger = () => {
     setNewMessage("");
   };
 
-  useEffect(() => {
-    if (isAuthenticated) {
-      socket.current = io(API_URL, { transports: ["websocket"] });
-      socket.current.on("getMessage", (data) => setMessages((prev) => [...prev, data]));
-      if (user?.sub) socket.current.emit("addNewUser", user.sub);
-      return () => socket.current.disconnect();
-    }
-  }, [user, isAuthenticated]);
+  const filteredConversations = conversations.filter(c => 
+    c._id.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   return (
     <div className="flex h-screen bg-[#010409] text-white font-mono overflow-hidden fixed inset-0">
@@ -130,25 +115,25 @@ const Messenger = () => {
         {viewingStory && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[6000] bg-black flex items-center justify-center">
              <div className="relative w-full max-w-[420px] h-full md:h-[92vh] bg-zinc-900 overflow-hidden md:rounded-3xl shadow-2xl">
-                {/* প্রগ্রেস বার: ৫ সেকেন্ড পর অটো ক্লোজ হবে */}
                 <div className="absolute top-4 left-4 right-4 h-1 bg-white/20 z-50 rounded-full overflow-hidden">
-                   <motion.div 
-                     initial={{ width: 0 }} 
-                     animate={{ width: "100%" }} 
-                     transition={{ duration: 5, ease: "linear" }} 
-                     onAnimationComplete={handleCloseStory} 
-                     className="h-full bg-cyan-500" 
-                   />
+                   <motion.div initial={{ width: 0 }} animate={{ width: "100%" }} transition={{ duration: 7, ease: "linear" }} onAnimationComplete={handleCloseStory} className="h-full bg-cyan-500" />
                 </div>
                 
                 <img src={viewingStory.mediaUrl} className="w-full h-full object-cover" alt="story" />
                 
                 <div className="absolute inset-0 flex flex-col justify-center items-center p-10 pointer-events-none">
-                  <span className="bg-white text-black px-4 py-1 text-xl font-black uppercase italic pointer-events-auto shadow-lg">{viewingStory.text}</span>
+                  <span className="bg-white text-black px-4 py-1 text-xl font-black uppercase italic pointer-events-auto">{viewingStory.text}</span>
                 </div>
 
-                <div className="absolute top-8 right-6 z-50">
-                  <button onClick={handleCloseStory} className="p-2 bg-black/40 backdrop-blur-md rounded-full hover:bg-black/60 transition-all"><HiXMark size={24}/></button>
+                <div className="absolute top-8 right-6 z-50 flex gap-2">
+                  <button onClick={handleCloseStory} className="p-2 bg-black/40 backdrop-blur-md rounded-full"><HiXMark size={24}/></button>
+                </div>
+
+                {/* ❤️ STORY REACTIONS */}
+                <div className="absolute bottom-24 left-0 right-0 flex justify-center gap-6 z-50 pointer-events-auto">
+                  {['❤️', '🔥', '👍'].map(emoji => (
+                    <button key={emoji} className="text-2xl hover:scale-125 transition-transform bg-black/20 p-2 rounded-full backdrop-blur-sm" onClick={() => alert(`${emoji} Sent!`)}>{emoji}</button>
+                  ))}
                 </div>
 
                 {viewingStory.musicName && (
@@ -171,14 +156,14 @@ const Messenger = () => {
 
               <div className="absolute top-8 left-0 right-0 px-6 flex justify-between z-50">
                 <button onClick={() => setSelectedStoryFile(null)} className="p-3 bg-black/40 rounded-full"><HiXMark size={24}/></button>
-                <button onClick={handleStoryUpload} disabled={isStoryUploading} className="px-8 py-2 bg-white text-black font-black rounded-full text-[11px] uppercase shadow-xl hover:scale-105 transition-transform">
+                <button onClick={handleStoryUpload} disabled={isStoryUploading} className="px-8 py-2 bg-white text-black font-black rounded-full text-[11px] uppercase shadow-xl">
                   {isStoryUploading ? "Syncing..." : "Post Story"}
                 </button>
               </div>
 
               <div className="absolute right-5 top-1/2 -translate-y-1/2 flex flex-col gap-6 z-50">
-                <button onClick={() => setActiveTool('text')} className={`p-3.5 rounded-full backdrop-blur-md border ${activeTool === 'text' ? 'bg-white text-black' : 'bg-black/40 border-white/10'}`}><HiLanguage size={24}/></button>
-                <button onClick={() => setActiveTool('music')} className={`p-3.5 rounded-full backdrop-blur-md border ${activeTool === 'music' ? 'bg-pink-500 text-white' : 'bg-black/40 border-white/10'}`}><HiOutlineMusicalNote size={24}/></button>
+                <button onClick={() => setActiveTool('text')} className="p-3.5 rounded-full bg-black/40 border border-white/10"><HiLanguage size={24}/></button>
+                <button onClick={() => setActiveTool('music')} className="p-3.5 rounded-full bg-black/40 border border-white/10"><HiOutlineMusicalNote size={24}/></button>
               </div>
 
               {storySettings.text && (
@@ -192,7 +177,7 @@ const Messenger = () => {
                   <div className="space-y-3 max-h-[300px] overflow-y-auto custom-scrollbar">
                     {viralSongs.map(track => (
                       <button key={track.name} onClick={() => {setStorySettings({...storySettings, musicName: track.name, musicUrl: track.url}); setActiveTool(null);}} 
-                        className="w-full flex justify-between p-4 bg-white/5 rounded-2xl text-[11px] font-bold uppercase hover:bg-white/10 transition-all">
+                        className="w-full flex justify-between p-4 bg-white/5 rounded-2xl text-[11px] font-bold uppercase">
                         {track.name} <HiCheck className={storySettings.musicName === track.name ? "text-pink-500" : "opacity-0"}/>
                       </button>
                     ))}
@@ -200,12 +185,6 @@ const Messenger = () => {
                 </motion.div>
               )}
             </div>
-            {activeTool === 'text' && (
-              <div className="fixed inset-0 bg-black/90 z-[70] flex flex-col items-center justify-center p-10">
-                <input autoFocus className="bg-transparent text-center text-4xl font-black uppercase text-white w-full outline-none border-b border-white/20 pb-4" placeholder="TYPE MESSAGE..." value={storySettings.text} onChange={(e) => setStorySettings({...storySettings, text: e.target.value})} onKeyDown={(e) => e.key === 'Enter' && setActiveTool(null)} />
-                <button onClick={() => setActiveTool(null)} className="mt-10 px-10 py-3 bg-white text-black font-black rounded-full uppercase text-[12px] tracking-widest">Done</button>
-              </div>
-            )}
           </motion.div>
         )}
       </AnimatePresence>
@@ -213,8 +192,20 @@ const Messenger = () => {
       {/* 📡 SIDEBAR */}
       <div className={`${currentChat ? 'hidden md:flex' : 'flex'} w-full md:w-[420px] bg-[#030712]/90 backdrop-blur-3xl border-r border-white/5 flex flex-col`}>
         <div className="p-8 pb-4">
-          <h2 className="text-2xl font-black tracking-tighter italic bg-gradient-to-r from-cyan-400 to-purple-600 bg-clip-text text-transparent mb-10">ONYX_NODES</h2>
+          <h2 className="text-2xl font-black tracking-tighter italic bg-gradient-to-r from-cyan-400 to-purple-600 bg-clip-text text-transparent mb-8">ONYX_NODES</h2>
           
+          {/* 🔍 SEARCH BAR */}
+          <div className="relative mb-8 group">
+            <HiOutlineMagnifyingGlass className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20 group-focus-within:text-cyan-500 transition-colors" size={18} />
+            <input 
+              type="text" 
+              placeholder="SEARCH NODE..." 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full bg-white/5 border border-white/10 rounded-2xl py-3 pl-12 pr-4 text-[10px] font-bold tracking-widest uppercase outline-none focus:border-cyan-500/50 transition-all"
+            />
+          </div>
+
           <div className="flex gap-5 overflow-x-auto hide-scrollbar pb-6">
             <label className="flex flex-col items-center gap-3 shrink-0 cursor-pointer group">
               <div className="w-16 h-16 rounded-[2.2rem] border-2 border-dashed border-white/10 flex items-center justify-center text-cyan-500 group-hover:border-cyan-500 transition-all">
@@ -238,13 +229,13 @@ const Messenger = () => {
         </div>
 
         <div className="flex-1 overflow-y-auto px-6 space-y-3 custom-scrollbar">
-          {conversations.map((c) => (
+          {filteredConversations.map((c) => (
             <div key={c._id} onClick={() => setCurrentChat(c)} className={`p-6 rounded-[2.5rem] flex items-center gap-5 cursor-pointer border transition-all ${currentChat?._id === c._id ? 'bg-cyan-500 border-cyan-400 text-black shadow-lg shadow-cyan-500/20' : 'bg-white/5 border-transparent hover:bg-white/10'}`}>
                 <div className={`w-14 h-14 rounded-2xl flex items-center justify-center font-black ${currentChat?._id === c._id ? 'bg-black text-cyan-500' : 'bg-zinc-800 text-white/20'}`}>
                   {c._id.slice(-2).toUpperCase()}
                 </div>
                 <div className="flex-1">
-                  <h4 className="text-sm font-black uppercase">Neural_Link_{c._id.slice(-4)}</h4>
+                  <h4 className="text-sm font-black uppercase">Link_{c._id.slice(-4)}</h4>
                   <p className={`text-[10px] uppercase font-bold tracking-widest ${currentChat?._id === c._id ? 'opacity-60' : 'opacity-20'}`}>Active Uplink</p>
                 </div>
             </div>
@@ -256,14 +247,14 @@ const Messenger = () => {
       <div className={`${!currentChat ? 'hidden md:flex' : 'flex'} flex-1 flex flex-col bg-[#010409]`}>
         {currentChat ? (
           <>
-            <header className="px-10 py-8 flex justify-between items-center border-b border-white/5 backdrop-blur-md sticky top-0 z-20">
+            <header className="px-10 py-8 flex justify-between items-center border-b border-white/5">
               <div className="flex items-center gap-6">
                 <button onClick={() => setCurrentChat(null)} className="md:hidden text-cyan-400"><HiOutlineChevronLeft size={24} /></button>
                 <h3 className="text-sm font-black uppercase tracking-widest text-cyan-500">Terminal_{currentChat._id.slice(-4)}</h3>
               </div>
               <div className="flex gap-4">
-                <button className="p-4 bg-white/5 rounded-2xl hover:bg-cyan-500/10 transition-all"><HiOutlinePhone size={22} /></button>
-                <button className="p-4 bg-white/5 rounded-2xl hover:bg-blue-500/10 transition-all"><HiOutlineVideoCamera size={22} /></button>
+                <button className="p-4 bg-white/5 rounded-2xl"><HiOutlinePhone size={22} /></button>
+                <button className="p-4 bg-white/5 rounded-2xl"><HiOutlineVideoCamera size={22} /></button>
               </div>
             </header>
 
@@ -279,7 +270,7 @@ const Messenger = () => {
             </div>
 
             <div className="p-10">
-              <div className="flex items-center gap-4 bg-white/5 p-4 rounded-[3rem] border border-white/10 focus-within:border-cyan-500/50 transition-all group shadow-2xl">
+              <div className="flex items-center gap-4 bg-white/5 p-4 rounded-[3rem] border border-white/10 focus-within:border-cyan-500/50 transition-all">
                 <input value={newMessage} onChange={(e) => setNewMessage(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSend()} placeholder="Transmit message..." className="flex-1 bg-transparent outline-none px-4 font-bold text-sm" />
                 <button onClick={handleSend} className="p-5 bg-cyan-500 rounded-full text-black hover:scale-110 active:scale-95 transition-all shadow-lg shadow-cyan-500/40">
                   <HiOutlinePaperAirplane size={22} className="rotate-45" />
