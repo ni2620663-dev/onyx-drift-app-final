@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ZegoUIKitPrebuilt } from '@zegocloud/zego-uikit-prebuilt';
 import { useAuth0 } from "@auth0/auth0-react";
@@ -6,97 +6,115 @@ import { HiOutlineXMark } from "react-icons/hi2";
 
 const CallPage = () => {
   const { roomId } = useParams(); 
-  const { user } = useAuth0();
+  const { user, isAuthenticated } = useAuth0();
   const navigate = useNavigate();
+  const containerRef = useRef(null);
 
-  // ✅ ZegoCloud Credentials (আপনার নতুন Secret দিয়ে আপডেট করা হয়েছে)
+  // ✅ ZegoCloud Credentials
   const appID = 1086315716;
   const serverSecret = "faa9451e78f290d4a11ff8eb53c79bea"; 
 
-  const myMeeting = async (element) => {
-    if (!element || !roomId) return;
+  useEffect(() => {
+    const initMeeting = async () => {
+      if (!roomId || !isAuthenticated) return;
 
-    try {
-      /**
-       * গুরুত্বপূর্ণ: ZegoCloud UserID তে পাইপ (|) বা স্পেশাল ক্যারেক্টার সাপোর্ট করে না।
-       * তাই আমরা auth0 ID পরিষ্কার করে নিচ্ছি।
-       */
-      const cleanUserID = user?.sub 
-        ? user.sub.replace(/[^a-zA-Z0-9_]/g, "_") 
-        : `user_${Math.floor(Math.random() * 10000)}`;
+      try {
+        // ১. ইউজার আইডি ক্লিন করা (Zego স্পেশাল ক্যারেক্টার সাপোর্ট করে না)
+        const cleanUserID = user?.sub 
+          ? user.sub.replace(/[^a-zA-Z0-9_]/g, "_") 
+          : `user_${Math.floor(Math.random() * 10000)}`;
 
-      const userName = user?.name || "Nexus User";
+        const userName = user?.name || "Drifter User";
 
-      // ১. টোকেন জেনারেট করা
-      const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(
-        appID, 
-        serverSecret, 
-        roomId, 
-        cleanUserID, 
-        userName
-      );
+        // ২. কিট টোকেন জেনারেট করা
+        const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(
+          appID, 
+          serverSecret, 
+          roomId, 
+          cleanUserID, 
+          userName
+        );
 
-      // ২. কলিং ইন্টারফেস তৈরি করা
-      const zp = ZegoUIKitPrebuilt.create(kitToken);
-      
-      zp.joinRoom({
-        container: element,
-        sharedLinks: [
-          {
-            name: 'Personal link',
-            url: window.location.origin + window.location.pathname,
+        // ৩. কলিং ইন্টারফেস তৈরি করা
+        const zp = ZegoUIKitPrebuilt.create(kitToken);
+        
+        zp.joinRoom({
+          container: containerRef.current,
+          sharedLinks: [
+            {
+              name: 'Invite link',
+              url: window.location.origin + window.location.pathname,
+            },
+          ],
+          scenario: {
+            mode: ZegoUIKitPrebuilt.OneONoneCall, // ১-১ কলের জন্য
           },
-        ],
-        scenario: {
-          mode: ZegoUIKitPrebuilt.OneONoneCall, 
-        },
-        showScreenSharingButton: true,
-        showPreJoinView: false, // সরাসরি কলে জয়েন করার জন্য
-        onLeaveRoom: () => {
-          navigate(-1); 
-        },
-      });
-    } catch (error) {
-      console.error("Zego Initialization Error:", error);
+          showScreenSharingButton: true,
+          showPreJoinView: false, // সরাসরি জয়েন
+          showUserList: false,
+          maxUsers: 2,
+          layout: "Auto", 
+          showLayoutButton: false,
+          showNonVideoUser: true,
+          showAudioVideoSettingsButton: true,
+          onLeaveRoom: () => {
+            navigate('/messenger'); // কল লিভ করলে মেসেঞ্জারে ফিরবে
+          },
+        });
+      } catch (error) {
+        console.error("Zego Initialization Error:", error);
+      }
+    };
+
+    if (isAuthenticated) {
+      initMeeting();
     }
-  };
+  }, [roomId, user, isAuthenticated, navigate]);
 
   return (
     <div className="relative w-full h-screen bg-[#020617] flex flex-col overflow-hidden">
-      {/* HUD / Top UI Bar */}
-      <div className="absolute top-0 left-0 w-full p-6 z-[999] flex justify-between items-center bg-gradient-to-b from-black/80 to-transparent pointer-events-none">
-        <div className="flex items-center gap-3">
-          <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+      
+      {/* 🛰️ Cyber HUD Overlay */}
+      <div className="absolute top-0 left-0 w-full p-6 z-[9999] flex justify-between items-center bg-gradient-to-b from-black/90 to-transparent pointer-events-none">
+        <div className="flex items-center gap-4 pointer-events-auto">
+          <div className="relative">
+            <div className="w-3 h-3 bg-red-600 rounded-full animate-ping absolute inset-0" />
+            <div className="w-3 h-3 bg-red-500 rounded-full relative" />
+          </div>
           <div>
-            <h2 className="text-cyan-400 font-black uppercase tracking-[0.3em] text-xs">Secure Channel</h2>
-            <p className="text-white/40 text-[9px] font-mono uppercase">Room ID: {roomId?.substring(0, 10)}...</p>
+            <h2 className="text-cyan-400 font-black uppercase tracking-[0.4em] text-[10px]">Neural Link Active</h2>
+            <p className="text-white/30 text-[8px] font-mono uppercase tracking-widest">Encrypted Room: {roomId?.substring(0, 12)}</p>
           </div>
         </div>
         
         <button 
-          onClick={() => navigate(-1)}
-          className="w-12 h-12 bg-white/5 backdrop-blur-xl rounded-full flex items-center justify-center border border-white/10 text-white hover:bg-red-500/40 hover:border-red-500/50 transition-all pointer-events-auto shadow-2xl"
+          onClick={() => navigate('/messenger')}
+          className="w-12 h-12 bg-white/5 backdrop-blur-2xl rounded-2xl flex items-center justify-center border border-white/10 text-white hover:bg-red-500 hover:text-white transition-all pointer-events-auto shadow-2xl group"
         >
-          <HiOutlineXMark size={24} />
+          <HiOutlineXMark size={24} className="group-hover:rotate-90 transition-transform" />
         </button>
       </div>
 
-      {/* Zego Video Container */}
+      {/* 🎥 Zego Video Container */}
       <div 
-        ref={myMeeting} 
-        className="zego-view-container w-full h-full"
-        style={{ width: '100vw', height: '100vh' }}
+        ref={containerRef} 
+        className="zego-container w-full h-full"
       ></div>
 
-      {/* UI Styling Overrides */}
+      {/* 🎨 Custom UI Styling Overrides */}
       <style>{`
-        .zego-view-container div {
-          background-color: transparent !important;
+        .zego-container {
+          background-color: #020617 !important;
         }
-        /* Zego-র নিচের কন্ট্রোল বার এর কালার ডার্ক করার জন্য */
-        .C66_Wf_S_Zl_98 { 
-          background: rgba(2, 6, 23, 0.8) !important;
-          backdrop-filter: blur(10px);
+        /* Zego-র ডিফল্ট কন্ট্রোল বার লুকানোর বা কাস্টমাইজ করার চেষ্টা */
+        .ZEGO_V_W_CONTROL_BAR {
+          background: rgba(2, 6, 23, 0.7) !important;
+          backdrop-filter: blur(15px) !important;
+          border-top: 1px solid rgba(255, 255, 255, 0.05) !important;
+        }
+        .ZEGO_V_W_VIDEO_PLAYER {
+          object-fit: cover !important;
+          border-radius: 20px !important;
         }
       `}</style>
     </div>

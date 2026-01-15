@@ -83,7 +83,7 @@ router.get("/", async (req, res) => {
 });
 
 /* ==========================================================
-    🚀 2. CREATE POST / REEL / STORY (POST /api/posts)
+    🚀 2. CREATE POST / REEL / STORY (POST /api/posts) - FIXED FOR 500 ERROR
 ========================================================== */
 router.post("/", auth, upload.single("media"), async (req, res) => {
   try {
@@ -101,9 +101,10 @@ router.post("/", auth, upload.single("media"), async (req, res) => {
     const isVideo = req.file.mimetype ? req.file.mimetype.includes("video") : false;
     let detectedType = isVideo ? "video" : "image";
     
-    if (req.body.isStory === "true") {
+    // স্টোরি এবং রিল ডিটেকশন লজিক আরও শক্তিশালী করা হয়েছে
+    if (req.body.isStory === "true" || req.body.type === "story") {
       detectedType = "story";
-    } else if (req.body.isReel === "true" && isVideo) {
+    } else if ((req.body.isReel === "true" || req.body.type === "reel") && isVideo) {
       detectedType = "reel";
     }
 
@@ -125,9 +126,9 @@ router.post("/", auth, upload.single("media"), async (req, res) => {
     res.status(201).json(post);
 
   } catch (err) {
-    console.error("🔥 POST_CREATION_CRASH:", err);
+    console.error("🔥 STORY_UPLOAD_CRASH:", err);
     res.status(500).json({ 
-      msg: "Internal Neural Breakdown", 
+      msg: "Internal Neural Breakdown during upload", 
       error: err.message
     });
   }
