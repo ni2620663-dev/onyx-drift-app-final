@@ -6,64 +6,41 @@ import Story from "../models/Story.js";
 
 const router = express.Router();
 
-// ১. ক্লাউডিনারি কনফিগারেশন (আপনার ডাটা দিয়ে আপডেট করুন অথবা .env থেকে নিন)
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
-});
-
-// ২. মাল্টার স্টোরেজ সেটআপ
+// ক্লাউডিনারি স্টোরেজ কনফিগ
 const storage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: {
-    folder: "messenger_stories",
+    folder: "onyx_stories",
     allowed_formats: ["jpg", "png", "jpeg", "gif"],
   },
 });
 
 const upload = multer({ storage: storage });
 
-// --- এপিআই রাউটস ---
-
-// ১. স্টোরি পোস্ট করা (মেসেঞ্জারের জন্য)
-// এখানে upload.single("media") যুক্ত করা হয়েছে যা ফাইল রিসিভ করবে
+// পোস্ট রাউট
 router.post("/", upload.single("media"), async (req, res) => {
   try {
-    // ফাইল যদি আপলোড হয় তবে ক্লাউডিনারি থেকে আসা URL ব্যবহার হবে
-    const mediaUrl = req.file ? req.file.path : req.body.mediaUrl;
+    // ইমেজ URL চেক
+    const mediaUrl = req.file ? req.file.path : null;
 
     if (!mediaUrl) {
-      return res.status(400).json({ message: "Media file or URL is required" });
+      return res.status(400).json({ message: "Image upload failed on Cloudinary" });
     }
 
     const newStory = new Story({
       userId: req.body.userId,
       mediaUrl: mediaUrl,
-      text: req.body.text,
-      musicName: req.body.musicName,
-      musicUrl: req.body.musicUrl,
-      filter: req.body.filter,
+      text: req.body.text || "",
+      musicName: req.body.musicName || "",
+      musicUrl: req.body.musicUrl || "",
       onlyMessenger: req.body.onlyMessenger || "true"
     });
 
     const savedStory = await newStory.save();
     res.status(200).json(savedStory);
   } catch (err) {
-    console.error("Story Post Error:", err);
-    res.status(500).json({ message: "Server Error", error: err.message });
-  }
-});
-
-// ২. সব স্টোরি গেট করা (শুধুমাত্র মেসেঞ্জার ফিল্টারসহ)
-router.get("/", async (req, res) => {
-  try {
-    const stories = await Story.find({ onlyMessenger: "true" })
-      .sort({ createdAt: -1 });
-      
-    res.status(200).json(stories);
-  } catch (err) {
-    res.status(500).json({ message: "Fetch failed", error: err.message });
+    console.error("DETAILED_ERROR:", err); // এটি Render লগে এরর দেখাবে
+    res.status(500).json({ message: "Server Side Error", error: err.message });
   }
 });
 
