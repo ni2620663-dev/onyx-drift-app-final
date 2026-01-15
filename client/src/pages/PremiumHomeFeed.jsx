@@ -2,14 +2,17 @@ import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   FaTimes, FaImage, FaHeart, FaComment, 
-  FaShareAlt, FaDownload, FaEllipsisH, FaCheckCircle 
+  FaShareAlt, FaDownload, FaEllipsisH, FaCheckCircle,
+  FaVolumeMute, FaVolumeUp, FaCog, FaSignOutAlt
 } from 'react-icons/fa'; 
 import { useAuth0 } from "@auth0/auth0-react";
 import axios from "axios";
 
-// --- Auto-play Video Component ---
+// --- Video Component with Sound Toggle ---
 const AutoPlayVideo = ({ src }) => {
   const videoRef = useRef(null);
+  const [isMuted, setIsMuted] = useState(true);
+
   useEffect(() => {
     const observer = new IntersectionObserver(
       ([entry]) => {
@@ -24,20 +27,36 @@ const AutoPlayVideo = ({ src }) => {
     return () => observer.disconnect();
   }, [src]);
 
+  const toggleSound = (e) => {
+    e.stopPropagation();
+    const nextMuteState = !isMuted;
+    videoRef.current.muted = nextMuteState;
+    setIsMuted(nextMuteState);
+  };
+
   return (
-    <video 
-      ref={videoRef} 
-      src={src} 
-      muted 
-      loop 
-      playsInline 
-      className="w-full h-auto max-h-[500px] object-contain rounded-xl bg-black" 
-    />
+    <div className="relative group">
+      <video 
+        ref={videoRef} 
+        src={src} 
+        muted={isMuted}
+        loop 
+        playsInline 
+        className="w-full h-auto max-h-[500px] object-contain rounded-xl bg-black shadow-inner" 
+      />
+      {/* Sound Button */}
+      <button 
+        onClick={toggleSound}
+        className="absolute bottom-4 right-4 p-2.5 bg-black/60 backdrop-blur-md border border-white/10 rounded-full text-white hover:bg-cyan-500 hover:scale-110 transition-all z-10 shadow-lg"
+      >
+        {isMuted ? <FaVolumeMute size={14} /> : <FaVolumeUp size={14} />}
+      </button>
+    </div>
   );
 };
 
 const PremiumHomeFeed = ({ searchQuery = "", isPostModalOpen, setIsPostModalOpen }) => {
-  const { user, getAccessTokenSilently, isAuthenticated } = useAuth0();
+  const { user, getAccessTokenSilently, logout } = useAuth0();
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -45,8 +64,10 @@ const PremiumHomeFeed = ({ searchQuery = "", isPostModalOpen, setIsPostModalOpen
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [mediaFile, setMediaFile] = useState(null);
   const [mediaPreview, setMediaPreview] = useState(null);
+  
+  // Settings dropdown state
+  const [activeSettingsId, setActiveSettingsId] = useState(null);
 
-  // API URL Configuration
   const API_URL = (import.meta.env.VITE_API_BASE_URL || "https://onyx-drift-app-final.onrender.com").replace(/\/$/, "");
   const postMediaRef = useRef(null);
 
@@ -59,7 +80,6 @@ const PremiumHomeFeed = ({ searchQuery = "", isPostModalOpen, setIsPostModalOpen
     } catch (err) { 
       console.error("Fetch Error:", err);
       setError("Syncing with Neural Network... (Server booting up)");
-      // ৫ সেকেন্ড পর অটো রিট্রাই
       setTimeout(fetchPosts, 5000);
     } finally { 
       setLoading(false); 
@@ -68,6 +88,13 @@ const PremiumHomeFeed = ({ searchQuery = "", isPostModalOpen, setIsPostModalOpen
 
   useEffect(() => { 
     fetchPosts(); 
+  }, []);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const closeSettings = () => setActiveSettingsId(null);
+    window.addEventListener('click', closeSettings);
+    return () => window.removeEventListener('click', closeSettings);
   }, []);
 
   const handlePostSubmit = async () => {
@@ -132,7 +159,6 @@ const PremiumHomeFeed = ({ searchQuery = "", isPostModalOpen, setIsPostModalOpen
         ) : (
           <div className="flex flex-col">
             {posts.map((post) => {
-              // মিডিয়া ইউআরএল ডিটেকশন
               const mediaSrc = post.media || post.mediaUrl;
               const isVideo = mediaSrc?.match(/\.(mp4|webm|mov)$/i) || post.mediaType === 'video';
               
@@ -141,13 +167,13 @@ const PremiumHomeFeed = ({ searchQuery = "", isPostModalOpen, setIsPostModalOpen
                   initial={{ opacity: 0, y: 10 }} 
                   animate={{ opacity: 1, y: 0 }}
                   key={post._id} 
-                  className="flex gap-3 py-5 border-b border-white/5 hover:bg-white/[0.01] transition-all"
+                  className="flex gap-3 py-5 border-b border-white/5 hover:bg-white/[0.01] transition-all relative"
                 >
                   {/* User Avatar */}
                   <div className="flex-shrink-0">
                     <img 
                       src={post.authorAvatar || post.authorPicture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${post.authorName}`} 
-                      className="w-11 h-11 rounded-full border border-white/10 object-cover bg-gray-900" 
+                      className="w-11 h-11 rounded-full border border-white/10 object-cover bg-gray-900 shadow-lg" 
                       alt="avatar" 
                     />
                   </div>
@@ -156,7 +182,7 @@ const PremiumHomeFeed = ({ searchQuery = "", isPostModalOpen, setIsPostModalOpen
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-1.5 overflow-hidden">
-                        <span className="text-[15px] font-bold text-gray-100 truncate hover:underline cursor-pointer">
+                        <span className="text-[15px] font-bold text-gray-100 truncate hover:text-cyan-400 cursor-pointer transition-colors">
                           {post.authorName || 'Onyx User'}
                         </span>
                         <FaCheckCircle className="text-cyan-500 text-[11px] flex-shrink-0" />
@@ -167,7 +193,41 @@ const PremiumHomeFeed = ({ searchQuery = "", isPostModalOpen, setIsPostModalOpen
                           · {post.createdAt ? new Date(post.createdAt).toLocaleDateString() : 'Now'}
                         </span>
                       </div>
-                      <FaEllipsisH className="text-gray-600 text-sm cursor-pointer hover:text-white transition-colors" />
+                      
+                      {/* Settings Dropdown Area */}
+                      <div className="relative">
+                        <button 
+                          onClick={(e) => { 
+                            e.stopPropagation(); 
+                            setActiveSettingsId(activeSettingsId === post._id ? null : post._id); 
+                          }}
+                          className="p-2 text-gray-600 hover:text-cyan-400 transition-colors rounded-full hover:bg-white/5"
+                        >
+                          <FaEllipsisH size={14} />
+                        </button>
+                        
+                        <AnimatePresence>
+                          {activeSettingsId === post._id && (
+                            <motion.div 
+                              initial={{ opacity: 0, scale: 0.9, y: -10 }}
+                              animate={{ opacity: 1, scale: 1, y: 0 }}
+                              exit={{ opacity: 0, scale: 0.9, y: -10 }}
+                              className="absolute right-0 mt-2 w-48 bg-[#0d1117] border border-white/10 rounded-xl shadow-2xl z-50 p-1.5 backdrop-blur-xl"
+                            >
+                              <button className="w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:bg-white/5 rounded-lg flex items-center gap-3 transition-colors">
+                                <FaCog className="text-gray-500" /> Settings
+                              </button>
+                              <div className="h-[1px] bg-white/5 my-1" />
+                              <button 
+                                onClick={() => logout()}
+                                className="w-full text-left px-4 py-2.5 text-sm text-rose-500 hover:bg-rose-500/10 rounded-lg flex items-center gap-3 transition-colors"
+                              >
+                                <FaSignOutAlt size={12} /> Log Out
+                              </button>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
                     </div>
 
                     <p className="text-[15px] text-gray-200 leading-normal mt-1 mb-3 whitespace-pre-wrap">
@@ -176,7 +236,7 @@ const PremiumHomeFeed = ({ searchQuery = "", isPostModalOpen, setIsPostModalOpen
 
                     {/* Media Display */}
                     {mediaSrc && (
-                      <div className="rounded-2xl overflow-hidden border border-white/10 bg-black/40">
+                      <div className="rounded-2xl overflow-hidden border border-white/10 bg-black/40 shadow-inner">
                         {isVideo ? (
                           <AutoPlayVideo src={mediaSrc} />
                         ) : (
@@ -194,18 +254,14 @@ const PremiumHomeFeed = ({ searchQuery = "", isPostModalOpen, setIsPostModalOpen
                     <div className="flex justify-between mt-4 max-w-[420px] text-gray-500">
                       <button className="flex items-center gap-2 hover:text-cyan-400 transition-colors group">
                         <div className="p-2 group-hover:bg-cyan-500/10 rounded-full"><FaComment size={16}/></div>
-                        <span className="text-xs">{post.comments?.length || 0}</span>
+                        <span className="text-xs font-medium">{post.comments?.length || 0}</span>
                       </button>
                       <button className="flex items-center gap-2 hover:text-pink-500 transition-colors group">
                         <div className="p-2 group-hover:bg-pink-500/10 rounded-full"><FaHeart size={16}/></div>
-                        <span className="text-xs">{post.likes?.length || 0}</span>
+                        <span className="text-xs font-medium">{post.likes?.length || 0}</span>
                       </button>
-                      <button className="p-2 hover:text-green-500 hover:bg-green-500/10 rounded-full transition-colors">
-                        <FaDownload size={15}/>
-                      </button>
-                      <button className="p-2 hover:text-cyan-400 hover:bg-cyan-500/10 rounded-full transition-colors">
-                        <FaShareAlt size={15}/>
-                      </button>
+                      <button className="p-2 hover:text-green-500 hover:bg-green-500/10 rounded-full transition-all"><FaDownload size={15}/></button>
+                      <button className="p-2 hover:text-cyan-400 hover:bg-cyan-500/10 rounded-full transition-all"><FaShareAlt size={15}/></button>
                     </div>
                   </div>
                 </motion.div>
