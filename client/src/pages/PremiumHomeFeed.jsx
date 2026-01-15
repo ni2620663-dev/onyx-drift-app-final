@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FaTimes, FaImage, FaHeart, FaComment, FaShareAlt, FaDownload } from 'react-icons/fa'; 
+import { FaTimes, FaImage, FaHeart, FaComment, FaShareAlt, FaDownload, FaEllipsisH } from 'react-icons/fa'; 
 import { useAuth0 } from "@auth0/auth0-react";
 import axios from "axios";
 import { io } from "socket.io-client"; 
@@ -106,8 +106,8 @@ const PremiumHomeFeed = ({ searchQuery = "", isPostModalOpen, setIsPostModalOpen
   return (
     <div className="w-full min-h-screen bg-[#02040a] text-white pt-2 pb-24">
       
-      {/* ১. ফিড হেডার */}
-      <section className="flex flex-col px-4 max-w-[500px] mx-auto">
+      {/* ১. ফিড হেডার (আগের মতোই রাখা হয়েছে) */}
+      <section className="flex flex-col px-4 max-w-[550px] mx-auto">
         <div className="flex items-center gap-4 mb-6 opacity-40">
           <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.4em]">
             Neural Feed
@@ -115,69 +115,90 @@ const PremiumHomeFeed = ({ searchQuery = "", isPostModalOpen, setIsPostModalOpen
           <div className="h-[1px] flex-1 bg-gradient-to-r from-white/20 to-transparent"></div>
         </div>
 
-        {/* ২. পোস্ট লিস্ট - ডার্ক কার্ড ডিজাইন */}
+        {/* ২. টুইটার স্টাইল পোস্ট লিস্ট */}
         {loading ? (
           <div className="flex flex-col items-center py-20 gap-4">
             <div className="w-6 h-6 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin"></div>
             <p className="text-[9px] font-bold text-cyan-500/50 uppercase tracking-[0.2em]">Syncing Neural Data...</p>
           </div>
         ) : filteredPosts.length > 0 ? (
-          <div className="flex flex-col gap-6">
+          <div className="flex flex-col">
             {filteredPosts.map(post => (
               <motion.div 
-                initial={{ opacity: 0, y: 10 }} 
-                animate={{ opacity: 1, y: 0 }}
+                initial={{ opacity: 0 }} 
+                animate={{ opacity: 1 }}
                 key={post._id} 
-                className="bg-[#0d1117]/90 border border-white/5 rounded-[28px] overflow-hidden shadow-2xl backdrop-blur-md"
+                className="border-b border-white/10 pb-4 mb-4"
               >
-                {/* ইউজার সেকশন */}
-                <div className="p-4 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <img 
-                      src={post.authorPicture || "https://via.placeholder.com/40"} 
-                      className="w-10 h-10 rounded-full border border-white/10" 
-                      alt="User" 
-                    />
-                    <div>
-                      <h4 className="text-[13px] font-bold text-gray-100 tracking-tight">{post.authorName || "Anonymous"}</h4>
-                      <p className="text-[10px] text-gray-500 font-medium">Neural Drift User</p>
+                {/* টুইটার স্টাইল লেআউট: বামে এভাটার, ডানে কন্টেন্ট */}
+                <div className="flex gap-3 px-2">
+                  <img 
+                    src={post.authorPicture || "https://via.placeholder.com/40"} 
+                    className="w-11 h-11 rounded-full object-cover border border-white/5" 
+                    alt="User" 
+                  />
+                  
+                  <div className="flex-1">
+                    {/* ইউজার নেম ও টাইমলাইন */}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1">
+                        <span className="text-[14px] font-bold text-gray-100 hover:underline cursor-pointer">{post.authorName}</span>
+                        <span className="text-[13px] text-gray-500">· {new Date(post.createdAt).toLocaleDateString()}</span>
+                      </div>
+                      <FaEllipsisH className="text-gray-600 text-sm" />
                     </div>
-                  </div>
-                </div>
 
-                {/* টেক্সট */}
-                {post.text && (
-                  <div className="px-5 pb-3">
-                    <p className="text-[14px] text-gray-300 leading-relaxed font-medium">
-                      {post.text}
-                    </p>
-                  </div>
-                )}
+                    {/* পোস্ট টেক্সট */}
+                    {post.text && (
+                      <p className="text-[15px] text-gray-200 mt-1 leading-normal mb-3">
+                        {post.text}
+                      </p>
+                    )}
 
-                {/* মিডিয়া ডিসপ্লে (ইমেজ/ভিডিও বড় আকারে) */}
-                {post.mediaUrl && (
-                  <div className="w-full bg-black/40 border-y border-white/5">
-                    <img 
-                      src={post.mediaUrl} 
-                      className="w-full h-auto max-h-[600px] object-cover" 
-                      alt="Post content" 
-                    />
-                  </div>
-                )}
+                    {/* মিডিয়া (টুইটারের মতো কার্ভড বর্ডার) */}
+                    {post.mediaUrl && (
+                      <div className="mt-2 rounded-2xl overflow-hidden border border-white/10 bg-black/20 max-h-[500px]">
+                        {post.mediaUrl.endsWith('.mp4') || post.mediaUrl.includes('video') ? (
+                          <video 
+                            src={post.mediaUrl} 
+                            controls 
+                            className="w-full h-auto object-contain"
+                          />
+                        ) : (
+                          <img 
+                            src={post.mediaUrl} 
+                            className="w-full h-auto object-contain" 
+                            alt="Post content" 
+                            loading="lazy"
+                          />
+                        )}
+                      </div>
+                    )}
 
-                {/* ইন্টারেকশন বার (লাইক, কমেন্ট, শেয়ার) */}
-                <div className="px-5 py-4 flex items-center justify-between bg-black/10">
-                  <div className="flex gap-6">
-                    <button className="flex items-center gap-2 text-gray-400 hover:text-pink-500 transition-colors">
-                      <FaHeart size={18}/> <span className="text-[12px] font-bold">{post.likes?.length || 0}</span>
-                    </button>
-                    <button className="flex items-center gap-2 text-gray-400 hover:text-cyan-400 transition-colors">
-                      <FaComment size={18}/> <span className="text-[12px] font-bold">{post.comments?.length || 0}</span>
-                    </button>
-                  </div>
-                  <div className="flex gap-5">
-                    <button className="text-gray-400 hover:text-white transition-opacity opacity-70"><FaDownload size={16}/></button>
-                    <button className="text-gray-400 hover:text-white transition-opacity opacity-70"><FaShareAlt size={16}/></button>
+                    {/* অ্যাকশন বার (টুইটার স্টাইল আইকন সেট) */}
+                    <div className="flex justify-between items-center mt-4 max-w-md opacity-80">
+                      <button className="flex items-center gap-2 text-gray-500 hover:text-cyan-400 transition-all group">
+                        <div className="p-2 group-hover:bg-cyan-500/10 rounded-full transition-all">
+                            <FaComment size={16}/>
+                        </div>
+                        <span className="text-[12px]">{post.comments?.length || 0}</span>
+                      </button>
+                      
+                      <button className="flex items-center gap-2 text-gray-500 hover:text-pink-500 transition-all group">
+                        <div className="p-2 group-hover:bg-pink-500/10 rounded-full transition-all">
+                            <FaHeart size={16}/>
+                        </div>
+                        <span className="text-[12px]">{post.likes?.length || 0}</span>
+                      </button>
+
+                      <button className="p-2 text-gray-500 hover:text-green-500 hover:bg-green-500/10 rounded-full transition-all">
+                        <FaDownload size={15}/>
+                      </button>
+
+                      <button className="p-2 text-gray-500 hover:text-cyan-400 hover:bg-cyan-500/10 rounded-full transition-all">
+                        <FaShareAlt size={15}/>
+                      </button>
+                    </div>
                   </div>
                 </div>
               </motion.div>
@@ -192,7 +213,7 @@ const PremiumHomeFeed = ({ searchQuery = "", isPostModalOpen, setIsPostModalOpen
         )}
       </section>
 
-      {/* ৩. পোস্ট মডাল (Popup) */}
+      {/* ৩. পোস্ট মডাল (Popup) - আগের মতোই রাখা হয়েছে */}
       <AnimatePresence>
         {isPostModalOpen && (
           <div className="fixed inset-0 z-[2000] flex items-end sm:items-center justify-center p-0 sm:p-4">
