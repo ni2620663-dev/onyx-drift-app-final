@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Routes, Route, useLocation, Navigate } from "react-router-dom";
+import { Routes, Route, useLocation, Navigate, useNavigate } from "react-router-dom"; // useNavigate যোগ করা হয়েছে
 import { useAuth0, withAuthenticationRequired } from "@auth0/auth0-react";
 import { io } from "socket.io-client"; 
 import { motion, AnimatePresence } from "framer-motion";
@@ -14,7 +14,7 @@ import PremiumHomeFeed from "./pages/PremiumHomeFeed";
 import Analytics from "./pages/Analytics";
 import Explorer from "./pages/Explorer";
 import Profile from "./pages/Profile";
-import Settings from "./pages/Settings"; // আপডেট করা সেটিংস পেজ
+import Settings from "./pages/Settings"; 
 import FollowingPage from "./pages/FollowingPage";
 import ReelsEditor from "./pages/ReelsEditor"; 
 import ReelsFeed from "./pages/ReelsFeed";     
@@ -39,6 +39,7 @@ const ProtectedRoute = ({ component: Component, ...props }) => {
 export default function App() {
   const { isAuthenticated, isLoading, user } = useAuth0();
   const location = useLocation();
+  const navigate = useNavigate(); // কল জয়েন করার জন্য নেভিগেট হুক
   const socket = useRef(null); 
   const [searchQuery, setSearchQuery] = useState("");
   const [isPostModalOpen, setIsPostModalOpen] = useState(false);
@@ -55,6 +56,53 @@ export default function App() {
       socket.current.on("connect", () => {
         socket.current.emit("addNewUser", user.sub);
       });
+
+      // --- ইনকামিং কল নোটিফিকেশন লজিক (নতুন যোগ করা হয়েছে) ---
+      socket.current.on("incomingCall", (data) => {
+        const ringtone = new Audio("https://assets.mixkit.co/active_storage/sfx/1359/1359-preview.mp3");
+        ringtone.play().catch(e => console.log("Audio play blocked"));
+
+        toast.custom((t) => (
+          <motion.div
+            initial={{ opacity: 0, x: 50 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 50 }}
+            className="bg-[#0f172a] border-2 border-cyan-500 p-5 rounded-3xl shadow-[0_0_30px_rgba(6,182,212,0.3)] flex flex-col gap-4 backdrop-blur-2xl min-w-[300px]"
+          >
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-cyan-500 animate-pulse flex items-center justify-center text-black font-black text-xl">
+                {data.callerName?.[0] || 'C'}
+              </div>
+              <div>
+                <p className="text-cyan-400 font-black text-xs uppercase tracking-widest">Incoming Neural Call</p>
+                <p className="text-white font-bold text-lg">{data.callerName}</p>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button 
+                onClick={() => {
+                  ringtone.pause();
+                  toast.dismiss(t.id);
+                  navigate(`/call/${data.roomId}`);
+                }}
+                className="flex-1 bg-cyan-500 text-black font-black py-2 rounded-xl text-xs uppercase hover:bg-white transition-colors"
+              >
+                Accept
+              </button>
+              <button 
+                onClick={() => {
+                  ringtone.pause();
+                  toast.dismiss(t.id);
+                }}
+                className="flex-1 bg-white/5 text-white/50 font-black py-2 rounded-xl text-xs uppercase hover:bg-red-500 hover:text-white transition-colors"
+              >
+                Decline
+              </button>
+            </div>
+          </motion.div>
+        ), { duration: 10000, position: 'top-right' });
+      });
+      // -------------------------------------------------------
 
       socket.current.on("getNotification", (data) => {
         toast.custom((t) => (
@@ -81,7 +129,7 @@ export default function App() {
         if (socket.current) socket.current.disconnect();
       };
     }
-  }, [isAuthenticated, user?.sub]);
+  }, [isAuthenticated, user?.sub, navigate]);
 
   if (isLoading) return (
     <div className="h-screen flex items-center justify-center bg-[#020617]">
@@ -156,7 +204,6 @@ export default function App() {
                   <Route path="/reels" element={<ProtectedRoute component={ReelsFeed} />} />
                   <Route path="/reels-editor" element={<ProtectedRoute component={ReelsEditor} />} />
                   
-                  {/* মেসেঞ্জার রাউটে সকেট পাস করা হয়েছে */}
                   <Route 
                     path="/messages" 
                     element={<ProtectedRoute component={() => <Messenger socket={socket} />} />} 
@@ -167,13 +214,14 @@ export default function App() {
                   />
                   
                   <Route path="/settings" element={<ProtectedRoute component={Settings} />} />
-                  
                   <Route path="/viral" element={<ProtectedRoute component={ViralFeed} />} />
                   <Route path="/profile/:userId" element={<ProtectedRoute component={Profile} />} />
                   <Route path="/analytics" element={<ProtectedRoute component={Analytics} />} />
                   <Route path="/explorer" element={<ProtectedRoute component={Explorer} />} />
                   <Route path="/following" element={<ProtectedRoute component={FollowingPage} />} />
-                  <Route path="/call/:roomId" element={<ProtectedRoute component={Call} />} />
+                  
+                  {/* কল রাউটে সকেট পাস করা হয়েছে */}
+                  <Route path="/call/:roomId" element={<ProtectedRoute component={() => <Call socket={socket} />} />} />
                   
                   <Route path="*" element={<Navigate to="/" />} />
                 </Routes>

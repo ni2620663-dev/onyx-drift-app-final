@@ -4,12 +4,13 @@ import { ZegoUIKitPrebuilt } from '@zegocloud/zego-uikit-prebuilt';
 import { useAuth0 } from "@auth0/auth0-react";
 import { HiOutlineXMark } from "react-icons/hi2";
 
-const CallPage = () => {
+const CallPage = ({ socket }) => { // <--- সকেট প্রপস হিসেবে নেওয়া হয়েছে
   const { roomId } = useParams(); 
   const { user, isAuthenticated } = useAuth0();
   const navigate = useNavigate();
   const containerRef = useRef(null);
-  const zpRef = useRef(null); // Zego instance স্টোর করার জন্য
+  const zpRef = useRef(null);
+  const ringtoneRef = useRef(new Audio("https://assets.mixkit.co/active_storage/sfx/1359/1359-preview.mp3")); // একটি স্যাম্পল রিংটোন
 
   // ✅ ZegoCloud Credentials
   const appID = 1086315716;
@@ -20,9 +21,9 @@ const CallPage = () => {
       if (!roomId || !isAuthenticated || !user) return;
 
       try {
-        // ১. ইউজার আইডি ক্লিন করা (Zego স্পেশাল ক্যারেক্টার সাপোর্ট করে না)
+        // ১. ইউজার আইডি ক্লিন করা
         const cleanUserID = user.sub.replace(/[^a-zA-Z0-9_]/g, "_");
-        const userName = user.name || "Drifter User";
+        const userName = user.name || "Onyx Drifter";
 
         // ২. কিট টোকেন জেনারেট করা
         const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(
@@ -35,29 +36,37 @@ const CallPage = () => {
 
         // ৩. কলিং ইন্টারফেস তৈরি করা
         const zp = ZegoUIKitPrebuilt.create(kitToken);
-        zpRef.current = zp; // রেফারেন্সে রাখা হলো
+        zpRef.current = zp;
+
+        // ৪. রিংটোন বাজানো (কল রুমে ঢোকার আগে)
+        ringtoneRef.current.loop = true;
+        ringtoneRef.current.play().catch(err => console.log("Ringtone play blocked by browser"));
 
         zp.joinRoom({
           container: containerRef.current,
           sharedLinks: [
             {
               name: 'Invite link',
-              url: window.location.origin + window.location.pathname,
+              url: window.location.origin + `/call/${roomId}`,
             },
           ],
           scenario: {
-            mode: ZegoUIKitPrebuilt.OneONoneCall, // ১-১ ভিডিও কল
+            mode: ZegoUIKitPrebuilt.OneONoneCall,
           },
           showScreenSharingButton: true,
-          showPreJoinView: false, // সরাসরি রুমে ঢুকবে
+          showPreJoinView: false,
           showUserList: false,
           maxUsers: 2,
           layout: "Auto", 
           showLayoutButton: false,
-          showNonVideoUser: true,
-          showAudioVideoSettingsButton: true,
+          onUserJoin: () => {
+            // কেউ জয়েন করলে রিংটোন বন্ধ হবে
+            ringtoneRef.current.pause();
+            ringtoneRef.current.currentTime = 0;
+          },
           onLeaveRoom: () => {
-            navigate('/messenger'); // কল শেষ হলে মেসেঞ্জারে ব্যাক করবে
+            ringtoneRef.current.pause();
+            navigate('/messenger');
           },
         });
       } catch (error) {
@@ -69,32 +78,35 @@ const CallPage = () => {
       initMeeting();
     }
 
-    // Cleanup: যখন ইউজার পেজ থেকে চলে যাবে
     return () => {
       if (zpRef.current) {
         zpRef.current.destroy();
       }
+      ringtoneRef.current.pause();
     };
   }, [roomId, user, isAuthenticated, navigate]);
 
   return (
-    <div className="relative w-full h-screen bg-[#020617] flex flex-col overflow-hidden">
+    <div className="relative w-full h-screen bg-[#020617] flex flex-col overflow-hidden fixed inset-0 z-[99999]">
       
-      {/* 🛰️ Cyber HUD Overlay (কলের ওপর ভাসমান লেয়ার) */}
+      {/* 🛰️ Cyber HUD Overlay */}
       <div className="absolute top-0 left-0 w-full p-6 z-[9999] flex justify-between items-center bg-gradient-to-b from-black/90 to-transparent pointer-events-none">
         <div className="flex items-center gap-4 pointer-events-auto">
           <div className="relative">
-            <div className="w-3 h-3 bg-red-600 rounded-full animate-ping absolute inset-0" />
-            <div className="w-3 h-3 bg-red-500 rounded-full relative" />
+            <div className="w-3 h-3 bg-cyan-500 rounded-full animate-ping absolute inset-0" />
+            <div className="w-3 h-3 bg-cyan-400 rounded-full relative" />
           </div>
           <div>
             <h2 className="text-cyan-400 font-black uppercase tracking-[0.4em] text-[10px]">Neural Link Active</h2>
-            <p className="text-white/30 text-[8px] font-mono uppercase tracking-widest">Encrypted Room: {roomId?.substring(0, 12)}</p>
+            <p className="text-white/30 text-[8px] font-mono uppercase tracking-widest">Node ID: {roomId?.substring(0, 12)}</p>
           </div>
         </div>
         
         <button 
-          onClick={() => navigate('/messenger')}
+          onClick={() => {
+            zpRef.current?.destroy();
+            navigate('/messenger');
+          }}
           className="w-12 h-12 bg-white/5 backdrop-blur-2xl rounded-2xl flex items-center justify-center border border-white/10 text-white hover:bg-red-500 hover:text-white transition-all pointer-events-auto shadow-2xl group"
         >
           <HiOutlineXMark size={24} className="group-hover:rotate-90 transition-transform" />
@@ -105,30 +117,30 @@ const CallPage = () => {
       <div 
         ref={containerRef} 
         className="zego-container w-full h-full"
-        style={{ width: '100vw', height: '100vh' }}
       ></div>
 
-      {/* 🎨 CSS Overrides */}
+      {/* 🎨 CSS Overrides for Cyberpunk UI */}
       <style>{`
         .zego-container {
           background-color: #020617 !important;
         }
-        /* Zego কন্ট্রোল প্যানেল স্টাইলিং */
         .ZEGO_V_W_CONTROL_BAR {
           background: rgba(2, 6, 23, 0.8) !important;
-          backdrop-filter: blur(20px) !important;
-          border-top: 1px solid rgba(255, 255, 255, 0.1) !important;
-          padding-bottom: 20px !important;
+          backdrop-filter: blur(30px) !important;
+          border-top: 1px solid rgba(34, 211, 238, 0.1) !important;
+          padding-bottom: 30px !important;
         }
         .ZEGO_V_W_VIDEO_PLAYER {
           object-fit: cover !important;
-          border-radius: 16px !important;
-          border: 1px solid rgba(255, 255, 255, 0.05);
+          border-radius: 24px !important;
+          border: 2px solid rgba(34, 211, 238, 0.05) !important;
+          box-shadow: 0 0 40px rgba(0, 0, 0, 0.5) !important;
         }
-        /* লোডিং টেক্সট বা অন্যান্য এলিমেন্ট হাইড করা (প্রয়োজনে) */
-        .zp_v_w_loading {
-           color: #22d3ee !important;
+        .ZEGO_V_W_PREJOIN_VIEW {
+           background-color: #020617 !important;
         }
+        /* Hide Zego Branding */
+        .ZEGO_V_W_LOGO { display: none !important; }
       `}</style>
     </div>
   );
