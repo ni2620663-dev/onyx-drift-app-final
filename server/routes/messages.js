@@ -1,49 +1,27 @@
 import express from "express";
 const router = express.Router();
+import auth from "../middleware/auth.js"; // টোকেন ভেরিফাই করার জন্য
 
 // মডেল ইম্পোর্ট
 import Conversation from "../models/Conversation.js"; 
 import Message from "../models/Message.js";      
 
 /* ==========================================================
-   1️⃣ CREATE OR GET CONVERSATION
-   Route: POST api/messages/conversation
+   1️⃣ GET ALL CONVERSATIONS (Fixes 404 Plural Error)
+   Route: GET /api/messages/conversations
 ========================================================== */
-router.post("/conversation", async (req, res) => {
-  const { senderId, receiverId } = req.body;
-
+router.get("/conversations", auth, async (req, res) => {
   try {
-    // চেক করি আগে থেকেই কোনো কনভারসেশন আছে কি না
-    let conversation = await Conversation.findOne({
-      members: { $all: [senderId, receiverId] },
-    });
+    // টোকেন থেকে ইউজার আইডি নেওয়া (Auth0 বা Custom JWT)
+    const currentUserId = req.user?.sub || req.user?.id;
 
-    if (!conversation) {
-      // না থাকলে নতুন কনভারসেশন তৈরি করি
-      conversation = new Conversation({
-        members: [senderId, receiverId],
-      });
-      await conversation.save();
+    if (!currentUserId) {
+      return res.status(401).json({ error: "Neural identity missing" });
     }
 
-    res.status(200).json(conversation);
-  } catch (err) {
-    console.error("Neural Link Error:", err);
-    res.status(500).json({ error: "Failed to initialize neural link" });
-  }
-});
-
-/* ==========================================================
-   2️⃣ GET ALL CONVERSATIONS OF A USER (Fixes 404 Plural Error)
-   Route: GET api/messages/conversations/:userId
-========================================================== */
-router.get("/conversations/:userId", async (req, res) => {
-  try {
-    const userId = req.params.userId;
-    
-    // ইউজারের সব কনভারসেশন খুঁজে বের করা
+    // ঐ ইউজারের সব চ্যাট খুঁজে বের করা
     const conversations = await Conversation.find({
-      members: { $in: [userId] },
+      members: { $in: [currentUserId] },
     }).sort({ updatedAt: -1 });
 
     res.status(200).json(conversations);
@@ -54,46 +32,71 @@ router.get("/conversations/:userId", async (req, res) => {
 });
 
 /* ==========================================================
-   3️⃣ SAVE NEW MESSAGE
-   Route: POST api/messages/message
+   2️⃣ CREATE OR GET CONVERSATION
+   Route: POST /api/messages/conversation
 ========================================================== */
-router.post("/message", async (req, res) => {
+router.post("/conversation", auth, async (req, res) => {
+  const { senderId, receiverId } = req.body;
+  const currentUserId = req.user?.sub || req.user?.id;
+
+  try {
+    // সিকিউরিটি চেক: সেন্ডার আইডি যেন বর্তমান ইউজারেরই হয়
+    const finalSenderId = senderId || currentUserId;
+
+    let conversation = await Conversation.findOne({
+      members: { $all: [finalSenderId, receiverId] },
+    });
+
+    if (!conversation) {
+      conversation = new Conversation({
+        members: [finalSenderId, receiverId],
+      });
+      await conversation.save();
+    }
+
+    res.status(200).json(conversation);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to initialize neural link" });
+  }
+});
+
+/* ==========================================================
+   3️⃣ SAVE NEW MESSAGE
+   Route: POST /api/messages/message
+========================================================== */
+router.post("/message", auth, async (req, res) => {
   try {
     const { conversationId, sender, text } = req.body;
 
-    // নতুন মেসেজ অবজেক্ট
     const newMessage = new Message({
       conversationId,
-      sender,
+      sender: sender || req.user?.sub || req.user?.id,
       text
     });
 
     const savedMessage = await newMessage.save();
 
-    // মেসেজ পাঠানোর পর মেইন কনভারসেশনের সময় আপডেট করা
     await Conversation.findByIdAndUpdate(conversationId, {
       $set: { updatedAt: Date.now() },
     });
 
     res.status(200).json(savedMessage);
   } catch (err) {
-    console.error("Message Transmission Error:", err);
     res.status(500).json({ error: "Message delivery failed" });
   }
 });
 
 /* ==========================================================
    4️⃣ GET MESSAGES OF A CONVERSATION
-   Route: GET api/messages/message/:conversationId
-========================================================= */
-router.get("/message/:conversationId", async (req, res) => {
+   Route: GET /api/messages/message/:conversationId
+========================================================== */
+router.get("/message/:conversationId", auth, async (req, res) => {
   try {
     const messages = await Message.find({
       conversationId: req.params.conversationId,
     });
     res.status(200).json(messages);
   } catch (err) {
-    console.error("History Fetch Error:", err);
     res.status(500).json({ error: "Neural history inaccessible" });
   }
 });
