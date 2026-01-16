@@ -122,6 +122,7 @@ const PremiumHomeFeed = ({ searchQuery = "", isPostModalOpen, setIsPostModalOpen
       await axios.post(`${API_URL}/api/user/follow/${encodeURIComponent(targetAuth0Id)}`, {}, {
         headers: { Authorization: `Bearer ${token}` }
       });
+      // ✅ "Neural link established!" এলার্ট
       alert("Neural link established!");
       setActiveProfileMenuId(null);
     } catch (err) {
@@ -192,13 +193,11 @@ const PremiumHomeFeed = ({ searchQuery = "", isPostModalOpen, setIsPostModalOpen
   return (
     <div className="w-full min-h-screen bg-[#02040a] text-white pt-2 pb-32 overflow-x-hidden font-sans">
       
-      {/* 🛑 FIXED HEADER SECTION FOR NOTIFICATION CLICK */}
       <div className="max-w-[550px] mx-auto px-4 flex justify-between items-center py-6 sticky top-0 bg-[#02040a]/90 backdrop-blur-xl z-[1000] pointer-events-auto border-b border-white/5">
           <div className="flex items-center gap-2">
               <div className="w-2.5 h-2.5 bg-cyan-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(6,182,212,0.5)]" />
               <h2 className="text-xs font-black uppercase tracking-[0.3em] text-gray-100">Onyx Drift</h2>
           </div>
-          {/* যদি আপনার নোটিফিকেশন বাটন এখানে থাকে তবে এটি এখন ক্লিকেবল হবে */}
       </div>
 
       <section className="max-w-[550px] mx-auto px-4 relative z-10">
@@ -240,8 +239,9 @@ const PremiumHomeFeed = ({ searchQuery = "", isPostModalOpen, setIsPostModalOpen
                             <FaUserPlus size={14} className="text-cyan-500" /> Follow
                           </button>
 
+                          {/* ✅ Message বাটনে ক্লিক করলে সরাসরি ওই ইউজারের চ্যাটে যাবে */}
                           <button 
-                            onClick={(e) => { e.stopPropagation(); navigate('/messages'); }}
+                            onClick={(e) => { e.stopPropagation(); navigate(`/messenger/chat/${authorId}`); }}
                             className="w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-300 hover:bg-white/5 rounded-xl transition-colors font-bold"
                           >
                             <FaEnvelope size={14} className="text-gray-400" /> Message
@@ -373,7 +373,7 @@ const PremiumHomeFeed = ({ searchQuery = "", isPostModalOpen, setIsPostModalOpen
               <div className="p-5">
                 <div className="flex justify-between items-center mb-4">
                   <button onClick={() => setIsPostModalOpen(false)} className="text-gray-400 hover:text-white p-2"><FaTimes size={18}/></button>
-                  <button disabled={isSubmitting || (!postText.trim() && !mediaFile)} onClick={handlePostSubmit} className="bg-cyan-500 text-white px-6 py-1.5 rounded-full text-[14px] font-bold disabled:opacity-40 hover:bg-cyan-400 transition-all font-bold">
+                  <button disabled={isSubmitting || (!postText.trim() && !mediaFile)} onClick={handlePostSubmit} className="bg-cyan-500 text-white px-6 py-1.5 rounded-full text-[14px] font-bold disabled:opacity-40 hover:bg-cyan-400 transition-all">
                     {isSubmitting ? "Syncing..." : "Transmit"}
                   </button>
                 </div>

@@ -37,31 +37,35 @@ const CallPage = ({ socket }) => {
         const zp = ZegoUIKitPrebuilt.create(kitToken);
         zpRef.current = zp;
 
-        ringtoneRef.current.play().catch(() => console.log("Waiting for user interaction to play audio"));
+        ringtoneRef.current.play().catch(() => console.log("Audio play blocked"));
 
         zp.joinRoom({
           container: containerRef.current,
           scenario: {
-            mode: ZegoUIKitPrebuilt.OneONoneCall,
+            mode: ZegoUIKitPrebuilt.OneONoneCall, // ১:১ কলের জন্য পারফেক্ট
           },
           showScreenSharingButton: false, 
           showPreJoinView: false,
           showUserList: false,
           maxUsers: 2,
-          layout: "Grid", // Grid দিলে মোবাইলে ভিডিও উপরে-নিচে বা পাশাপাশি সমানভাবে দেখাবে
+          layout: "Auto", // Grid এর বদলে Auto দিলে মোবাইলে ফেস ডিটেকশন ভালো হয়
           showLayoutButton: false,
           showAudioVideoSettingsButton: true,
-          showTextChat: true, // চ্যাট অপশন এনাবল করা হয়েছে
-          onUserJoin: () => {
+          showTextChat: true,
+          showNonVideoUser: true, // ভিডিও অফ থাকলেও ইউজারকে দেখাবে
+          showTurnOffRemoteCameraButton: true, 
+          showTurnOffRemoteMicrophoneButton: true,
+          onUserJoin: (users) => {
+            // অন্য জন জয়েন করলেই রিংটোন বন্ধ হবে
             if (ringtoneRef.current) {
               ringtoneRef.current.pause();
               ringtoneRef.current.currentTime = 0;
             }
           },
-          onUserLeave: () => navigate('/messenger'),
+          onUserLeave: () => navigate('/messages'),
           onLeaveRoom: () => {
             if (ringtoneRef.current) ringtoneRef.current.pause();
-            navigate('/messenger');
+            navigate('/messages');
           },
         });
       } catch (error) {
@@ -100,7 +104,7 @@ const CallPage = ({ socket }) => {
         <button 
           onClick={() => {
             if (zpRef.current) zpRef.current.destroy();
-            navigate('/messenger');
+            navigate('/messages');
           }}
           className="w-10 h-10 bg-red-500/20 backdrop-blur-md rounded-full flex items-center justify-center border border-red-500/30 text-red-500 pointer-events-auto"
         >
@@ -111,50 +115,41 @@ const CallPage = ({ socket }) => {
       {/* 🎥 Video Container */}
       <div 
         ref={containerRef} 
-        className="zego-container w-full h-full overflow-hidden"
+        className="zego-container w-full h-full"
       ></div>
 
-      {/* 🎨 CSS Overrides for Mobile UI Fix */}
+      {/* 🎨 CSS Fixes for Remote Video Visibility */}
       <style>{`
         .zego-container {
           background-color: #020617 !important;
         }
         
-        /* ভিডিও ফুল স্ক্রিন এবং ফেস ভিজিবিলিটি ঠিক করা */
+        /* রিমোট ভিডিও বড় করে দেখানোর জন্য */
         .ZEGO_V_W_VIDEO_PLAYER video {
           object-fit: cover !important;
+          background: #000 !important;
         }
 
-        /* মোবাইলে কন্ট্রোল বার ছোট এবং উপরে উঠানো */
+        /* মোবাইলে ভিডিওর লেআউট ফিক্স */
+        .ZEGO_V_W_REMOTE_VIDEO {
+           height: 100% !important;
+           width: 100% !important;
+        }
+
         .ZEGO_V_W_CONTROL_BAR {
-          bottom: 25px !important;
-          background: rgba(15, 23, 42, 0.85) !important;
+          bottom: 30px !important;
+          background: rgba(15, 23, 42, 0.9) !important;
           backdrop-filter: blur(20px) !important;
-          border-radius: 40px !important;
-          width: 90% !important;
-          left: 5% !important;
-          height: 60px !important;
-          padding: 0 !important;
-          border: 1px solid rgba(34, 211, 238, 0.2) !important;
-        }
-
-        /* চ্যাট পপআপ পজিশন ফিক্স */
-        .ZEGO_V_W_CHAT_PANEL {
-          bottom: 100px !important;
-          height: 50% !important;
-          background: #0f172a !important;
-        }
-
-        /* ভিডিওর ওপর ইউজারের নাম ছোট করা */
-        .ZEGO_V_W_USER_NAME {
-          font-size: 11px !important;
-          background: rgba(0,0,0,0.5) !important;
-          padding: 2px 8px !important;
-          border-radius: 4px !important;
+          border-radius: 50px !important;
+          width: fit-content !important;
+          padding: 10px 20px !important;
+          left: 50% !important;
+          transform: translateX(-50%) !important;
+          border: 1px solid rgba(34, 211, 238, 0.3) !important;
         }
 
         .ZEGO_V_W_LOGO { display: none !important; }
-        .ZEGO_V_W_PREJOIN_VIEW { background: #020617 !important; }
+        .ZEGO_V_W_PREJOIN_VIEW { display: none !important; }
       `}</style>
     </div>
   );

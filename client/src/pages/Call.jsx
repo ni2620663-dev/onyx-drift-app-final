@@ -6,26 +6,23 @@ const Call = () => {
   const { roomId } = useParams();
   const navigate = useNavigate();
   
-  // ১. রেফারেন্স তৈরি করা যাতে বারবার জয়েন না হয়
   const videoContainerRef = useRef(null);
   const isJoined = useRef(false);
+  const zpInstance = useRef(null);
 
-  // ২. আপনার সঠিক ZegoCloud Credentials
-  // যদি Environment Variable থাকে তবে তা নেবে, না থাকলে ডিফল্ট ভ্যালু নেবে।
   const appID = Number(import.meta.env.VITE_ZEGO_APP_ID) || 1086315716;
   const serverSecret = import.meta.env.VITE_ZEGO_SERVER_SECRET || "faa9451e78f290d4a11ff8eb53c79bea"; 
 
   useEffect(() => {
     const initCall = async () => {
-      // যদি অলরেডি জয়েন করা থাকে বা কন্টেইনার না থাকে তবে রিটার্ন করবে
       if (isJoined.current || !videoContainerRef.current) return;
       isJoined.current = true; 
 
       try {
+        // ইউনিক ইউজার আইডি জেনারেশন
         const userID = "drifter_" + Math.floor(Math.random() * 10000);
         const userName = "User_" + userID;
 
-        // ৩. টোকেন জেনারেট করা (এখানে serverSecret-ই দিতে হবে)
         const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(
           appID, 
           serverSecret, 
@@ -34,22 +31,34 @@ const Call = () => {
           userName
         );
 
-        // ৪. কলিং ইন্টারফেস তৈরি করা
         const zp = ZegoUIKitPrebuilt.create(kitToken);
+        zpInstance.current = zp;
         
         zp.joinRoom({
           container: videoContainerRef.current,
           scenario: {
-            mode: ZegoUIKitPrebuilt.OneONoneCall,
+            mode: ZegoUIKitPrebuilt.OneONoneCall, // ১:১ ভিডিও কলের জন্য অপ্টিমাইজড
           },
-          showScreenSharingButton: true,
-          showPreJoinView: false,
+          // ইন্টারফেস কনফিগারেশন
+          showScreenSharingButton: false,
+          showPreJoinView: false, // সরাসরি কলে জয়েন হবে
           turnOnMicrophoneWhenJoining: true,
           turnOnCameraWhenJoining: true,
+          showUserList: false,
+          showLayoutButton: false,
+          showTextChat: true,
+          showAudioVideoSettingsButton: true,
+          maxUsers: 2,
+          layout: "Auto", // মোবাইলে অটোমেটিক ফেস অ্যাডজাস্ট করবে
+          
           onLeaveRoom: () => {
-            isJoined.current = false;
-            navigate('/messenger'); 
+            handleCleanup();
+            navigate('/messages'); 
           },
+          onUserLeave: () => {
+            handleCleanup();
+            navigate('/messages');
+          }
         });
       } catch (error) {
         isJoined.current = false;
@@ -57,44 +66,73 @@ const Call = () => {
       }
     };
 
+    const handleCleanup = () => {
+      isJoined.current = false;
+      if (zpInstance.current) {
+        zpInstance.current.destroy();
+      }
+    };
+
     initCall();
 
-    // কম্পোনেন্ট আনমাউন্ট হলে ফ্ল্যাগ রিসেট করা
     return () => {
-      isJoined.current = false;
-      // কল পেজ থেকে বেরিয়ে গেলে জেনারেট করা ডম এলিমেন্ট পরিষ্কার করা ভালো
-      if (videoContainerRef.current) {
-        videoContainerRef.current.innerHTML = "";
-      }
+      handleCleanup();
     };
   }, [roomId, navigate, appID, serverSecret]);
 
   return (
-    <div className="w-screen h-screen bg-[#020617] flex items-center justify-center relative overflow-hidden">
-      {/* লোডার এনিমেশন - ভিডিও আসার আগে এটি দেখাবে */}
-      <div className="absolute inset-0 flex flex-col items-center justify-center z-0">
-          <div className="w-20 h-20 border-4 border-cyan-500/10 border-t-cyan-500 rounded-full animate-spin mb-6 shadow-[0_0_50px_rgba(6,182,212,0.2)]"></div>
+    <div className="w-screen h-screen bg-[#020617] flex items-center justify-center relative overflow-hidden fixed inset-0 z-[9999]">
+      
+      {/* লোডার এনিমেশন - ভিডিও লোড হওয়ার আগে দেখাবে */}
+      <div className="absolute inset-0 flex flex-col items-center justify-center z-0 bg-[#020617]">
+          <div className="w-16 h-16 border-4 border-cyan-500/10 border-t-cyan-500 rounded-full animate-spin mb-6"></div>
           <div className="text-center">
-            <h2 className="text-cyan-400 font-black uppercase tracking-[0.3em] text-sm animate-pulse mb-2">
-              Initializing Neural Link
+            <h2 className="text-cyan-400 font-black uppercase tracking-[0.2em] text-xs animate-pulse">
+              Establishing Neural Link
             </h2>
-            <p className="text-gray-600 text-[10px] uppercase font-bold tracking-widest">
-              Securing End-to-End Encryption...
-            </p>
           </div>
       </div>
       
       {/* Zego UI Container */}
       <div 
         ref={videoContainerRef} 
-        className="w-full h-full z-10 bg-transparent" 
-        style={{ width: '100vw', height: '100vh' }}
+        className="w-full h-full z-10" 
       />
 
-      {/* Zego ডিফল্ট স্টাইল ওভাররাইড */}
+      {/* 🛠️ CSS Overrides for Premium Mobile UI */}
       <style>{`
-        .zego-view-container {
-          background-color: transparent !important;
+        /* ভিডিওর কালো বর্ডার দূর করে ফুল স্ক্রিন করা */
+        .zego-view-container video {
+          object-fit: cover !important;
+          background-color: #020617 !important;
+        }
+
+        /* রিমোট ভিডিও (অন্য জনের ফেস) কে ফুল স্ক্রিন অগ্রাধিকার দেওয়া */
+        .ZEGO_V_W_REMOTE_VIDEO {
+          height: 100% !important;
+          width: 100% !important;
+        }
+
+        /* কন্ট্রোল বার কে আরও আধুনিক করা */
+        .ZEGO_V_W_CONTROL_BAR {
+          background: rgba(15, 23, 42, 0.8) !important;
+          backdrop-filter: blur(15px) !important;
+          border-radius: 50px !important;
+          bottom: 40px !important;
+          border: 1px solid rgba(34, 211, 238, 0.2) !important;
+          padding: 10px !important;
+        }
+
+        /* লোগো এবং অপ্রয়োজনীয় টেক্সট হাইড করা */
+        .ZEGO_V_W_LOGO, .ZEGO_V_W_POWERED_BY {
+          display: none !important;
+        }
+
+        /* চ্যাট উইন্ডো ফিক্স */
+        .ZEGO_V_W_CHAT_PANEL {
+          bottom: 110px !important;
+          border-radius: 20px !important;
+          background: #0f172a !important;
         }
       `}</style>
     </div>
