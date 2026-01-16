@@ -31,7 +31,7 @@ import reelRoutes from "./routes/reels.js";
 const app = express();
 const server = http.createServer(app);
 
-// ৪. CORS কনফিগারেশন (উন্নত করা হয়েছে)
+// ৪. CORS কনফিগারেশন (উন্নত করা হয়েছে)
 const allowedOrigins = [
     "http://localhost:5173", 
     "https://onyx-drift-app-final.onrender.com",
@@ -41,9 +41,11 @@ const allowedOrigins = [
 
 const corsOptions = {
     origin: function (origin, callback) {
+        // origin না থাকলেও (যেমন মোবাইল বা লোকাল) কানেকশন অ্যালাউ করবে
         if (!origin || allowedOrigins.includes(origin)) {
             callback(null, true);
         } else {
+            console.log("CORS blocked origin:", origin);
             callback(new Error('Signal Blocked: CORS Security Policy'));
         }
     },
@@ -56,10 +58,13 @@ app.use(cors(corsOptions));
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
-// ৫. সকেট আইও কনফিগারেশন (Transports অগ্রাধিকার ঠিক করা হয়েছে)
+// ৫. সকেট আইও কনফিগারেশন (Websocket Closed এরর ফিক্স করার জন্য টাইমআউট বাড়ানো হয়েছে)
 const io = new Server(server, {
     cors: corsOptions,
-    transports: ['websocket', 'polling']
+    transports: ['websocket', 'polling'],
+    pingTimeout: 60000,   // ৬০ সেকেন্ড পর্যন্ত কানেকশন ড্রপ ঠেকাবে
+    pingInterval: 25000,  // প্রতি ২৫ সেকেন্ডে কানেকশন চেক করবে
+    connectTimeout: 20000
 });
 
 // ৬. Redis Setup (Error Handling সহ)
@@ -67,8 +72,7 @@ const redis = process.env.REDIS_URL ? new Redis(process.env.REDIS_URL, {
     maxRetriesPerRequest: null,
     enableReadyCheck: false,
     retryStrategy(times) {
-        const delay = Math.min(times * 50, 2000);
-        return delay;
+        return Math.min(times * 50, 2000);
     }
 }) : null;
 
@@ -89,14 +93,14 @@ app.get("/", (req, res) => {
     res.send("🚀 OnyxDrift Neural Core is Online!");
 });
 
-// ৯. Keep-Alive Mechanism
+// ৯. Keep-Alive Mechanism (Render সার্ভারকে ঘুমিয়ে পড়া থেকে বাঁচাতে)
 setInterval(() => {
     https.get('https://onyx-drift-app-final.onrender.com', (res) => {
-        // Ping success
+        // Success
     }).on('error', (err) => console.log('Keep-alive ping failure'));
-}, 840000); 
+}, 600000); // ১০ মিনিট পর পর পিং
 
-// ১০. উন্নত গ্লোবাল এরর হ্যান্ডলার
+// ১০. গ্লোবাল এরর হ্যান্ডলার
 app.use((err, req, res, next) => {
     console.error("🔥 SYSTEM_ERROR:", err.stack);
     res.status(err.status || 500).json({ 
@@ -106,12 +110,12 @@ app.use((err, req, res, next) => {
 });
 
 /* ==========================================================
-    📡 REAL-TIME ENGINE (Socket.io) - Fixed Logic
+    📡 REAL-TIME ENGINE (Socket.io)
 ========================================================== */
 io.on("connection", (socket) => {
-    console.log("A user connected:", socket.id);
+    console.log("Connected to Neural Socket:", socket.id);
 
-    // ইউজার অনলাইন হলে রেজিস্টার করা
+    // ইউজার অনলাইন রেজিস্টার
     socket.on("addNewUser", async (userId) => {
         if (userId) {
             if (redis) {
@@ -119,7 +123,6 @@ io.on("connection", (socket) => {
                 const allUsers = await redis.hgetall("online_users");
                 io.emit("getOnlineUsers", Object.keys(allUsers).map(id => ({ userId: id })));
             } else {
-                // Redis না থাকলে ইন-মেমোরি ব্যাকআপ (Optional)
                 socket.join(userId); 
             }
         }
@@ -132,32 +135,25 @@ io.on("connection", (socket) => {
             const socketId = await redis.hget("online_users", receiverId);
             if (socketId) io.to(socketId).emit("getMessage", data);
         } else {
-            socket.to(receiverId).emit("getMessage", data);
+            io.to(receiverId).emit("getMessage", data);
         }
     });
 
-    // ভিডিও কল রিকোয়েস্ট হ্যান্ডলার (Fixed Naming for Frontend)
+    // কল রিকোয়েস্ট
     socket.on("sendCallRequest", async (data) => {
         const { receiverId, senderName, roomId } = data;
-        
         let socketId = null;
         if (redis) {
             socketId = await redis.hget("online_users", receiverId);
         }
-
         if (socketId) {
-            // ফ্রন্টএন্ড 'callerName' আশা করছে, তাই সেটাই পাঠানো হচ্ছে
             io.to(socketId).emit("incomingCall", {
                 callerName: senderName, 
                 roomId: roomId
             });
-            console.log(`Call forwarded to: ${receiverId}`);
-        } else {
-            console.log(`User ${receiverId} is offline. Call failed.`);
         }
     });
 
-    // ডিসকানেক্ট হ্যান্ডলার
     socket.on("disconnect", async () => {
         if (redis) {
             const all = await redis.hgetall("online_users");
@@ -170,7 +166,7 @@ io.on("connection", (socket) => {
                 }
             }
         }
-        console.log("User disconnected");
+        console.log("Drifter disconnected from Socket");
     });
 });
 

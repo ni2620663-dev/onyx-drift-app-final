@@ -124,13 +124,13 @@ const PremiumHomeFeed = ({ searchQuery = "", isPostModalOpen, setIsPostModalOpen
 
     try {
       const token = await getAccessTokenSilently();
+      // targetAuth0Id encode করা হয়েছে যাতে স্পেশাল ক্যারেক্টার সমস্যা না করে
       await axios.post(`${API_URL}/api/user/follow/${encodeURIComponent(targetAuth0Id)}`, {}, {
         headers: { Authorization: `Bearer ${token}` }
       });
       alert("Neural link established!");
       setActiveProfileMenuId(null);
     } catch (err) {
-      // যদি অলরেডি ফলো করা থাকে বা অন্য সমস্যা হয়
       const msg = err.response?.data?.message || "Already linked or failed to connect.";
       alert(msg);
       setActiveProfileMenuId(null);
@@ -247,7 +247,7 @@ const PremiumHomeFeed = ({ searchQuery = "", isPostModalOpen, setIsPostModalOpen
                           </button>
 
                           <button 
-                            onClick={(e) => { e.stopPropagation(); navigate(`/messages/chat/${authorId}`); }}
+                            onClick={(e) => { e.stopPropagation(); navigate(`/messenger/chat/${authorId}`); }}
                             className="w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-300 hover:bg-white/5 rounded-xl transition-colors font-bold"
                           >
                             <FaEnvelope size={14} className="text-gray-400" /> Message
