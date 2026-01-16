@@ -46,7 +46,7 @@ export default function App() {
 
   useEffect(() => {
     if (isAuthenticated && user?.sub) {
-      // সকেট কানেকশন কনফিগারেশন (Fixed Path & Transports)
+      // সকেট কানেকশন কনফিগারেশন
       const socketUrl = "https://onyx-drift-app-final.onrender.com";
       socket.current = io(socketUrl, {
         transports: ["websocket", "polling"],
@@ -58,53 +58,56 @@ export default function App() {
         socket.current.emit("addNewUser", user.sub);
       });
 
-      // --- ইনকামিং কল নোটিফিকেশন লজিক ---
+      // --- 📞 ইনকামিং কল নোটিফিকেশন লজিক ---
       socket.current.on("incomingCall", (data) => {
         const ringtone = new Audio("https://assets.mixkit.co/active_storage/sfx/1359/1359-preview.mp3");
-        ringtone.play().catch(e => console.log("Audio play blocked by browser settings"));
+        ringtone.loop = true;
+        ringtone.play().catch(e => console.log("Audio play blocked by browser"));
 
         toast.custom((t) => (
           <motion.div
-            initial={{ opacity: 0, x: 50 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: 50 }}
-            className="bg-[#0f172a] border-2 border-cyan-500 p-5 rounded-3xl shadow-[0_0_30px_rgba(6,182,212,0.3)] flex flex-col gap-4 backdrop-blur-2xl min-w-[300px] z-[9999]"
+            initial={{ opacity: 0, x: 50, scale: 0.9 }}
+            animate={{ opacity: 1, x: 0, scale: 1 }}
+            exit={{ opacity: 0, x: 50, scale: 0.9 }}
+            className="bg-[#0f172a]/95 border-2 border-cyan-500/50 p-6 rounded-[2rem] shadow-[0_0_50px_rgba(6,182,212,0.3)] flex flex-col gap-5 backdrop-blur-3xl min-w-[320px] z-[9999]"
           >
             <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-cyan-500 animate-pulse flex items-center justify-center text-black font-black text-xl">
+              <div className="w-14 h-14 rounded-2xl bg-cyan-500 animate-pulse flex items-center justify-center text-black font-black text-2xl shadow-[0_0_20px_rgba(6,182,212,0.5)]">
                 {data.callerName?.[0] || 'C'}
               </div>
               <div>
-                <p className="text-cyan-400 font-black text-xs uppercase tracking-widest">Incoming Neural Call</p>
-                <p className="text-white font-bold text-lg">{data.callerName}</p>
+                <p className="text-cyan-400 font-black text-[10px] uppercase tracking-[0.2em] animate-pulse">Incoming Neural Call</p>
+                <p className="text-white font-black text-xl tracking-tight">{data.callerName}</p>
               </div>
             </div>
-            <div className="flex gap-2">
+
+            <div className="flex gap-3">
               <button 
                 onClick={() => {
                   ringtone.pause();
                   toast.dismiss(t.id);
                   navigate(`/call/${data.roomId}`);
                 }}
-                className="flex-1 bg-cyan-500 text-black font-black py-2 rounded-xl text-xs uppercase hover:bg-white transition-colors"
+                className="flex-1 bg-cyan-500 text-black font-black py-3 rounded-2xl text-[11px] uppercase tracking-widest hover:bg-white hover:scale-[1.02] transition-all active:scale-95"
               >
                 Accept
               </button>
               <button 
                 onClick={() => {
                   ringtone.pause();
+                  socket.current.emit("rejectCall", { receiverId: data.senderId });
                   toast.dismiss(t.id);
                 }}
-                className="flex-1 bg-white/5 text-white/50 font-black py-2 rounded-xl text-xs uppercase hover:bg-red-500 hover:text-white transition-colors"
+                className="flex-1 bg-white/5 border border-white/10 text-white font-black py-3 rounded-2xl text-[11px] uppercase tracking-widest hover:bg-red-500 hover:border-red-500 transition-all active:scale-95"
               >
                 Decline
               </button>
             </div>
           </motion.div>
-        ), { duration: 15000, position: 'top-right' });
+        ), { duration: 30000, position: 'top-right' }); // কল নোটিফিকেশন ৩০ সেকেন্ড থাকবে
       });
 
-      // --- সাধারণ নোটিফিকেশন লজিক ---
+      // --- 🔔 সাধারণ নোটিফিকেশন লজিক ---
       socket.current.on("getNotification", (data) => {
         toast.custom((t) => (
           <motion.div

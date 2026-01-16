@@ -9,23 +9,36 @@ import { useAuth0 } from "@auth0/auth0-react";
 import axios from "axios";
 import { useNavigate } from 'react-router-dom';
 
-// --- Video Component with Sound Toggle ---
+// --- ফিক্সড ভিডিও কম্পোনেন্ট (createSpan এরর এবং Memory Leak রোধের জন্য) ---
 const AutoPlayVideo = ({ src }) => {
   const videoRef = useRef(null);
   const [isMuted, setIsMuted] = useState(true);
 
   useEffect(() => {
+    const currentVideo = videoRef.current; // রেফারেন্সটি একটি ভেরিয়েবলে সেভ রাখা হয়েছে
+    
     const observer = new IntersectionObserver(
       ([entry]) => {
-        if (entry.isIntersecting) {
-          videoRef.current?.play().catch(() => {});
-        } else {
-          videoRef.current?.pause();
+        if (currentVideo) {
+          if (entry.isIntersecting) {
+            currentVideo.play().catch(() => {});
+          } else {
+            currentVideo.pause();
+          }
         }
       }, { threshold: 0.5 }
     );
-    if (videoRef.current) observer.observe(videoRef.current);
-    return () => observer.disconnect();
+
+    if (currentVideo) {
+      observer.observe(currentVideo);
+    }
+
+    return () => {
+      if (currentVideo) {
+        observer.unobserve(currentVideo); // সেফ ক্লিনআপ
+      }
+      observer.disconnect();
+    };
   }, [src]);
 
   const toggleSound = (e) => {
@@ -48,6 +61,7 @@ const AutoPlayVideo = ({ src }) => {
         className="w-full h-auto max-h-[500px] object-contain rounded-xl bg-black shadow-inner" 
       />
       <button 
+        type="button"
         onClick={toggleSound}
         className="absolute bottom-4 right-4 p-2.5 bg-black/60 backdrop-blur-md border border-white/10 rounded-full text-white hover:bg-cyan-500 hover:scale-110 transition-all z-10 shadow-lg"
       >
@@ -117,7 +131,7 @@ const PremiumHomeFeed = ({ searchQuery = "", isPostModalOpen, setIsPostModalOpen
   const handleFollowUser = async (e, targetAuth0Id) => {
     e.stopPropagation();
     if (!isAuthenticated) return alert("Please login to follow");
-    if (!targetAuth0Id || targetAuth0Id === "undefined") return alert("Target ID is invalid.");
+    if (!targetAuth0Id) return alert("User ID not found.");
     if (user?.sub === targetAuth0Id) return alert("You cannot link with your own neural signal.");
 
     try {
@@ -197,6 +211,7 @@ const PremiumHomeFeed = ({ searchQuery = "", isPostModalOpen, setIsPostModalOpen
   return (
     <div className="w-full min-h-screen bg-[#02040a] text-white pt-2 pb-32 overflow-x-hidden font-sans">
       
+      {/* Header */}
       <div className="max-w-[550px] mx-auto px-4 flex justify-between items-center py-6 sticky top-0 bg-[#02040a]/90 backdrop-blur-xl z-[1000] border-b border-white/5">
           <div className="flex items-center gap-2">
               <div className="w-2.5 h-2.5 bg-cyan-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(6,182,212,0.5)]" />
@@ -215,12 +230,12 @@ const PremiumHomeFeed = ({ searchQuery = "", isPostModalOpen, setIsPostModalOpen
               const mediaSrc = post.media || post.mediaUrl;
               const isVideo = mediaSrc?.match(/\.(mp4|webm|mov)$/i) || post.mediaType === 'video';
               const isLiked = post.likes?.includes(user?.sub);
-              // ফিক্সড authorId লজিক:
               const authorId = post.authorAuth0Id || post.userId || post.authorId;
               
               return (
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} key={post._id} className="flex gap-3 py-6 border-b border-white/5 relative">
                   
+                  {/* Avatar Section */}
                   <div className="relative flex-shrink-0">
                     <img 
                       onClick={(e) => { e.stopPropagation(); setActiveProfileMenuId(activeProfileMenuId === post._id ? null : post._id); }}
@@ -264,6 +279,7 @@ const PremiumHomeFeed = ({ searchQuery = "", isPostModalOpen, setIsPostModalOpen
                     </AnimatePresence>
                   </div>
 
+                  {/* Content Section */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-1.5 overflow-hidden group">

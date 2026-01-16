@@ -31,7 +31,7 @@ import reelRoutes from "./routes/reels.js";
 const app = express();
 const server = http.createServer(app);
 
-// ৪. CORS কনফিগারেশন (উন্নত করা হয়েছে)
+// ৪. CORS কনফিগারেশন
 const allowedOrigins = [
     "http://localhost:5173", 
     "https://onyx-drift-app-final.onrender.com",
@@ -41,7 +41,6 @@ const allowedOrigins = [
 
 const corsOptions = {
     origin: function (origin, callback) {
-        // origin না থাকলেও (যেমন মোবাইল বা লোকাল) কানেকশন অ্যালাউ করবে
         if (!origin || allowedOrigins.includes(origin)) {
             callback(null, true);
         } else {
@@ -58,16 +57,18 @@ app.use(cors(corsOptions));
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
-// ৫. সকেট আইও কনফিগারেশন (Websocket Closed এরর ফিক্স করার জন্য টাইমআউট বাড়ানো হয়েছে)
+// ৫. সকেট আইও কনফিগারেশন
 const io = new Server(server, {
     cors: corsOptions,
-    transports: ['websocket', 'polling'],
-    pingTimeout: 60000,   // ৬০ সেকেন্ড পর্যন্ত কানেকশন ড্রপ ঠেকাবে
-    pingInterval: 25000,  // প্রতি ২৫ সেকেন্ডে কানেকশন চেক করবে
-    connectTimeout: 20000
+    transports: ['polling', 'websocket'], 
+    allowEIO3: true, 
+    pingTimeout: 60000,   
+    pingInterval: 25000,  
+    connectTimeout: 30000,
+    maxHttpBufferSize: 1e8 
 });
 
-// ৬. Redis Setup (Error Handling সহ)
+// ৬. Redis Setup
 const redis = process.env.REDIS_URL ? new Redis(process.env.REDIS_URL, {
     maxRetriesPerRequest: null,
     enableReadyCheck: false,
@@ -93,12 +94,12 @@ app.get("/", (req, res) => {
     res.send("🚀 OnyxDrift Neural Core is Online!");
 });
 
-// ৯. Keep-Alive Mechanism (Render সার্ভারকে ঘুমিয়ে পড়া থেকে বাঁচাতে)
+// ৯. Keep-Alive Mechanism (Self-Ping)
 setInterval(() => {
     https.get('https://onyx-drift-app-final.onrender.com', (res) => {
-        // Success
+        // Active
     }).on('error', (err) => console.log('Keep-alive ping failure'));
-}, 600000); // ১০ মিনিট পর পর পিং
+}, 600000); 
 
 // ১০. গ্লোবাল এরর হ্যান্ডলার
 app.use((err, req, res, next) => {
@@ -115,7 +116,7 @@ app.use((err, req, res, next) => {
 io.on("connection", (socket) => {
     console.log("Connected to Neural Socket:", socket.id);
 
-    // ইউজার অনলাইন রেজিস্টার
+    // ইউজার রেজিস্টার করা
     socket.on("addNewUser", async (userId) => {
         if (userId) {
             if (redis) {
@@ -125,10 +126,11 @@ io.on("connection", (socket) => {
             } else {
                 socket.join(userId); 
             }
+            console.log(`Node Active: ${userId}`);
         }
     });
 
-    // টেক্সট মেসেজ হ্যান্ডলার
+    // মেসেজ পাঠানো
     socket.on("sendMessage", async (data) => {
         const { receiverId } = data;
         if (redis) {
@@ -139,21 +141,36 @@ io.on("connection", (socket) => {
         }
     });
 
-    // কল রিকোয়েস্ট
+    // কল রিকোয়েস্ট পাঠানো
     socket.on("sendCallRequest", async (data) => {
-        const { receiverId, senderName, roomId } = data;
-        let socketId = null;
+        const { receiverId, senderName, roomId, senderId } = data;
+        const callPayload = {
+            senderName,
+            roomId,
+            senderId
+        };
+
         if (redis) {
-            socketId = await redis.hget("online_users", receiverId);
-        }
-        if (socketId) {
-            io.to(socketId).emit("incomingCall", {
-                callerName: senderName, 
-                roomId: roomId
-            });
+            const socketId = await redis.hget("online_users", receiverId);
+            if (socketId) {
+                io.to(socketId).emit("incomingCall", callPayload);
+            }
+        } else {
+            io.to(receiverId).emit("incomingCall", callPayload);
         }
     });
 
+    // কল রিজেক্ট করা (Optional: যদি আপনি ফ্রন্টএন্ডে এটি হ্যান্ডেল করতে চান)
+    socket.on("rejectCall", async ({ receiverId }) => {
+        if (redis) {
+            const socketId = await redis.hget("online_users", receiverId);
+            if (socketId) io.to(socketId).emit("callRejected");
+        } else {
+            io.to(receiverId).emit("callRejected");
+        }
+    });
+
+    // ডিসকানেক্ট হ্যান্ডলার
     socket.on("disconnect", async () => {
         if (redis) {
             const all = await redis.hgetall("online_users");

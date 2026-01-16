@@ -29,17 +29,23 @@ const Messenger = ({ socket }) => {
     filter: "none", text: "", musicName: "", musicUrl: ""
   });
 
+  // --- 📞 Call Notification State ---
+  const [incomingCall, setIncomingCall] = useState(null);
+  const ringtoneRef = useRef(new Audio("https://assets.mixkit.co/active_storage/sfx/1359/1359-preview.mp3"));
+
   const scrollRef = useRef();
   const audioRef = useRef(new Audio());
   const API_URL = "https://onyx-drift-app-final.onrender.com";
 
   /* ==========================================================
-      📡 REAL-TIME SOCKET LOGIC
+      📡 REAL-TIME SOCKET LOGIC (Fixed & Enhanced)
   ========================================================== */
   useEffect(() => {
-    if (socket?.current) {
-      socket.current.on("getMessage", (data) => {
-        // যদি মেসেজটি বর্তমান চ্যাট থেকে আসে এবং আমি সেন্ডার না হই
+    const socketInstance = socket?.current || socket; 
+
+    if (socketInstance) {
+      // মেসেজ রিসিভ করার লিসেনার
+      socketInstance.on("getMessage", (data) => {
         if (currentChat?.members.includes(data.senderId) && data.senderId !== user?.sub) {
           setMessages((prev) => [...prev, {
             senderId: data.senderId,
@@ -48,18 +54,65 @@ const Messenger = ({ socket }) => {
           }]);
         }
       });
+
+      // ইনকামিং কল রিসিভ করার লিসেনার
+      socketInstance.on("incomingCall", (data) => {
+        setIncomingCall(data);
+        ringtoneRef.current.loop = true;
+        ringtoneRef.current.play().catch(e => console.log("Audio blocked by browser"));
+      });
     }
+
     return () => {
-      if (socket?.current) socket.current.off("getMessage");
+      if (socketInstance) {
+        socketInstance.off("getMessage");
+        socketInstance.off("incomingCall");
+      }
     };
-  }, [socket, currentChat, user]);
+  }, [socket, currentChat, user, navigate]);
 
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
   /* ==========================================================
-      📥 FETCH MESSAGES (নতুন যোগ করা হয়েছে)
+      📞 CALL HANDLERS
+  ========================================================== */
+  const acceptCall = () => {
+    ringtoneRef.current.pause();
+    ringtoneRef.current.currentTime = 0;
+    navigate(`/call/${incomingCall.roomId}`);
+    setIncomingCall(null);
+  };
+
+  const rejectCall = () => {
+    ringtoneRef.current.pause();
+    ringtoneRef.current.currentTime = 0;
+    setIncomingCall(null);
+  };
+
+  const handleCall = () => {
+    const socketInstance = socket?.current || socket;
+
+    if (currentChat && socketInstance) {
+      const receiverId = currentChat.members.find(m => m !== user.sub);
+      const roomId = `room_${currentChat._id}_${Date.now()}`;
+
+      socketInstance.emit("sendCallRequest", {
+        senderId: user.sub,
+        senderName: user.name || "Neural User",
+        receiverId: receiverId,
+        roomId: roomId
+      });
+
+      navigate(`/call/${roomId}`);
+    } else {
+      alert("Socket connection or Chat not active!");
+    }
+  };
+
+  /* ==========================================================
+      📥 FETCH MESSAGES
   ========================================================== */
   useEffect(() => {
     const getMessages = async () => {
@@ -76,25 +129,6 @@ const Messenger = ({ socket }) => {
     };
     getMessages();
   }, [currentChat, getAccessTokenSilently]);
-
-  /* ==========================================================
-      📞 CALL LOGIC
-  ========================================================== */
-  const handleCall = () => {
-    if (currentChat && socket?.current) {
-      const receiverId = currentChat.members.find(m => m !== user.sub);
-      const roomId = `room_${currentChat._id}_${Date.now()}`;
-
-      socket.current.emit("sendCallRequest", {
-        senderId: user.sub,
-        senderName: user.name || "Neural User",
-        receiverId: receiverId,
-        roomId: roomId
-      });
-
-      navigate(`/call/${roomId}`);
-    }
-  };
 
   /* ==========================================================
       🔍 SEARCH & CHAT LOGIC
@@ -203,17 +237,16 @@ const Messenger = ({ socket }) => {
     if (!newMessage.trim() || !currentChat) return;
 
     const receiverId = currentChat.members.find(m => m !== user.sub);
+    const socketInstance = socket?.current || socket;
     
-    // সকেটে পাঠানো
-    if (socket?.current) {
-      socket.current.emit("sendMessage", {
+    if (socketInstance) {
+      socketInstance.emit("sendMessage", {
         senderId: user.sub,
         receiverId: receiverId,
         text: newMessage
       });
     }
 
-    // লোকাললি মেসেজ পুশ করা
     const tempMessage = { senderId: user.sub, text: newMessage, createdAt: Date.now() };
     setMessages((prev) => [...prev, tempMessage]);
     setNewMessage("");
@@ -234,13 +267,45 @@ const Messenger = ({ socket }) => {
   return (
     <div className="flex h-screen bg-[#010409] text-white font-mono overflow-hidden fixed inset-0">
       
+      {/* 📞 INCOMING CALL NOTIFICATION OVERLAY */}
+      <AnimatePresence>
+        {incomingCall && (
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9, y: -20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.9, y: -20 }}
+            className="fixed top-10 left-1/2 -translate-x-1/2 z-[10000] w-[90%] max-w-[400px]"
+          >
+            <div className="bg-[#030712]/90 backdrop-blur-2xl border border-cyan-500/30 p-6 rounded-[2.5rem] shadow-[0_0_50px_rgba(6,182,212,0.2)] flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="w-14 h-14 rounded-2xl bg-cyan-500 flex items-center justify-center text-black font-black animate-pulse uppercase">
+                  {incomingCall.senderName?.slice(0, 2)}
+                </div>
+                <div>
+                  <h4 className="text-white font-black text-sm uppercase tracking-widest">{incomingCall.senderName}</h4>
+                  <p className="text-cyan-400 text-[10px] font-bold animate-pulse">INCOMING NEURAL CALL...</p>
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <button onClick={rejectCall} className="w-12 h-12 bg-red-500/20 text-red-500 rounded-full flex items-center justify-center border border-red-500/20 hover:bg-red-500 hover:text-white transition-all">
+                  <HiXMark size={24} />
+                </button>
+                <button onClick={acceptCall} className="w-12 h-12 bg-cyan-500 text-black rounded-full flex items-center justify-center shadow-lg shadow-cyan-500/40 hover:scale-110 transition-all">
+                  <HiOutlinePhone size={24} />
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* 🎬 STORY VIEWER */}
       <AnimatePresence>
         {viewingStory && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[6000] bg-black flex items-center justify-center">
               <div className="relative w-full max-w-[420px] h-full md:h-[92vh] bg-zinc-900 overflow-hidden md:rounded-3xl shadow-2xl">
                 <div className="absolute top-4 left-4 right-4 h-1 bg-white/20 z-50 rounded-full overflow-hidden">
-                   <motion.div initial={{ width: 0 }} animate={{ width: "100%" }} transition={{ duration: 7, ease: "linear" }} onAnimationComplete={handleCloseStory} className="h-full bg-cyan-500" />
+                    <motion.div initial={{ width: 0 }} animate={{ width: "100%" }} transition={{ duration: 7, ease: "linear" }} onAnimationComplete={handleCloseStory} className="h-full bg-cyan-500" />
                 </div>
                 <img src={viewingStory.mediaUrl} className="w-full h-full object-cover" alt="story" />
                 <div className="absolute inset-0 flex flex-col justify-center items-center p-10 pointer-events-none">
