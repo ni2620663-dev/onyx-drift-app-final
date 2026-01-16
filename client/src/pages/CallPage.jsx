@@ -4,28 +4,30 @@ import { ZegoUIKitPrebuilt } from '@zegocloud/zego-uikit-prebuilt';
 import { useAuth0 } from "@auth0/auth0-react";
 import { HiOutlineXMark } from "react-icons/hi2";
 
-const CallPage = ({ socket }) => { // <--- সকেট প্রপস হিসেবে নেওয়া হয়েছে
+const CallPage = ({ socket }) => { 
   const { roomId } = useParams(); 
   const { user, isAuthenticated } = useAuth0();
   const navigate = useNavigate();
   const containerRef = useRef(null);
   const zpRef = useRef(null);
-  const ringtoneRef = useRef(new Audio("https://assets.mixkit.co/active_storage/sfx/1359/1359-preview.mp3")); // একটি স্যাম্পল রিংটোন
+  const ringtoneRef = useRef(null);
 
-  // ✅ ZegoCloud Credentials
+  // ZegoCloud Credentials
   const appID = 1086315716;
   const serverSecret = "faa9451e78f290d4a11ff8eb53c79bea"; 
 
   useEffect(() => {
+    // অডিও অবজেক্ট ইনিশিয়ালাইজ (ব্রাউজার পলিসি অনুযায়ী)
+    ringtoneRef.current = new Audio("https://assets.mixkit.co/active_storage/sfx/1359/1359-preview.mp3");
+    ringtoneRef.current.loop = true;
+
     const initMeeting = async () => {
       if (!roomId || !isAuthenticated || !user) return;
 
       try {
-        // ১. ইউজার আইডি ক্লিন করা
         const cleanUserID = user.sub.replace(/[^a-zA-Z0-9_]/g, "_");
         const userName = user.name || "Onyx Drifter";
 
-        // ২. কিট টোকেন জেনারেট করা
         const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(
           appID, 
           serverSecret, 
@@ -34,13 +36,16 @@ const CallPage = ({ socket }) => { // <--- সকেট প্রপস হি�
           userName
         );
 
-        // ৩. কলিং ইন্টারফেস তৈরি করা
         const zp = ZegoUIKitPrebuilt.create(kitToken);
         zpRef.current = zp;
 
-        // ৪. রিংটোন বাজানো (কল রুমে ঢোকার আগে)
-        ringtoneRef.current.loop = true;
-        ringtoneRef.current.play().catch(err => console.log("Ringtone play blocked by browser"));
+        // রিংটোন প্লে করার চেষ্টা (User Interaction ছাড়া ব্লক হতে পারে)
+        const playPromise = ringtoneRef.current.play();
+        if (playPromise !== undefined) {
+          playPromise.catch(() => {
+            console.log("Autoplay blocked: Ringtone will play after user interaction");
+          });
+        }
 
         zp.joinRoom({
           container: containerRef.current,
@@ -59,13 +64,20 @@ const CallPage = ({ socket }) => { // <--- সকেট প্রপস হি�
           maxUsers: 2,
           layout: "Auto", 
           showLayoutButton: false,
-          onUserJoin: () => {
+          // ভিডিও রেন্ডারিং এবং রিংটোন লজিক
+          onUserJoin: (users) => {
             // কেউ জয়েন করলে রিংটোন বন্ধ হবে
-            ringtoneRef.current.pause();
-            ringtoneRef.current.currentTime = 0;
+            if (ringtoneRef.current) {
+              ringtoneRef.current.pause();
+              ringtoneRef.current.currentTime = 0;
+            }
+          },
+          onUserLeave: () => {
+             // অন্য ইউজার চলে গেলে কল কেটে যাবে
+             navigate('/messenger');
           },
           onLeaveRoom: () => {
-            ringtoneRef.current.pause();
+            if (ringtoneRef.current) ringtoneRef.current.pause();
             navigate('/messenger');
           },
         });
@@ -82,7 +94,10 @@ const CallPage = ({ socket }) => { // <--- সকেট প্রপস হি�
       if (zpRef.current) {
         zpRef.current.destroy();
       }
-      ringtoneRef.current.pause();
+      if (ringtoneRef.current) {
+        ringtoneRef.current.pause();
+        ringtoneRef.current.src = "";
+      }
     };
   }, [roomId, user, isAuthenticated, navigate]);
 
@@ -104,7 +119,7 @@ const CallPage = ({ socket }) => { // <--- সকেট প্রপস হি�
         
         <button 
           onClick={() => {
-            zpRef.current?.destroy();
+            if (zpRef.current) zpRef.current.destroy();
             navigate('/messenger');
           }}
           className="w-12 h-12 bg-white/5 backdrop-blur-2xl rounded-2xl flex items-center justify-center border border-white/10 text-white hover:bg-red-500 hover:text-white transition-all pointer-events-auto shadow-2xl group"
@@ -124,6 +139,11 @@ const CallPage = ({ socket }) => { // <--- সকেট প্রপস হি�
         .zego-container {
           background-color: #020617 !important;
         }
+        /* অন্য ইউজারকে বড় করে দেখানোর জন্য ভিডিও রেন্ডার সেটিংস */
+        .ZEGO_V_W_VIDEO_PLAYER video {
+          object-fit: cover !important;
+          background: #020617 !important;
+        }
         .ZEGO_V_W_CONTROL_BAR {
           background: rgba(2, 6, 23, 0.8) !important;
           backdrop-filter: blur(30px) !important;
@@ -131,16 +151,13 @@ const CallPage = ({ socket }) => { // <--- সকেট প্রপস হি�
           padding-bottom: 30px !important;
         }
         .ZEGO_V_W_VIDEO_PLAYER {
-          object-fit: cover !important;
           border-radius: 24px !important;
-          border: 2px solid rgba(34, 211, 238, 0.05) !important;
-          box-shadow: 0 0 40px rgba(0, 0, 0, 0.5) !important;
-        }
-        .ZEGO_V_W_PREJOIN_VIEW {
-           background-color: #020617 !important;
+          border: 2px solid rgba(34, 211, 238, 0.1) !important;
+          overflow: hidden !important;
         }
         /* Hide Zego Branding */
         .ZEGO_V_W_LOGO { display: none !important; }
+        .ZEGO_V_W_PREJOIN_VIEW { background: #020617 !important; }
       `}</style>
     </div>
   );
