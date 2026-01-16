@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Routes, Route, useLocation, Navigate, useNavigate } from "react-router-dom"; // useNavigate যোগ করা হয়েছে
+import { Routes, Route, useLocation, Navigate, useNavigate } from "react-router-dom";
 import { useAuth0, withAuthenticationRequired } from "@auth0/auth0-react";
 import { io } from "socket.io-client"; 
 import { motion, AnimatePresence } from "framer-motion";
@@ -39,35 +39,36 @@ const ProtectedRoute = ({ component: Component, ...props }) => {
 export default function App() {
   const { isAuthenticated, isLoading, user } = useAuth0();
   const location = useLocation();
-  const navigate = useNavigate(); // কল জয়েন করার জন্য নেভিগেট হুক
+  const navigate = useNavigate();
   const socket = useRef(null); 
   const [searchQuery, setSearchQuery] = useState("");
   const [isPostModalOpen, setIsPostModalOpen] = useState(false);
 
   useEffect(() => {
     if (isAuthenticated && user?.sub) {
+      // সকেট কানেকশন কনফিগারেশন (Fixed Path & Transports)
       const socketUrl = "https://onyx-drift-app-final.onrender.com";
       socket.current = io(socketUrl, {
-        transports: ["polling", "websocket"],
-        path: "/socket.io/",
+        transports: ["websocket", "polling"],
         withCredentials: true,
       });
 
       socket.current.on("connect", () => {
+        console.log("Connected to Neural Socket");
         socket.current.emit("addNewUser", user.sub);
       });
 
-      // --- ইনকামিং কল নোটিফিকেশন লজিক (নতুন যোগ করা হয়েছে) ---
+      // --- ইনকামিং কল নোটিফিকেশন লজিক ---
       socket.current.on("incomingCall", (data) => {
         const ringtone = new Audio("https://assets.mixkit.co/active_storage/sfx/1359/1359-preview.mp3");
-        ringtone.play().catch(e => console.log("Audio play blocked"));
+        ringtone.play().catch(e => console.log("Audio play blocked by browser settings"));
 
         toast.custom((t) => (
           <motion.div
             initial={{ opacity: 0, x: 50 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: 50 }}
-            className="bg-[#0f172a] border-2 border-cyan-500 p-5 rounded-3xl shadow-[0_0_30px_rgba(6,182,212,0.3)] flex flex-col gap-4 backdrop-blur-2xl min-w-[300px]"
+            className="bg-[#0f172a] border-2 border-cyan-500 p-5 rounded-3xl shadow-[0_0_30px_rgba(6,182,212,0.3)] flex flex-col gap-4 backdrop-blur-2xl min-w-[300px] z-[9999]"
           >
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 rounded-2xl bg-cyan-500 animate-pulse flex items-center justify-center text-black font-black text-xl">
@@ -100,10 +101,10 @@ export default function App() {
               </button>
             </div>
           </motion.div>
-        ), { duration: 10000, position: 'top-right' });
+        ), { duration: 15000, position: 'top-right' });
       });
-      // -------------------------------------------------------
 
+      // --- সাধারণ নোটিফিকেশন লজিক ---
       socket.current.on("getNotification", (data) => {
         toast.custom((t) => (
           <motion.div
@@ -126,7 +127,11 @@ export default function App() {
       });
 
       return () => {
-        if (socket.current) socket.current.disconnect();
+        if (socket.current) {
+          socket.current.off("incomingCall");
+          socket.current.off("getNotification");
+          socket.current.disconnect();
+        }
       };
     }
   }, [isAuthenticated, user?.sub, navigate]);
@@ -220,7 +225,6 @@ export default function App() {
                   <Route path="/explorer" element={<ProtectedRoute component={Explorer} />} />
                   <Route path="/following" element={<ProtectedRoute component={FollowingPage} />} />
                   
-                  {/* কল রাউটে সকেট পাস করা হয়েছে */}
                   <Route path="/call/:roomId" element={<ProtectedRoute component={() => <Call socket={socket} />} />} />
                   
                   <Route path="*" element={<Navigate to="/" />} />

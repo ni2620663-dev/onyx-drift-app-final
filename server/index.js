@@ -20,7 +20,7 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET 
 });
 
-// ৩. রাউট ইম্পোর্ট
+// ৩. রাুট ইম্পোর্ট
 import profileRoutes from "./src/routes/profile.js"; 
 import postRoutes from "./routes/posts.js";
 import userRoutes from './routes/users.js'; 
@@ -31,7 +31,7 @@ import reelRoutes from "./routes/reels.js";
 const app = express();
 const server = http.createServer(app);
 
-// ৪. CORS কনফিগারেশন
+// ৪. CORS কনফিগারেশন (উন্নত করা হয়েছে)
 const allowedOrigins = [
     "http://localhost:5173", 
     "https://onyx-drift-app-final.onrender.com",
@@ -56,19 +56,27 @@ app.use(cors(corsOptions));
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
-// ৫. সকেট আইও কনফিগারেশন
+// ৫. সকেট আইও কনফিগারেশন (Transports অগ্রাধিকার ঠিক করা হয়েছে)
 const io = new Server(server, {
     cors: corsOptions,
-    transports: ['polling', 'websocket']
+    transports: ['websocket', 'polling']
 });
 
-// ৬. Redis Setup
+// ৬. Redis Setup (Error Handling সহ)
 const redis = process.env.REDIS_URL ? new Redis(process.env.REDIS_URL, {
     maxRetriesPerRequest: null,
-    enableReadyCheck: false
+    enableReadyCheck: false,
+    retryStrategy(times) {
+        const delay = Math.min(times * 50, 2000);
+        return delay;
+    }
 }) : null;
 
-// ৭. এপিআই রাউট মাউন্টিং
+if (redis) {
+    redis.on("error", (err) => console.log("Redis Connection Error:", err.message));
+}
+
+// ৭. এপিআই রাুট মাউন্টিং
 app.use("/api/user", userRoutes); 
 app.use("/api/profile", profileRoutes); 
 app.use("/api/posts", postRoutes); 
@@ -98,36 +106,54 @@ app.use((err, req, res, next) => {
 });
 
 /* ==========================================================
-    📡 REAL-TIME ENGINE (Socket.io)
+    📡 REAL-TIME ENGINE (Socket.io) - Fixed Logic
 ========================================================== */
 io.on("connection", (socket) => {
+    console.log("A user connected:", socket.id);
+
     // ইউজার অনলাইন হলে রেজিস্টার করা
     socket.on("addNewUser", async (userId) => {
-        if (redis && userId) {
-            await redis.hset("online_users", userId, socket.id);
-            const allUsers = await redis.hgetall("online_users");
-            io.emit("getOnlineUsers", Object.keys(allUsers).map(id => ({ userId: id })));
+        if (userId) {
+            if (redis) {
+                await redis.hset("online_users", userId, socket.id);
+                const allUsers = await redis.hgetall("online_users");
+                io.emit("getOnlineUsers", Object.keys(allUsers).map(id => ({ userId: id })));
+            } else {
+                // Redis না থাকলে ইন-মেমোরি ব্যাকআপ (Optional)
+                socket.join(userId); 
+            }
         }
     });
 
     // টেক্সট মেসেজ হ্যান্ডলার
     socket.on("sendMessage", async (data) => {
         const { receiverId } = data;
-        const socketId = await redis?.hget("online_users", receiverId);
-        if (socketId) io.to(socketId).emit("getMessage", data);
+        if (redis) {
+            const socketId = await redis.hget("online_users", receiverId);
+            if (socketId) io.to(socketId).emit("getMessage", data);
+        } else {
+            socket.to(receiverId).emit("getMessage", data);
+        }
     });
 
-    // ভিডিও কল রিকোয়েস্ট হ্যান্ডলার (এটি কল পৌঁছানোর জন্য জরুরি)
+    // ভিডিও কল রিকোয়েস্ট হ্যান্ডলার (Fixed Naming for Frontend)
     socket.on("sendCallRequest", async (data) => {
         const { receiverId, senderName, roomId } = data;
-        const socketId = await redis?.hget("online_users", receiverId);
         
+        let socketId = null;
+        if (redis) {
+            socketId = await redis.hget("online_users", receiverId);
+        }
+
         if (socketId) {
-            // রিসিভার অনলাইন থাকলে তাকে কল নোটিফিকেশন পাঠানো
+            // ফ্রন্টএন্ড 'callerName' আশা করছে, তাই সেটাই পাঠানো হচ্ছে
             io.to(socketId).emit("incomingCall", {
-                senderName,
-                roomId
+                callerName: senderName, 
+                roomId: roomId
             });
+            console.log(`Call forwarded to: ${receiverId}`);
+        } else {
+            console.log(`User ${receiverId} is offline. Call failed.`);
         }
     });
 
@@ -144,6 +170,7 @@ io.on("connection", (socket) => {
                 }
             }
         }
+        console.log("User disconnected");
     });
 });
 
