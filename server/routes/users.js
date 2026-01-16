@@ -120,34 +120,47 @@ router.get("/search", auth, async (req, res) => {
 ========================================================== */
 router.post("/follow/:targetId", auth, async (req, res) => {
   try {
-    const myId = req.user.sub || req.user.id;
+    // ১. আইডি সঠিকভাবে ডিকোড করা
+    const myId = req.user.sub; 
     const targetId = decodeURIComponent(req.params.targetId);
 
-    if (myId === targetId) return res.status(400).json({ msg: "Self-link forbidden" });
+    // ২. নিজেকে ফলো করা চেক (এটিই 400 এরর দিচ্ছে)
+    if (myId === targetId) {
+      return res.status(400).json({ 
+        msg: "Neural Loop Detected: You cannot link with yourself.",
+        selfLink: true 
+      });
+    }
 
+    // ৩. টার্গেট ইউজার চেক
     const targetUser = await User.findOne({ auth0Id: targetId });
-    if (!targetUser) return res.status(404).json({ msg: "Target drifter not found" });
+    if (!targetUser) {
+      return res.status(404).json({ msg: "Target drifter not found in neural core" });
+    }
 
-    const isFollowing = targetUser.followers?.includes(myId);
+    // ৪. ফলোয়ার লিস্টে অলরেডি আছে কি না চেক
+    const isFollowing = targetUser.followers && targetUser.followers.includes(myId);
 
     if (isFollowing) {
+      // Unfollow Logic
       await Promise.all([
-        User.updateOne({ auth0Id: myId }, { $pull: { following: targetId } }),
-        User.updateOne({ auth0Id: targetId }, { $pull: { followers: myId } })
+        User.findOneAndUpdate({ auth0Id: myId }, { $pull: { following: targetId } }),
+        User.findOneAndUpdate({ auth0Id: targetId }, { $pull: { followers: myId } })
       ]);
-      res.json({ followed: false, msg: "Disconnected" });
+      return res.json({ followed: false, msg: "Disconnected from node" });
     } else {
+      // Follow Logic
       await Promise.all([
-        User.updateOne({ auth0Id: myId }, { $addToSet: { following: targetId } }),
-        User.updateOne({ auth0Id: targetId }, { $addToSet: { followers: myId } })
+        User.findOneAndUpdate({ auth0Id: myId }, { $addToSet: { following: targetId } }),
+        User.findOneAndUpdate({ auth0Id: targetId }, { $addToSet: { followers: myId } })
       ]);
-      res.json({ followed: true, msg: "Linked" });
+      return res.json({ followed: true, msg: "Neural Link Established" });
     }
   } catch (err) {
-    res.status(500).json({ msg: "Neural link failed" });
+    console.error("Follow Error:", err);
+    res.status(500).json({ msg: "Neural link failed due to core error" });
   }
 });
-
 /* ==========================================================
     5️⃣ DISCOVERY (All Users)
 ========================================================== */

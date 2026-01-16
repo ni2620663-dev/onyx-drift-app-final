@@ -9,8 +9,9 @@ const MobileNav = () => {
   const location = useLocation();
   const fileInputRef = useRef(null);
 
-  // ১. মেসেঞ্জার বা চ্যাট পেজে থাকলে ন্যাভিগেশন বারটি লুকানোর লজিক
-  const hidePaths = ["/messages", "/chat", "/reels-editor"];
+  // ১. মেসেঞ্জার, চ্যাট বা কল পেজে থাকলে ন্যাভিগেশন বারটি লুকানোর লজিক
+  // এখানে শুধু "/call" যোগ করা হয়েছে যাতে ভিডিও কলের সময় বাটনগুলো ঢেকে না যায়
+  const hidePaths = ["/messages", "/chat", "/reels-editor", "/call"];
   const shouldHide = hidePaths.some(path => location.pathname.startsWith(path));
 
   if (shouldHide) return null;

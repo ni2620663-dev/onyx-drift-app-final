@@ -8,7 +8,7 @@ import {
 } from 'react-icons/fa'; 
 import { useAuth0 } from "@auth0/auth0-react";
 import axios from "axios";
-import { useNavigate } from 'react-router-dom'; // প্রোফাইল নেভিগেশনের জন্য যোগ করা হয়েছে
+import { useNavigate } from 'react-router-dom';
 
 // --- Video Component with Sound Toggle ---
 const AutoPlayVideo = ({ src }) => {
@@ -58,7 +58,7 @@ const AutoPlayVideo = ({ src }) => {
 
 const PremiumHomeFeed = ({ searchQuery = "", isPostModalOpen, setIsPostModalOpen }) => {
   const { user, logout, getAccessTokenSilently, isAuthenticated } = useAuth0();
-  const navigate = useNavigate(); // রিডাইরেক্ট করার জন্য
+  const navigate = useNavigate();
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -70,7 +70,6 @@ const PremiumHomeFeed = ({ searchQuery = "", isPostModalOpen, setIsPostModalOpen
   const [activePostMenuId, setActivePostMenuId] = useState(null);
   const [activeProfileMenuId, setActiveProfileMenuId] = useState(null);
   
-  // New States for Comments
   const [activeCommentPost, setActiveCommentPost] = useState(null);
   const [commentText, setCommentText] = useState("");
 
@@ -115,7 +114,6 @@ const PremiumHomeFeed = ({ searchQuery = "", isPostModalOpen, setIsPostModalOpen
     }
   };
 
-  // --- Follow Logic ---
   const handleFollowUser = async (e, targetAuth0Id) => {
     e.stopPropagation();
     if (!isAuthenticated) return alert("Please login to follow");
@@ -131,7 +129,6 @@ const PremiumHomeFeed = ({ searchQuery = "", isPostModalOpen, setIsPostModalOpen
     }
   };
 
-  // --- FIXED Comment Logic ---
   const handleCommentClick = (e, post) => {
     e.stopPropagation();
     setActiveCommentPost(post);
@@ -146,7 +143,7 @@ const PremiumHomeFeed = ({ searchQuery = "", isPostModalOpen, setIsPostModalOpen
         { headers: { Authorization: `Bearer ${token}` } }
       );
       setPosts(posts.map(p => p._id === activeCommentPost._id ? response.data : p));
-      setActiveCommentPost(response.data); // Update modal view
+      setActiveCommentPost(response.data);
       setCommentText("");
     } catch (err) {
       alert("Comment failed to transmit.");
@@ -195,14 +192,16 @@ const PremiumHomeFeed = ({ searchQuery = "", isPostModalOpen, setIsPostModalOpen
   return (
     <div className="w-full min-h-screen bg-[#02040a] text-white pt-2 pb-32 overflow-x-hidden font-sans">
       
-      <div className="max-w-[550px] mx-auto px-4 flex justify-between items-center py-6 sticky top-0 bg-[#02040a]/80 backdrop-blur-md z-[100]">
+      {/* 🛑 FIXED HEADER SECTION FOR NOTIFICATION CLICK */}
+      <div className="max-w-[550px] mx-auto px-4 flex justify-between items-center py-6 sticky top-0 bg-[#02040a]/90 backdrop-blur-xl z-[1000] pointer-events-auto border-b border-white/5">
           <div className="flex items-center gap-2">
               <div className="w-2.5 h-2.5 bg-cyan-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(6,182,212,0.5)]" />
               <h2 className="text-xs font-black uppercase tracking-[0.3em] text-gray-100">Onyx Drift</h2>
           </div>
+          {/* যদি আপনার নোটিফিকেশন বাটন এখানে থাকে তবে এটি এখন ক্লিকেবল হবে */}
       </div>
 
-      <section className="max-w-[550px] mx-auto px-4">
+      <section className="max-w-[550px] mx-auto px-4 relative z-10">
         {error && <div className="p-3 mb-4 bg-cyan-500/5 border border-cyan-500/20 rounded-lg text-cyan-400 text-[10px] uppercase text-center animate-pulse">{error}</div>}
 
         {loading && posts.length === 0 ? (
@@ -213,7 +212,7 @@ const PremiumHomeFeed = ({ searchQuery = "", isPostModalOpen, setIsPostModalOpen
               const mediaSrc = post.media || post.mediaUrl;
               const isVideo = mediaSrc?.match(/\.(mp4|webm|mov)$/i) || post.mediaType === 'video';
               const isLiked = post.likes?.includes(user?.sub);
-              const authorId = post.authorAuth0Id || post.userId; // ইউজারের ইউনিক আইডি
+              const authorId = post.authorAuth0Id || post.userId;
               
               return (
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} key={post._id} className="flex gap-3 py-6 border-b border-white/5 relative">
@@ -234,7 +233,6 @@ const PremiumHomeFeed = ({ searchQuery = "", isPostModalOpen, setIsPostModalOpen
                              <p className="text-[10px] text-gray-500 truncate">@{post.authorName?.toLowerCase().replace(/\s/g, '')}</p>
                           </div>
                           
-                          {/* Follow Button */}
                           <button 
                             onClick={(e) => handleFollowUser(e, authorId)}
                             className="w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-300 hover:bg-white/5 rounded-xl transition-colors font-bold"
@@ -242,7 +240,6 @@ const PremiumHomeFeed = ({ searchQuery = "", isPostModalOpen, setIsPostModalOpen
                             <FaUserPlus size={14} className="text-cyan-500" /> Follow
                           </button>
 
-                          {/* Message Button */}
                           <button 
                             onClick={(e) => { e.stopPropagation(); navigate('/messages'); }}
                             className="w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-300 hover:bg-white/5 rounded-xl transition-colors font-bold"
@@ -252,7 +249,6 @@ const PremiumHomeFeed = ({ searchQuery = "", isPostModalOpen, setIsPostModalOpen
 
                           <div className="my-1 border-t border-white/5" />
 
-                          {/* Profile View Button */}
                           <button 
                             onClick={(e) => { e.stopPropagation(); navigate(`/profile/${authorId}`); }}
                             className="w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-300 hover:bg-white/5 rounded-xl transition-colors font-bold"

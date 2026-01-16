@@ -146,3 +146,9 @@
     display: none;
   }
 }
+/* App.css বা index.css */
+header {
+  position: sticky;
+  top: 0;
+  z-index: 1000; /* ন্যাভিগেশন বারের চেয়ে বেশি রাখুন */
+}
