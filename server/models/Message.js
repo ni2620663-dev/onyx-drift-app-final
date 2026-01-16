@@ -2,34 +2,42 @@ import mongoose from "mongoose";
 
 const MessageSchema = new mongoose.Schema(
   {
-    // ১. কন্টিনজেন্সি: এটি ওয়ান-টু-ওয়ান চ্যাট নাকি কমিউনিটি চ্যাট?
+    // ১. কন্টিনজেন্সি: এটি ওয়ান-টু-ওয়ান চ্যাট নাকি কমিউনিটি চ্যাট?
     conversationId: {
-      type: String, // ওয়ান-টু-ওয়ান চ্যাটের জন্য (যেমন: senderId + receiverId)
-      index: true
+      type: String, // ওয়ান-টু-ওয়ান চ্যাটের জন্য (যেমন: senderId + receiverId)
+      index: true,
+      required: function() { return !this.communityId; } // কমিউনিটি না হলে এটি মাস্ট
     },
     communityId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Community",
-      default: null, // যদি এটি কোনো গ্রুপ বা নোড চ্যাট হয়
+      default: null,
       index: true
     },
 
-    // ২. সেন্ডার ডিটেইলস (Fast UI Rendering এর জন্য ডেনরমালাইজড ডাটা)
+    // ২. সেন্ডার ডিটেইলস (Fast UI Rendering এর জন্য)
     senderId: {
-      type: String, // Auth0 ID
+      type: String, // Auth0 ID (e.g., auth0|123...)
       required: true,
       index: true
     },
     senderName: { type: String },
     senderAvatar: { type: String },
 
-    // ৩. কন্টেন্ট টাইপস
+    // ৩. ইউনিক আইডেন্টিফায়ার (Duplicate প্রিভেন্ট করার জন্য)
+    tempId: { 
+      type: String, 
+      unique: true, // এটি ডুপ্লিকেট মেসেজ সেভ হওয়া আটকাবে
+      sparse: true  // যাদের tempId নেই তাদের জন্য এরর দিবে না
+    },
+
+    // ৪. কন্টেন্ট টাইপস
     text: {
       type: String,
       trim: true
     },
     media: {
-      type: String, // Cloudinary URL (Image/Video/Voice Note)
+      type: String, // Cloudinary URL
       default: ""
     },
     mediaType: {
@@ -38,7 +46,7 @@ const MessageSchema = new mongoose.Schema(
       default: "text"
     },
 
-    // ৪. রিড রিসিপ্ট এবং রিয়েল-টাইম স্ট্যাটাস
+    // ৫. রিড রিসিপ্ট এবং রিয়েল-টাইম স্ট্যাটাস
     seenBy: [
       {
         userId: String,
@@ -51,7 +59,7 @@ const MessageSchema = new mongoose.Schema(
     }
   },
   { 
-    timestamps: true, // এটি createdAt এবং updatedAt অটোমেটিক হ্যান্ডেল করবে
+    timestamps: true, 
     toJSON: { virtuals: true },
     toObject: { virtuals: true }
   }
