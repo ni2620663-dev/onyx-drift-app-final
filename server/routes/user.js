@@ -80,7 +80,37 @@ router.put("/update-profile", auth, upload.fields([
 });
 
 /* ==========================================================
-    3️⃣ SEARCH DRIFTERS (Neural Scan)
+    3️⃣ UPDATE PHOTO (New Dedicated Route for Profile/Cover)
+========================================================== */
+router.post("/update-photo", auth, upload.single('image'), async (req, res) => {
+  try {
+    const { type } = req.body; // 'profile' or 'cover'
+    const targetAuth0Id = req.user.sub || req.user.id;
+    
+    if (!req.file) return res.status(400).json({ msg: "No image provided" });
+
+    let updateFields = {};
+    if (type === 'profile') {
+      updateFields.avatar = req.file.path;
+    } else if (type === 'cover') {
+      updateFields.coverImg = req.file.path;
+    }
+
+    const updatedUser = await User.findOneAndUpdate(
+      { auth0Id: targetAuth0Id },
+      { $set: updateFields },
+      { new: true, lean: true }
+    );
+
+    res.json(updatedUser);
+  } catch (err) {
+    console.error("📡 Photo Sync Error:", err);
+    res.status(500).json({ msg: "Neural Sync Failed" });
+  }
+});
+
+/* ==========================================================
+    4️⃣ SEARCH DRIFTERS (Neural Scan)
 ========================================================== */
 router.get("/search", auth, async (req, res) => {
   try {
@@ -112,7 +142,7 @@ router.get("/search", auth, async (req, res) => {
 });
 
 /* ==========================================================
-    4️⃣ FOLLOW / UNFOLLOW SYSTEM (Fixed Logic)
+    5️⃣ FOLLOW / UNFOLLOW SYSTEM (Fixed Logic)
 ========================================================== */
 router.post("/follow/:targetId", auth, async (req, res) => {
   try {
@@ -124,18 +154,15 @@ router.post("/follow/:targetId", auth, async (req, res) => {
     const targetUser = await User.findOne({ auth0Id: targetId });
     if (!targetUser) return res.status(404).json({ msg: "Target not found" });
 
-    //followers অ্যারে চেক করা (যদি না থাকে তবে খালি অ্যারে ধরে নেওয়া)
     const isFollowing = targetUser.followers ? targetUser.followers.includes(myId) : false;
 
     if (isFollowing) {
-      // Unfollow Logic
       await Promise.all([
         User.findOneAndUpdate({ auth0Id: myId }, { $pull: { following: targetId } }),
         User.findOneAndUpdate({ auth0Id: targetId }, { $pull: { followers: myId } })
       ]);
       res.json({ followed: false });
     } else {
-      // Follow Logic
       await Promise.all([
         User.findOneAndUpdate({ auth0Id: myId }, { $addToSet: { following: targetId } }),
         User.findOneAndUpdate({ auth0Id: targetId }, { $addToSet: { followers: myId } })
@@ -149,7 +176,7 @@ router.post("/follow/:targetId", auth, async (req, res) => {
 });
 
 /* ==========================================================
-    5️⃣ DISCOVERY
+    6️⃣ DISCOVERY
 ========================================================== */
 router.get("/all", auth, async (req, res) => {
   try {

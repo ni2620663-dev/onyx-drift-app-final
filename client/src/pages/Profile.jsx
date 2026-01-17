@@ -7,7 +7,7 @@ import {
   FaEdit, FaShieldAlt, FaRocket, FaCamera, FaImage, 
   FaFilm, FaPlayCircle, FaTimes, FaPlus, FaCheckCircle, 
   FaUserPlus, FaEnvelope, FaSearch, FaMagic, FaAward,
-  FaThLarge, FaPlay // গ্রিড এবং ভিডিও আইকনের জন্য
+  FaThLarge, FaPlay, FaUsers, FaHeart // নতুন আইকন যোগ করা হয়েছে
 } from "react-icons/fa";
 import { BRAND_NAME } from "../utils/constants";
 import PostCard from "../components/PostCard";
@@ -82,9 +82,9 @@ const Profile = () => {
   
   const [userProfile, setUserProfile] = useState(null);
   const [userPosts, setUserPosts] = useState([]);
-  const [userReels, setUserReels] = useState([]); // রিলস এর জন্য নতুন স্টেট
+  const [userReels, setUserReels] = useState([]); 
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState("Echoes"); // Default: Echoes
+  const [activeTab, setActiveTab] = useState("Echoes"); 
   
   const [searchQuery, setSearchQuery] = useState("");
   const [suggestedUsers, setSuggestedUsers] = useState([]);
@@ -100,6 +100,8 @@ const Profile = () => {
 
   const API_URL = (import.meta.env.VITE_API_BASE_URL || "https://onyx-drift-app-final.onrender.com").replace(/\/$/, "");
   const fileInputRef = useRef(null);
+  const profilePhotoRef = useRef(null); // প্রোফাইল ফটোর জন্য
+  const coverPhotoRef = useRef(null);   // কভার ফটোর জন্য
 
   const [editData, setEditData] = useState({ nickname: "", bio: "" });
   const [isUpdating, setIsUpdating] = useState(false);
@@ -129,7 +131,6 @@ const Profile = () => {
       setUserProfile(profileRes.data);
       const allPosts = Array.isArray(postsRes.data) ? postsRes.data : [];
       
-      // পোস্ট এবং রিলস আলাদা করা
       setUserPosts(allPosts.filter(p => p.postType !== 'reels'));
       setUserReels(allPosts.filter(p => p.postType === 'reels' || p.mediaType === 'video'));
       
@@ -140,6 +141,31 @@ const Profile = () => {
       setUserPosts([]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // ফটো আপডেট করার নতুন ফাংশন
+  const handlePhotoUpdate = async (e, type) => {
+    const photoFile = e.target.files[0];
+    if (!photoFile) return;
+
+    try {
+      const token = await getAccessTokenSilently();
+      const formData = new FormData();
+      formData.append("image", photoFile);
+      formData.append("type", type);
+
+      await axios.post(`${API_URL}/api/user/update-photo`, formData, {
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "multipart/form-data" 
+        }
+      });
+      
+      fetchProfileData(); // রিফ্রেশ
+      alert(`${type.charAt(0).toUpperCase() + type.slice(1)} Sync Complete!`);
+    } catch (err) {
+      alert("Neural Sync Failed");
     }
   };
 
@@ -193,7 +219,7 @@ const Profile = () => {
         } 
       });
       
-      fetchProfileData(); // রিফ্রেশ ডেটা
+      fetchProfileData(); 
       setIsCreateOpen(false);
       setContent("");
       setFile(null);
@@ -220,6 +246,10 @@ const Profile = () => {
   return (
     <div className={`w-full min-h-screen transition-all duration-700 ${isGhostMode ? 'bg-black' : 'bg-[#020617]'} text-gray-200 overflow-x-hidden flex flex-col`}>
       
+      {/* Hidden Inputs for Photos */}
+      <input type="file" ref={profilePhotoRef} hidden onChange={(e) => handlePhotoUpdate(e, "profile")} accept="image/*" />
+      <input type="file" ref={coverPhotoRef} hidden onChange={(e) => handlePhotoUpdate(e, "cover")} accept="image/*" />
+
       {/* Search & Navigation Overlay */}
       <div className="w-full py-4 px-6 border-b border-white/5 sticky top-0 z-[60] bg-[#020617]/80 backdrop-blur-xl">
         <div className="max-w-[1400px] mx-auto flex items-center justify-between gap-4">
@@ -254,13 +284,23 @@ const Profile = () => {
 
         {/* Main Feed Section */}
         <main className="flex-1 pb-20">
-          <div className="relative h-48 md:h-72 w-full overflow-hidden">
+          {/* COVER PHOTO SECTION */}
+          <div className="relative h-48 md:h-72 w-full overflow-hidden group">
             <img 
               src={userProfile?.coverImg || "https://images.unsplash.com/photo-1614850523296-d8c1af93d400?q=80&w=1000"} 
               className={`w-full h-full object-cover transition-all duration-1000 ${isGhostMode ? 'opacity-20 grayscale blur-sm' : 'opacity-40'}`}
               alt="Cover"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-[#020617] via-[#020617]/40 to-transparent"></div>
+            
+            {isOwnProfile && (
+              <button 
+                onClick={() => coverPhotoRef.current.click()}
+                className="absolute bottom-4 right-4 p-3 bg-black/50 backdrop-blur-xl rounded-full border border-white/10 text-white opacity-0 group-hover:opacity-100 transition-all"
+              >
+                <FaCamera size={16} />
+              </button>
+            )}
           </div>
 
           <div className="max-w-[800px] mx-auto px-4 -mt-16 md:-mt-24 relative z-20">
@@ -272,11 +312,23 @@ const Profile = () => {
               >
                 <div className="flex flex-col md:flex-row justify-between items-center md:items-end gap-6">
                   <div className="flex flex-col md:flex-row items-center md:items-end gap-6">
-                    <img 
-                      src={userProfile?.avatar || currentUser?.picture} 
-                      className={`w-32 h-32 md:w-40 md:h-40 rounded-[2.5rem] border-4 border-[#020617] shadow-lg object-cover transition-all ${isGhostMode ? 'grayscale invert' : ''}`} 
-                      alt="Avatar"
-                    />
+                    {/* AVATAR PHOTO SECTION */}
+                    <div className="relative group">
+                      <img 
+                        src={userProfile?.avatar || currentUser?.picture} 
+                        className={`w-32 h-32 md:w-40 md:h-40 rounded-[2.5rem] border-4 border-[#020617] shadow-lg object-cover transition-all ${isGhostMode ? 'grayscale invert' : ''}`} 
+                        alt="Avatar"
+                      />
+                      {isOwnProfile && (
+                        <button 
+                          onClick={() => profilePhotoRef.current.click()}
+                          className="absolute bottom-2 right-2 p-3 bg-cyan-500 rounded-2xl border-4 border-[#020617] text-black shadow-xl hover:scale-110 transition-all"
+                        >
+                          <FaCamera size={14} />
+                        </button>
+                      )}
+                    </div>
+
                     <div className="text-center md:text-left">
                       <div className="flex items-center gap-2 justify-center md:justify-start">
                         <h1 className="text-2xl md:text-4xl font-black text-white italic tracking-tighter uppercase">
@@ -308,7 +360,27 @@ const Profile = () => {
                   </div>
                 </div>
 
-                <div className="mt-8 pt-8 border-t border-white/5">
+                {/* --- FOLLOWERS & STATS SECTION (আপনি যেমনটি চেয়েছিলেন) --- */}
+                <div className="flex justify-center md:justify-start gap-8 mt-8 py-4 border-y border-white/5">
+                   <div className="text-center md:text-left">
+                      <p className="text-lg font-black text-white">{userProfile?.followers?.length || 0}</p>
+                      <p className="text-[8px] text-gray-500 uppercase font-bold tracking-[0.2em] flex items-center gap-1 justify-center md:justify-start">
+                        <FaUsers className="text-cyan-500" /> Followers
+                      </p>
+                   </div>
+                   <div className="w-[1px] bg-white/5"></div>
+                   <div className="text-center md:text-left">
+                      <p className="text-lg font-black text-white">{userProfile?.following?.length || 0}</p>
+                      <p className="text-[8px] text-gray-500 uppercase font-bold tracking-[0.2em]">Following</p>
+                   </div>
+                   <div className="w-[1px] bg-white/5"></div>
+                   <div className="text-center md:text-left">
+                      <p className="text-lg font-black text-white">{userPosts.length + userReels.length}</p>
+                      <p className="text-[8px] text-gray-500 uppercase font-bold tracking-[0.2em]">Signals</p>
+                   </div>
+                </div>
+
+                <div className="mt-6">
                     <p className="text-gray-400 text-sm italic leading-relaxed text-center md:text-left">
                       "{userProfile?.bio || "No neural signature detected..."}"
                     </p>
