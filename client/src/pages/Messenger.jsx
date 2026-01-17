@@ -9,11 +9,12 @@ import {
 } from "react-icons/hi2";
 import { AnimatePresence } from "framer-motion";
 
-// সঠিক পাথ অনুযায়ী কম্পোনেন্টগুলো ইমপোর্ট করা হয়েছে
+// সঠিক পাথ অনুযায়ী কম্পোনেন্টগুলো ইমপোর্ট করা হয়েছে
 import StorySection from "../components/Messenger/StorySection";
 import ChatInput from "../components/Messenger/ChatInput";
 import CallOverlay from "../components/Messenger/CallOverlay";
 import StoryEditor from "../components/Messenger/StoryEditor";
+
 const Messenger = ({ socket }) => {
   const { user, getAccessTokenSilently, isAuthenticated, logout } = useAuth0();
   const navigate = useNavigate();
@@ -28,7 +29,8 @@ const Messenger = ({ socket }) => {
   const [activeTab, setActiveTab] = useState("chats");
   const [isTyping, setIsTyping] = useState(false);
   const [incomingCall, setIncomingCall] = useState(null);
-  const [tempStoryFile, setTempStoryFile] = useState(null); // স্টোরি এডিটর ওপেন করার জন্য
+  const [tempStoryFile, setTempStoryFile] = useState(null); 
+  const [isUploading, setIsUploading] = useState(false); // আপলোড ইন্ডিকেটর
 
   const ringtoneRef = useRef(new Audio("https://assets.mixkit.co/active_storage/sfx/1359/1359-preview.mp3"));
   const scrollRef = useRef();
@@ -96,7 +98,39 @@ const Messenger = ({ socket }) => {
   /* =================✉️ HANDLERS ================= */
   const handleStorySelect = (e) => {
     const file = e.target.files[0];
-    if (file) setTempStoryFile(file); // এডিটর ওপেন হবে
+    if (file) setTempStoryFile(file);
+  };
+
+  const handlePostStory = async (file, text, filter) => {
+    setIsUploading(true);
+    try {
+      const token = await getAccessTokenSilently();
+      
+      // ১. Cloudinary-তে ছবি আপলোড করার জন্য FormData
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("text", text || "");
+      formData.append("filter", filter || "none");
+      formData.append("userId", user.sub);
+      formData.append("userName", user.name);
+      formData.append("userPicture", user.picture);
+
+      // ২. ব্যাকএন্ড API-তে পাঠানো (ব্যাকএন্ড Cloudinary হ্যান্ডেল করবে)
+      await axios.post(`${API_URL}/api/stories/upload`, formData, {
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "multipart/form-data"
+        }
+      });
+
+      alert("Story shared successfully! 🚀");
+      setTempStoryFile(null);
+    } catch (err) {
+      console.error("Story Upload Failed:", err);
+      alert("Failed to share story. Try again.");
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   const handleInputChange = (e) => {
@@ -273,10 +307,8 @@ const Messenger = ({ socket }) => {
           <StoryEditor 
             selectedFile={tempStoryFile} 
             onCancel={() => setTempStoryFile(null)} 
-            onPost={(file, text, filter) => {
-              console.log("Post Story Logic Here", { file, text, filter });
-              setTempStoryFile(null);
-            }} 
+            onPost={handlePostStory} // আপলোড ফাংশন যুক্ত করা হয়েছে
+            isUploading={isUploading}
           />
         )}
       </AnimatePresence>
@@ -285,6 +317,16 @@ const Messenger = ({ socket }) => {
         incomingCall={incomingCall} setIncomingCall={setIncomingCall} 
         ringtoneRef={ringtoneRef} navigate={navigate} 
       />
+
+      {/* Loading Overlay for Story Upload */}
+      {isUploading && (
+        <div className="fixed inset-0 z-[1000] bg-black/60 backdrop-blur-sm flex items-center justify-center">
+          <div className="bg-zinc-900 p-6 rounded-2xl flex flex-col items-center gap-3">
+            <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+            <p className="text-sm font-medium">Uploading Story...</p>
+          </div>
+        </div>
+      )}
 
       <style>{`
         .no-scrollbar::-webkit-scrollbar { display: none; }

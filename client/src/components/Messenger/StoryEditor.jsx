@@ -6,7 +6,7 @@ import {
   HiOutlineAdjustmentsHorizontal
 } from "react-icons/hi2";
 
-const StoryEditor = ({ selectedFile, onCancel, onPost }) => {
+const StoryEditor = ({ selectedFile, onCancel, onPost, isUploading }) => {
   const [text, setText] = useState("");
   const [showTextInput, setShowTextInput] = useState(false);
   const [activeFilter, setActiveFilter] = useState("none");
@@ -26,7 +26,7 @@ const StoryEditor = ({ selectedFile, onCancel, onPost }) => {
       initial={{ y: "100%" }} 
       animate={{ y: 0 }} 
       exit={{ y: "100%" }}
-      className="fixed inset-0 z-[700] bg-black flex flex-col overflow-hidden"
+      className="fixed inset-0 z-[1000] bg-black flex flex-col overflow-hidden"
     >
       {/* --- Header --- */}
       <div className="absolute top-8 left-0 right-0 px-4 flex justify-between items-center z-[720]">
@@ -61,7 +61,7 @@ const StoryEditor = ({ selectedFile, onCancel, onPost }) => {
         )}
       </div>
 
-      {/* --- Filter Selection (Horizontal Scroll) --- */}
+      {/* --- Filter Selection --- */}
       <div className="px-4 py-4 flex gap-3 overflow-x-auto no-scrollbar bg-black/50 backdrop-blur-md">
         {filters.map((f) => (
           <button
@@ -94,21 +94,32 @@ const StoryEditor = ({ selectedFile, onCancel, onPost }) => {
         </div>
 
         <button 
+          disabled={isUploading}
           onClick={() => onPost(selectedFile, text, activeFilter)} 
-          className="w-full py-4 bg-blue-600 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-blue-600/30"
+          className={`w-full py-4 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 shadow-lg transition-all ${
+            isUploading ? "bg-zinc-700 cursor-not-allowed" : "bg-blue-600 shadow-blue-600/30 active:scale-95"
+          }`}
         >
-          Share Story <HiOutlineChevronRight size={18} />
+          {isUploading ? (
+            <>
+              <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+              Uploading...
+            </>
+          ) : (
+            <>
+              Share Story <HiOutlineChevronRight size={18} />
+            </>
+          )}
         </button>
       </div>
 
-      {/* --- Full Screen Text Input Overlay --- */}
+      {/* --- Text Input Overlay --- */}
       <AnimatePresence>
         {showTextInput && (
           <motion.div 
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[800] bg-black/90 backdrop-blur-xl flex flex-col items-center justify-center p-6"
+            className="fixed inset-0 z-[1100] bg-black/90 backdrop-blur-xl flex flex-col items-center justify-center p-6"
           >
-            {/* Color Palette */}
             <div className="flex gap-4 mb-10">
               {["#ffffff", "#ff3b30", "#ffcc00", "#4cd964", "#5ac8fa", "#007aff", "#5856d6"].map(color => (
                 <button 
