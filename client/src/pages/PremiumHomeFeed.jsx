@@ -4,7 +4,7 @@ import {
   FaTimes, FaImage, FaHeart, FaComment, 
   FaShareAlt, FaDownload, FaEllipsisH, FaCheckCircle,
   FaVolumeMute, FaVolumeUp, FaTrashAlt, FaUser, FaUserPlus, FaEnvelope, FaPaperPlane,
-  FaExternalLinkAlt // নিউজের জন্য নতুন আইকন
+  FaExternalLinkAlt 
 } from 'react-icons/fa'; 
 import { useAuth0 } from "@auth0/auth0-react";
 import axios from "axios";
@@ -65,7 +65,15 @@ const AutoPlayVideo = ({ src }) => {
   );
 };
 
-// --- নতুন নিউজ কার্ড কম্পোনেন্ট (পোস্ট কার্ডের থিমের সাথে মিল রেখে) ---
+// --- তারিখ ফরম্যাট করার সেফ ফাংশন (Invalid Date সমস্যা সমাধান করবে) ---
+const formatDate = (dateStr) => {
+  if (!dateStr) return "Just now";
+  const date = new Date(dateStr);
+  if (isNaN(date.getTime())) return "Recently";
+  return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+};
+
+// --- নিউজ কার্ড কম্পোনেন্ট ---
 const NewsFeedCard = ({ news }) => {
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex gap-3 py-6 border-b border-white/5 relative group">
@@ -76,14 +84,19 @@ const NewsFeedCard = ({ news }) => {
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 mb-1">
-          <span className="text-[14px] font-black text-cyan-500 uppercase tracking-tighter">{news.source}</span>
+          <span className="text-[14px] font-black text-cyan-500 uppercase tracking-tighter">{news.source || "Onyx Signal"}</span>
           <FaCheckCircle className="text-cyan-500 text-[10px]" />
-          <span className="text-gray-600 text-[12px]">· {new Date(news.publishedAt).toLocaleDateString()}</span>
+          <span className="text-gray-600 text-[12px]">· {formatDate(news.publishedAt || news.createdAt)}</span>
         </div>
         <h3 className="text-[16px] font-bold text-gray-100 leading-tight mb-2">{news.title}</h3>
         {news.image && (
-          <div className="rounded-2xl overflow-hidden border border-white/10 mb-3">
-             <img src={news.image} className="w-full h-48 object-cover grayscale hover:grayscale-0 transition-all duration-700" alt="news" />
+          <div className="rounded-2xl overflow-hidden border border-white/10 mb-3 bg-slate-900">
+             <img 
+               src={news.image} 
+               className="w-full h-48 object-cover grayscale hover:grayscale-0 transition-all duration-700" 
+               alt="news" 
+               onError={(e) => { e.target.style.display = 'none'; }} // ইমেজ এরর দিলে হাইড হবে
+             />
           </div>
         )}
         <p className="text-[14px] text-gray-400 leading-relaxed line-clamp-2 italic mb-3">{news.description}</p>
@@ -98,7 +111,7 @@ const NewsFeedCard = ({ news }) => {
 const PremiumHomeFeed = ({ searchQuery = "", isPostModalOpen, setIsPostModalOpen }) => {
   const { user, getAccessTokenSilently, isAuthenticated } = useAuth0();
   const navigate = useNavigate();
-  const [mergedFeed, setMergedFeed] = useState([]); // পোস্ট এবং নিউজ একসাথে এখানে থাকবে
+  const [mergedFeed, setMergedFeed] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [postText, setPostText] = useState("");
@@ -117,16 +130,18 @@ const PremiumHomeFeed = ({ searchQuery = "", isPostModalOpen, setIsPostModalOpen
     try {
       setLoading(true);
       const [postsRes, newsRes] = await Promise.all([
-        axios.get(`${API_URL}/api/posts`),
-        axios.get(`${API_URL}/api/news`)
+        axios.get(`${API_URL}/api/posts`).catch(() => ({ data: [] })),
+        axios.get(`${API_URL}/api/news`).catch(() => ({ data: [] }))
       ]);
 
-      const allPosts = postsRes.data.map(p => ({ ...p, feedType: 'post' }));
-      const allNews = newsRes.data.map(n => ({ ...n, feedType: 'news' }));
+      const allPosts = (postsRes.data || []).map(p => ({ ...p, feedType: 'post' }));
+      const allNews = (newsRes.data || []).map(n => ({ ...n, feedType: 'news' }));
 
-      // তারিখ অনুযায়ী সাজানো
+      // সর্টিং লজিক ঠিক করা হয়েছে (Post-এর createdAt এবং News-এর publishedAt ব্যবহার করে)
       const sortedFeed = [...allPosts, ...allNews].sort((a, b) => {
-        return new Date(b.createdAt || b.publishedAt) - new Date(a.createdAt || a.publishedAt);
+        const dateA = new Date(a.createdAt || a.publishedAt || 0);
+        const dateB = new Date(b.createdAt || b.publishedAt || 0);
+        return dateB - dateA;
       });
 
       setMergedFeed(sortedFeed);
@@ -149,7 +164,7 @@ const PremiumHomeFeed = ({ searchQuery = "", isPostModalOpen, setIsPostModalOpen
     return () => window.removeEventListener('click', closeAllMenus);
   }, []);
 
-  // --- হ্যান্ডলার ফাংশনগুলো (আগের মতই আছে) ---
+  // --- হ্যান্ডলার ফাংশনগুলো ---
   const handleLike = async (e, postId) => {
     e.stopPropagation(); 
     if (!isAuthenticated) return alert("Please login to like");
@@ -251,13 +266,13 @@ const PremiumHomeFeed = ({ searchQuery = "", isPostModalOpen, setIsPostModalOpen
           <div className="flex justify-center py-20"><div className="w-8 h-8 border-2 border-cyan-500/30 border-t-cyan-500 rounded-full animate-spin"></div></div>
         ) : (
           <div className="flex flex-col">
-            {mergedFeed.map((item) => {
-              // যদি আইটেমটি নিউজ হয়
+            {mergedFeed.map((item, index) => {
+              // নিউজ ফিড কার্ড
               if (item.feedType === 'news') {
-                return <NewsFeedCard key={item._id} news={item} />;
+                return <NewsFeedCard key={item._id || `news-${index}`} news={item} />;
               }
 
-              // যদি আইটেমটি পোস্ট হয়
+              // পোস্ট কার্ড
               const post = item;
               const mediaSrc = post.media || post.mediaUrl;
               const isVideo = mediaSrc?.match(/\.(mp4|webm|mov)$/i) || post.mediaType === 'video';
@@ -300,7 +315,7 @@ const PremiumHomeFeed = ({ searchQuery = "", isPostModalOpen, setIsPostModalOpen
                       <div className="flex items-center gap-1.5 overflow-hidden group">
                         <span className="text-[15px] font-bold text-gray-100 truncate">{post.authorName || 'Drifter'}</span>
                         <FaCheckCircle className="text-cyan-500 text-[11px] flex-shrink-0" />
-                        <span className="text-gray-600 text-[13px]">· {post.createdAt ? new Date(post.createdAt).toLocaleDateString() : 'Now'}</span>
+                        <span className="text-gray-600 text-[13px]">· {formatDate(post.createdAt)}</span>
                       </div>
                       <div className="relative">
                         <button onClick={(e) => { e.stopPropagation(); setActivePostMenuId(activePostMenuId === post._id ? null : post._id); }} className="p-2 text-gray-600 hover:text-rose-500 rounded-full hover:bg-white/5 transition-colors">
