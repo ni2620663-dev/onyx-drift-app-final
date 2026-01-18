@@ -5,13 +5,10 @@ import cors from "cors";
 import dotenv from "dotenv";
 import Redis from "ioredis"; 
 import { v2 as cloudinary } from 'cloudinary';
-import https from 'https';
 import axios from "axios"; 
 
-// ১. কনফিগারেশন লোড
+// ১. কনফিগারেশন ও ডাটাবেস কানেকশন
 dotenv.config();
-
-// ২. ডাটাবেস ও ক্লাউডিনারি কানেকশন
 import connectDB from "./config/db.js"; 
 connectDB();
 
@@ -21,7 +18,7 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET 
 });
 
-// ৩. রাুট ইম্পোর্ট
+// ২. রাুট ইম্পোর্ট
 import profileRoutes from "./src/routes/profile.js"; 
 import postRoutes from "./routes/posts.js";
 import userRoutes from './routes/users.js'; 
@@ -32,7 +29,7 @@ import reelRoutes from "./routes/reels.js";
 const app = express();
 const server = http.createServer(app);
 
-// ৪. CORS কনফিগারেশন
+// ৩. CORS কনফিগারেশন
 const allowedOrigins = [
     "http://localhost:5173", 
     "https://onyx-drift-app-final.onrender.com",
@@ -45,7 +42,6 @@ const corsOptions = {
         if (!origin || allowedOrigins.includes(origin)) {
             callback(null, true);
         } else {
-            console.log("CORS blocked origin:", origin);
             callback(new Error('Signal Blocked: CORS Security Policy'));
         }
     },
@@ -54,11 +50,12 @@ const corsOptions = {
     allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"]
 };
 
+// মিডলওয়্যার (অর্ডার খুবই গুরুত্বপূর্ণ)
 app.use(cors(corsOptions));
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
-// ৫. সকেট আইও কনফিগারেশন
+// ৪. সকেট আইও কনফিগারেশন
 const io = new Server(server, {
     cors: corsOptions,
     transports: ['polling', 'websocket'], 
@@ -69,7 +66,7 @@ const io = new Server(server, {
     maxHttpBufferSize: 1e8 
 });
 
-// ৬. Redis Setup
+// ৫. Redis Setup (যদি থাকে)
 const redis = process.env.REDIS_URL ? new Redis(process.env.REDIS_URL, {
     maxRetriesPerRequest: null,
     enableReadyCheck: false,
@@ -78,51 +75,36 @@ const redis = process.env.REDIS_URL ? new Redis(process.env.REDIS_URL, {
     }
 }) : null;
 
-if (redis) {
-    redis.on("error", (err) => console.log("Redis Connection Error:", err.message));
-}
-
 /* ==========================================================
-    📰 OnyxDrift - নিখুঁত নিউজ ইঞ্জিন (Fixed UI Issues)
+    📰 নিউজ ইঞ্জিন (Optional: যদি অ্যাপে আর না লাগে তবে ডিলিট করতে পারেন)
 ========================================================== */
 app.get("/api/news", async (req, res) => {
     try {
         const apiKey = process.env.NEWS_API_KEY; 
-        if (!apiKey) {
-            return res.status(500).json({ error: "News API Key missing" });
-        }
+        if (!apiKey) return res.status(500).json({ error: "News API Key missing" });
 
-        const response = await axios.get(`https://gnews.io/api/v4/top-headlines?category=general&lang=en&apikey=${apiKey}`);
+        const response = await axios.get(`https://gnews.io/api/v4/top-headlines?category=technology&lang=en&apikey=${apiKey}`);
         
-        // স্ক্রিনশটের "Invalid Date" এবং "খালি টেক্সট" সমস্যা সমাধানের জন্য ফরম্যাটিং
-        const formattedNews = response.data.articles.map((article, index) => {
-            // তারিখ ফরম্যাট নিশ্চিত করা
-            const newsDate = article.publishedAt ? new Date(article.publishedAt).toISOString() : new Date().toISOString();
-            
-            return {
-                _id: `news-${index}-${Date.now()}`,
-                authorName: article.source.name || "Global News",
-                authorAvatar: "https://cdn-icons-png.flaticon.com/512/21/21601.png", 
-                isVerified: true,
-                createdAt: newsDate, // তারিখটি ISO ফরম্যাটে পাঠানো হচ্ছে
-                text: article.title || article.description || "No content available", 
-                media: article.image || "https://images.unsplash.com/photo-1504711434969-e33886168f5c?q=80&w=1000",
-                mediaType: "image",
-                link: article.url,
-                likes: [], 
-                comments: [],
-                feedType: 'news' 
-            };
-        });
+        const formattedNews = response.data.articles.map((article, index) => ({
+            _id: `news-${index}-${Date.now()}`,
+            authorName: article.source.name || "Global News",
+            authorAvatar: "https://cdn-icons-png.flaticon.com/512/21/21601.png", 
+            isVerified: true,
+            createdAt: article.publishedAt || new Date().toISOString(),
+            text: article.title || "Neural Signal Received", 
+            media: article.image || "https://images.unsplash.com/photo-1504711434969-e33886168f5c",
+            mediaType: "image",
+            link: article.url,
+            feedType: 'news' 
+        }));
 
         res.json(formattedNews);
     } catch (error) {
-        console.error("News Sync Error:", error.message);
         res.status(500).json({ error: "Failed to sync world news" });
     }
 });
 
-// ৭. এপিআই রাুট মাউন্টিং
+// ৬. এপিআই রাুটস
 app.use("/api/user", userRoutes); 
 app.use("/api/profile", profileRoutes); 
 app.use("/api/posts", postRoutes); 
@@ -130,12 +112,9 @@ app.use("/api/messages", messageRoutes);
 app.use("/api/stories", storyRoute);
 app.use("/api/reels", reelRoutes); 
 
-// ৮. রুট এন্ডপয়েন্ট চেক
-app.get("/", (req, res) => {
-    res.send("🚀 OnyxDrift Neural Core is Online!");
-});
+app.get("/", (req, res) => res.send("🚀 OnyxDrift Neural Core is Online!"));
 
-// ৯. গ্লোবাল এরর হ্যান্ডলার
+// ৭. গ্লোবাল এরর হ্যান্ডলার
 app.use((err, req, res, next) => {
     console.error("🔥 SYSTEM_ERROR:", err.stack);
     res.status(err.status || 500).json({ 
@@ -149,14 +128,13 @@ app.use((err, req, res, next) => {
 ========================================================== */
 io.on("connection", (socket) => {
     socket.on("addNewUser", async (userId) => {
-        if (userId) {
-            if (redis) {
-                await redis.hset("online_users", userId, socket.id);
-                const allUsers = await redis.hgetall("online_users");
-                io.emit("getOnlineUsers", Object.keys(allUsers).map(id => ({ userId: id })));
-            } else {
-                socket.join(userId); 
-            }
+        if (!userId) return;
+        if (redis) {
+            await redis.hset("online_users", userId, socket.id);
+            const allUsers = await redis.hgetall("online_users");
+            io.emit("getOnlineUsers", Object.keys(allUsers).map(id => ({ userId: id })));
+        } else {
+            socket.join(userId); 
         }
     });
 

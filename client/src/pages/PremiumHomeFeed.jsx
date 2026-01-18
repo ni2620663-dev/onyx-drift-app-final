@@ -3,8 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   FaTimes, FaImage, FaHeart, FaComment, 
   FaShareAlt, FaDownload, FaEllipsisH, FaCheckCircle,
-  FaVolumeMute, FaVolumeUp, FaTrashAlt, FaUser, FaUserPlus, FaEnvelope, FaPaperPlane,
-  FaNewspaper, FaExternalLinkAlt
+  FaVolumeMute, FaVolumeUp, FaTrashAlt, FaUser, FaUserPlus, FaEnvelope, FaPaperPlane
 } from 'react-icons/fa'; 
 import { useAuth0 } from "@auth0/auth0-react";
 import axios from "axios";
@@ -69,7 +68,6 @@ const PremiumHomeFeed = ({ searchQuery = "", isPostModalOpen, setIsPostModalOpen
   const { user, getAccessTokenSilently, isAuthenticated } = useAuth0();
   const navigate = useNavigate();
   const [posts, setPosts] = useState([]);
-  const [news, setNews] = useState([]); 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [postText, setPostText] = useState("");
@@ -84,32 +82,6 @@ const PremiumHomeFeed = ({ searchQuery = "", isPostModalOpen, setIsPostModalOpen
 
   const API_URL = (import.meta.env.VITE_API_BASE_URL || "https://onyx-drift-app-final.onrender.com").replace(/\/$/, "");
   const postMediaRef = useRef(null);
-
-  // --- রিয়েল নিউজ ডেটা ফেচিং (GNews API) ---
- const fetchNews = async () => {
-  try {
-    const NEWS_API_KEY = "2462daa77162a9f3da4e2f17ca56105e";
-    // সরাসরি লিঙ্কের আগে এই প্রক্সিটি যোগ করে দেখতে পারেন
-    const proxyUrl = "https://cors-anywhere.herokuapp.com/"; 
-    const targetUrl = `https://gnews.io/api/v4/top-headlines?category=technology&lang=en&max=6&apikey=${NEWS_API_KEY}`;
-
-    const response = await axios.get(targetUrl); // প্রথমে প্রক্সি ছাড়াই চেষ্টা করুন
-    
-    if (response.data && response.data.articles) {
-      const formattedNews = response.data.articles.map((article, index) => ({
-        id: index,
-        title: article.title,
-        source: article.source.name,
-        time: new Date(article.publishedAt).toLocaleDateString(),
-        image: article.image || "https://images.unsplash.com/photo-1451187580459-43490279c0fa",
-        url: article.url
-      }));
-      setNews(formattedNews);
-    }
-  } catch (err) { 
-    console.error("News Fetch Error:", err.response?.data || err.message);
-    }
-  };
 
   const fetchPosts = async () => {
     try {
@@ -126,7 +98,6 @@ const PremiumHomeFeed = ({ searchQuery = "", isPostModalOpen, setIsPostModalOpen
 
   useEffect(() => { 
     fetchPosts(); 
-    fetchNews(); 
   }, []);
 
   useEffect(() => {
@@ -203,6 +174,7 @@ const PremiumHomeFeed = ({ searchQuery = "", isPostModalOpen, setIsPostModalOpen
     }
   };
 
+  // --- FIXED HANDLE SUBMIT (Fixes 400 Bad Request) ---
   const handlePostSubmit = async () => {
     if (!postText.trim() && !mediaFile) return;
     setIsSubmitting(true);
@@ -213,12 +185,22 @@ const PremiumHomeFeed = ({ searchQuery = "", isPostModalOpen, setIsPostModalOpen
       if (mediaFile) formData.append("media", mediaFile);
       
       await axios.post(`${API_URL}/api/posts`, formData, {
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "multipart/form-data" }
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          // Browser will automatically set the correct Boundary for multipart/form-data
+        }
       });
 
-      setPostText(""); setMediaFile(null);
-      setIsPostModalOpen(false); fetchPosts();
-    } catch (err) { alert("Transmission failed."); } finally { setIsSubmitting(false); }
+      setPostText(""); 
+      setMediaFile(null);
+      setIsPostModalOpen(false); 
+      fetchPosts();
+    } catch (err) { 
+      console.error("Submit Error:", err.response?.data);
+      alert(err.response?.data?.message || "Transmission failed. Check console for details."); 
+    } finally { 
+      setIsSubmitting(false); 
+    }
   };
 
   const handleDeletePost = async (postId) => {
@@ -246,40 +228,10 @@ const PremiumHomeFeed = ({ searchQuery = "", isPostModalOpen, setIsPostModalOpen
       <section className="max-w-[550px] mx-auto px-4 relative z-10">
         {error && <div className="p-3 mb-4 bg-cyan-500/5 border border-cyan-500/20 rounded-lg text-cyan-400 text-[10px] uppercase text-center animate-pulse">{error}</div>}
 
-        {/* --- NEWS SECTION START --- */}
-        <div className="mb-8 mt-4">
-          <div className="flex items-center gap-2 mb-4 px-1">
-            <FaNewspaper className="text-cyan-500 text-sm" />
-            <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-400">Neural_Pulse_News</h3>
-          </div>
-          <div className="flex gap-4 overflow-x-auto pb-4 no-scrollbar">
-            {news.map((item) => (
-              <a 
-                href={item.url} 
-                target="_blank" 
-                rel="noopener noreferrer" 
-                key={item.id} 
-                className="min-w-[280px] group relative rounded-2xl overflow-hidden border border-white/5 bg-white/5 hover:border-cyan-500/30 transition-all cursor-pointer block"
-              >
-                <img src={item.image} className="w-full h-32 object-cover opacity-60 group-hover:opacity-80 transition-opacity" alt="news" />
-                <div className="absolute inset-0 bg-gradient-to-t from-[#02040a] to-transparent" />
-                <div className="absolute bottom-0 p-4 w-full">
-                  <p className="text-[10px] font-bold text-cyan-500 uppercase mb-1">{item.source} • {item.time}</p>
-                  <h4 className="text-sm font-bold text-gray-100 leading-snug line-clamp-2">{item.title}</h4>
-                </div>
-                <div className="absolute top-3 right-3 p-2 bg-black/50 backdrop-blur-md rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
-                  <FaExternalLinkAlt size={10} className="text-cyan-400" />
-                </div>
-              </a>
-            ))}
-          </div>
-        </div>
-        {/* --- NEWS SECTION END --- */}
-
         {loading && posts.length === 0 ? (
           <div className="flex justify-center py-20"><div className="w-8 h-8 border-2 border-cyan-500/30 border-t-cyan-500 rounded-full animate-spin"></div></div>
         ) : (
-          <div className="flex flex-col">
+          <div className="flex flex-col mt-4">
             {posts.map((post) => {
               const mediaSrc = post.media || post.mediaUrl;
               const isVideo = mediaSrc?.match(/\.(mp4|webm|mov)$/i) || post.mediaType === 'video';
