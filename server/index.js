@@ -6,7 +6,7 @@ import dotenv from "dotenv";
 import Redis from "ioredis"; 
 import { v2 as cloudinary } from 'cloudinary';
 import https from 'https';
-import axios from "axios"; // নিউজ নিয়ে আসার জন্য এটি যুক্ত করা হয়েছে
+import axios from "axios"; 
 
 // ১. কনফিগারেশন লোড
 dotenv.config();
@@ -21,7 +21,7 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET 
 });
 
-// ৩. রাউট ইম্পোর্ট
+// ৩. রাুট ইম্পোর্ট
 import profileRoutes from "./src/routes/profile.js"; 
 import postRoutes from "./routes/posts.js";
 import userRoutes from './routes/users.js'; 
@@ -83,27 +83,31 @@ if (redis) {
 }
 
 /* ==========================================================
-    📰 অটোমেটিক নিউজ ইঞ্জিন (World News API)
+    📰 সংশোধিত অটোমেটিক নিউজ ইঞ্জিন (World News API)
 ========================================================== */
 app.get("/api/news", async (req, res) => {
     try {
-        // GNews বা NewsAPI থেকে লেটেস্ট খবর নিয়ে আসা
         const apiKey = process.env.NEWS_API_KEY; 
+        if (!apiKey) {
+            return res.status(500).json({ error: "News API Key is missing in environment" });
+        }
+
         const response = await axios.get(`https://gnews.io/api/v4/top-headlines?category=general&lang=en&apikey=${apiKey}`);
         
-        // নিউজ ডাটাকে আপনার পোস্ট কার্ডের সাথে মিল রেখে ফরম্যাট করা
+        // আপনার PostCard.jsx এর সাথে সামঞ্জস্য রেখে ডাটা ফরম্যাট
         const formattedNews = response.data.articles.map((article, index) => ({
-            _id: `news-${Date.now()}-${index}`,
+            _id: `news-${index}-${Date.now()}`,
             authorName: article.source.name || "Global News",
-            authorAvatar: "https://cdn-icons-png.flaticon.com/512/21/21601.png", // নিউজ আইকন
-            title: article.title,
-            text: article.description,
+            authorAvatar: "https://cdn-icons-png.flaticon.com/512/21/21601.png", 
+            isVerified: true,
+            createdAt: article.publishedAt, // এটি Invalid Date সমস্যা সমাধান করবে
+            text: article.title, // টাইটেলটিকে মেইন টেক্সট হিসেবে দেওয়া হয়েছে
             media: article.image,
             mediaType: "image",
             link: article.url,
-            createdAt: article.publishedAt,
-            isVerified: true,
-            feedType: 'news' // ফ্রন্টএন্ডে নিউজ কার্ড চেনার জন্য
+            likes: [], // এরর এড়াতে ডিফল্ট খালি অ্যারে
+            comments: [],
+            feedType: 'news' 
         }));
 
         res.json(formattedNews);
