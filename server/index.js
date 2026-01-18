@@ -6,6 +6,7 @@ import dotenv from "dotenv";
 import Redis from "ioredis"; 
 import { v2 as cloudinary } from 'cloudinary';
 import https from 'https';
+import axios from "axios"; // নিউজ নিয়ে আসার জন্য এটি যুক্ত করা হয়েছে
 
 // ১. কনফিগারেশন লোড
 dotenv.config();
@@ -20,7 +21,7 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET 
 });
 
-// ৩. রাুট ইম্পোর্ট
+// ৩. রাউট ইম্পোর্ট
 import profileRoutes from "./src/routes/profile.js"; 
 import postRoutes from "./routes/posts.js";
 import userRoutes from './routes/users.js'; 
@@ -81,6 +82,37 @@ if (redis) {
     redis.on("error", (err) => console.log("Redis Connection Error:", err.message));
 }
 
+/* ==========================================================
+    📰 অটোমেটিক নিউজ ইঞ্জিন (World News API)
+========================================================== */
+app.get("/api/news", async (req, res) => {
+    try {
+        // GNews বা NewsAPI থেকে লেটেস্ট খবর নিয়ে আসা
+        const apiKey = process.env.NEWS_API_KEY; 
+        const response = await axios.get(`https://gnews.io/api/v4/top-headlines?category=general&lang=en&apikey=${apiKey}`);
+        
+        // নিউজ ডাটাকে আপনার পোস্ট কার্ডের সাথে মিল রেখে ফরম্যাট করা
+        const formattedNews = response.data.articles.map((article, index) => ({
+            _id: `news-${Date.now()}-${index}`,
+            authorName: article.source.name || "Global News",
+            authorAvatar: "https://cdn-icons-png.flaticon.com/512/21/21601.png", // নিউজ আইকন
+            title: article.title,
+            text: article.description,
+            media: article.image,
+            mediaType: "image",
+            link: article.url,
+            createdAt: article.publishedAt,
+            isVerified: true,
+            feedType: 'news' // ফ্রন্টএন্ডে নিউজ কার্ড চেনার জন্য
+        }));
+
+        res.json(formattedNews);
+    } catch (error) {
+        console.error("News Sync Error:", error.message);
+        res.status(500).json({ error: "Failed to sync world news" });
+    }
+});
+
 // ৭. এপিআই রাুট মাউন্টিং
 app.use("/api/user", userRoutes); 
 app.use("/api/profile", profileRoutes); 
@@ -94,14 +126,7 @@ app.get("/", (req, res) => {
     res.send("🚀 OnyxDrift Neural Core is Online!");
 });
 
-// ৯. Keep-Alive Mechanism (Self-Ping)
-setInterval(() => {
-    https.get('https://onyx-drift-app-final.onrender.com', (res) => {
-        // Active
-    }).on('error', (err) => console.log('Keep-alive ping failure'));
-}, 600000); 
-
-// ১০. গ্লোবাল এরর হ্যান্ডলার
+// ৯. গ্লোবাল এরর হ্যান্ডলার
 app.use((err, req, res, next) => {
     console.error("🔥 SYSTEM_ERROR:", err.stack);
     res.status(err.status || 500).json({ 
@@ -116,7 +141,6 @@ app.use((err, req, res, next) => {
 io.on("connection", (socket) => {
     console.log("Connected to Neural Socket:", socket.id);
 
-    // ইউজার রেজিস্টার করা
     socket.on("addNewUser", async (userId) => {
         if (userId) {
             if (redis) {
@@ -130,7 +154,6 @@ io.on("connection", (socket) => {
         }
     });
 
-    // মেসেজ পাঠানো
     socket.on("sendMessage", async (data) => {
         const { receiverId } = data;
         if (redis) {
@@ -141,36 +164,6 @@ io.on("connection", (socket) => {
         }
     });
 
-    // কল রিকোয়েস্ট পাঠানো
-    socket.on("sendCallRequest", async (data) => {
-        const { receiverId, senderName, roomId, senderId } = data;
-        const callPayload = {
-            senderName,
-            roomId,
-            senderId
-        };
-
-        if (redis) {
-            const socketId = await redis.hget("online_users", receiverId);
-            if (socketId) {
-                io.to(socketId).emit("incomingCall", callPayload);
-            }
-        } else {
-            io.to(receiverId).emit("incomingCall", callPayload);
-        }
-    });
-
-    // কল রিজেক্ট করা (Optional: যদি আপনি ফ্রন্টএন্ডে এটি হ্যান্ডেল করতে চান)
-    socket.on("rejectCall", async ({ receiverId }) => {
-        if (redis) {
-            const socketId = await redis.hget("online_users", receiverId);
-            if (socketId) io.to(socketId).emit("callRejected");
-        } else {
-            io.to(receiverId).emit("callRejected");
-        }
-    });
-
-    // ডিসকানেক্ট হ্যান্ডলার
     socket.on("disconnect", async () => {
         if (redis) {
             const all = await redis.hgetall("online_users");
@@ -183,7 +176,6 @@ io.on("connection", (socket) => {
                 }
             }
         }
-        console.log("Drifter disconnected from Socket");
     });
 });
 

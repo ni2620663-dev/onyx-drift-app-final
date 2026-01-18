@@ -70,7 +70,7 @@ const PostCard = ({ post, onAction, onDelete, onUserClick }) => {
     try {
       setIsLiking(true);
       const token = await getAccessTokenSilently();
-      // লাইক রিকোয়েস্ট API
+      // লাইক রিকোয়েস্ট API
       await axios.put(`${API_URL}/api/posts/${post._id}/like`, {}, {
         headers: { Authorization: `Bearer ${token}` }
       });
