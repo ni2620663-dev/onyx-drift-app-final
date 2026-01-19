@@ -1,13 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FaSearch, FaRegBell, FaSignOutAlt, FaUserCircle } from 'react-icons/fa'; 
+import { FaSearch, FaRegBell, FaSignOutAlt, FaUserCircle, FaUserCheck } from 'react-icons/fa'; 
 import { HiOutlineMenuAlt4 } from "react-icons/hi"; 
 import { useNavigate } from 'react-router-dom';
 import { useAuth0 } from "@auth0/auth0-react";
 import axios from 'axios';
 import webSocketService from "../services/WebSocketService"; 
 
-const Navbar = ({ setSearchQuery, setIsPostModalOpen, toggleSidebar }) => { 
+const Navbar = ({ setIsPostModalOpen, toggleSidebar }) => { 
   const navigate = useNavigate();
   const { user, logout, getAccessTokenSilently, isAuthenticated } = useAuth0();
   const [showDropdown, setShowDropdown] = useState(false);
@@ -17,11 +17,40 @@ const Navbar = ({ setSearchQuery, setIsPostModalOpen, toggleSidebar }) => {
   const [loading, setLoading] = useState(false);
   const [hasNewNotification, setHasNewNotification] = useState(false);
 
-  const API_URL = (import.meta.env.VITE_API_BASE_URL || "https://onyx-drift-app-final.onrender.com").replace(/\/$/, "");
+  const API_URL = "https://onyx-drift-app-final.onrender.com";
 
+  // ১. সার্চ লজিক (Debounced Search)
+  useEffect(() => {
+    const fetchResults = async () => {
+      if (localSearch.trim().length < 2) {
+        setSearchResults([]);
+        setShowResults(false);
+        return;
+      }
+      try {
+        setLoading(true);
+        const token = await getAccessTokenSilently();
+        const res = await axios.get(`${API_URL}/api/user/search`, {
+          params: { query: localSearch },
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        setSearchResults(res.data);
+        setShowResults(true);
+      } catch (err) {
+        console.error("Search sync failed");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    const delayDebounceFn = setTimeout(fetchResults, 500);
+    return () => clearTimeout(delayDebounceFn);
+  }, [localSearch, getAccessTokenSilently]);
+
+  // ২. নোটিফিকেশন সাবস্ক্রিপশন
   useEffect(() => {
     if (isAuthenticated && user?.sub) {
-      const subscription = webSocketService.subscribe(`/topic/notifications/${user.sub}`, (data) => {
+      const subscription = webSocketService.subscribe(`/topic/notifications/${user.sub}`, () => {
         setHasNewNotification(true);
       });
       return () => { if (subscription) subscription.unsubscribe(); };
@@ -29,9 +58,9 @@ const Navbar = ({ setSearchQuery, setIsPostModalOpen, toggleSidebar }) => {
   }, [user, isAuthenticated]);
 
   return (
-    // 'relative' পজিশন ব্যবহার করা হয়েছে যাতে স্ক্রল করলে এটি উপরে চলে যায়
     <nav className="w-full h-[60px] bg-[#030303]/90 backdrop-blur-xl border-b border-white/[0.05] z-[1000] flex items-center justify-between px-4 lg:px-8 relative">
       
+      {/* Left Section: Menu & Logo */}
       <div className="flex items-center gap-3">
         <HiOutlineMenuAlt4 
           size={22} 
@@ -51,22 +80,69 @@ const Navbar = ({ setSearchQuery, setIsPostModalOpen, toggleSidebar }) => {
         </div>
       </div>
 
+      {/* Center Section: Real-time Identity Search */}
       <div className="flex-1 max-w-[400px] mx-4 relative">
-        <div 
-          onClick={() => setIsPostModalOpen(true)}
-          className="bg-white/5 border border-white/10 rounded-full px-4 py-2 flex items-center justify-between cursor-pointer hover:bg-white/10 hover:border-cyan-500/30 transition-all group"
-        >
-          <div className="flex items-center gap-3">
-            <div className="w-1.5 h-1.5 rounded-full bg-cyan-500 animate-pulse" />
-            <span className="text-gray-500 text-[9px] font-black uppercase tracking-[2px] group-hover:text-gray-300">
-              Broadcast Signal...
-            </span>
+        <div className="relative group">
+          <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
+            <FaSearch size={12} className={`${loading ? 'animate-spin text-cyan-500' : 'text-gray-500'}`} />
           </div>
-          <FaSearch size={12} className="text-gray-600 group-hover:text-cyan-500 transition-colors" />
+          <input 
+            type="text"
+            value={localSearch}
+            onChange={(e) => setLocalSearch(e.target.value)}
+            onFocus={() => localSearch.length > 0 && setShowResults(true)}
+            placeholder="Scan Identity or ID..."
+            className="w-full bg-white/5 border border-white/10 rounded-full py-2 pl-10 pr-4 text-[10px] text-white font-black uppercase tracking-widest outline-none focus:border-cyan-500/50 focus:bg-white/10 transition-all placeholder:text-gray-600"
+          />
         </div>
+
+        {/* Search Results Dropdown */}
+        <AnimatePresence>
+          {showResults && searchResults.length > 0 && (
+            <>
+              <div className="fixed inset-0 z-[10]" onClick={() => setShowResults(false)}></div>
+              <motion.div 
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 10 }}
+                className="absolute top-full left-0 right-0 mt-2 bg-[#0A0A0A] border border-white/10 rounded-2xl shadow-2xl overflow-hidden z-[100]"
+              >
+                {searchResults.map((result) => (
+                  <div 
+                    key={result.auth0Id}
+                    onClick={() => {
+                      navigate(`/following?userId=${encodeURIComponent(result.auth0Id)}`);
+                      setShowResults(false);
+                      setLocalSearch("");
+                    }}
+                    className="flex items-center gap-3 px-4 py-3 hover:bg-white/5 cursor-pointer transition-all border-b border-white/[0.03] last:border-0"
+                  >
+                    <img src={result.avatar} className="w-8 h-8 rounded-full border border-white/10 object-cover" alt="U" />
+                    <div className="flex flex-col">
+                      <span className="text-white text-[10px] font-black uppercase tracking-tighter flex items-center gap-1">
+                        {result.name} {result.isVerified && <FaUserCheck className="text-cyan-500" size={8} />}
+                      </span>
+                      <span className="text-gray-500 text-[8px] font-bold">@{result.nickname || 'drifter'}</span>
+                    </div>
+                  </div>
+                ))}
+              </motion.div>
+            </>
+          )}
+        </AnimatePresence>
       </div>
 
+      {/* Right Section: Actions & Profile */}
       <div className="flex items-center gap-3 lg:gap-6">
+        {/* Broadcast Button */}
+        <button 
+          onClick={() => setIsPostModalOpen(true)}
+          className="hidden md:flex items-center gap-2 bg-cyan-500/10 border border-cyan-500/30 px-3 py-1.5 rounded-lg text-cyan-500 hover:bg-cyan-500 hover:text-black transition-all group"
+        >
+          <div className="w-1.5 h-1.5 rounded-full bg-cyan-500 group-hover:bg-black animate-pulse" />
+          <span className="text-[8px] font-black uppercase tracking-tighter">New Signal</span>
+        </button>
+
         <div 
           className="relative cursor-pointer group"
           onClick={() => {

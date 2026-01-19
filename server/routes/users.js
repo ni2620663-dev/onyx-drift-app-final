@@ -1,13 +1,14 @@
 import express from 'express';
 import User from '../models/User.js'; 
 import auth from '../middleware/auth.js'; 
-import upload from '../middleware/multer.js'; // আপনার মিডলওয়্যার পাথ চেক করে নিন
-import Post from '../models/Post.js'; // পোস্ট খোঁজার জন্য এই ইমপোর্টটি প্রয়োজন
+import upload from '../middleware/multer.js'; 
+import Post from '../models/Post.js'; 
 
 const router = express.Router();
 
 /* ==========================================================
     1️⃣ GET PROFILE BY ID (With Auto-Sync & 404 Fix)
+    ফেসবুকের মতো এই আইডিটিই প্রোফাইল চাবিকাঠি
 ========================================================== */
 router.get(['/profile/:id', '/:id'], auth, async (req, res) => {
   try {
@@ -85,11 +86,11 @@ router.put("/update-profile", auth, upload.fields([
 });
 
 /* ==========================================================
-    3️⃣ UPDATE PHOTO (New Dedicated Route Added)
+    3️⃣ UPDATE PHOTO
 ========================================================== */
 router.post("/update-photo", auth, upload.single('image'), async (req, res) => {
   try {
-    const { type } = req.body; // 'profile' or 'cover'
+    const { type } = req.body; 
     const myId = req.user.sub || req.user.id;
     
     if (!req.file) return res.status(400).json({ msg: "No image received" });
@@ -115,17 +116,21 @@ router.post("/update-photo", auth, upload.single('image'), async (req, res) => {
 });
 
 /* ==========================================================
-    4️⃣ SEARCH & DISCOVERY (Fixed Search Logic)
+    4️⃣ SEARCH & DISCOVERY (ফেসবুক স্টাইল সার্চ)
+    নাম বা নেকনেম লিখলে ওই ইউজারের আইডি রিটার্ন করবে
 ========================================================== */
 router.get("/search", auth, async (req, res) => {
   try {
     const { query } = req.query;
     const myId = req.user.sub || req.user.id;
+    
+    // নিজের আইডি বাদে অন্য সব আইডি খোঁজার ফিল্টার
     let filter = { auth0Id: { $ne: myId } };
 
     if (query && query.trim() !== "") {
       const searchRegex = new RegExp(query.trim(), "i");
       
+      // নাম, নেকনেম বা আইডির আংশিক মিল খুঁজবে
       filter.$or = [
         { name: { $regex: searchRegex } },
         { nickname: { $regex: searchRegex } },
@@ -214,7 +219,8 @@ router.get("/posts/user/:userId", auth, async (req, res) => {
     const posts = await Post.find({
       $or: [
         { authorAuth0Id: targetUserId },
-        { userId: targetUserId }
+        { userId: targetUserId },
+        { author: targetUserId } // আপনার মডেল অনুযায়ী 'author' ও থাকতে পারে
       ]
     }).sort({ createdAt: -1 });
 
