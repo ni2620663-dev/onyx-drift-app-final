@@ -174,7 +174,6 @@ const PremiumHomeFeed = ({ searchQuery = "", isPostModalOpen, setIsPostModalOpen
     }
   };
 
-  // --- আপডেট করা সাবমিট লজিক ---
   const handlePostSubmit = async () => {
     if (!postText.trim() && !mediaFile) return;
     setIsSubmitting(true);
@@ -183,7 +182,6 @@ const PremiumHomeFeed = ({ searchQuery = "", isPostModalOpen, setIsPostModalOpen
       const formData = new FormData();
       formData.append("text", postText);
       
-      // ব্যাকএন্ডে যেহেতু upload.single("media") আছে, তাই এখানে "media" কি-ওয়ার্ড ব্যবহার করা হয়েছে
       if (mediaFile) {
         formData.append("media", mediaFile);
       }
@@ -251,53 +249,35 @@ const PremiumHomeFeed = ({ searchQuery = "", isPostModalOpen, setIsPostModalOpen
                   {/* Avatar Section */}
                   <div className="relative flex-shrink-0">
                     <img 
-                      onClick={(e) => { e.stopPropagation(); setActiveProfileMenuId(activeProfileMenuId === post._id ? null : post._id); }}
+                      onClick={(e) => { e.stopPropagation(); navigate(`/profile/${authorId}`); }}
                       src={post.authorAvatar || post.authorPicture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${post.authorName}`} 
                       className="w-11 h-11 rounded-full border border-white/10 object-cover bg-gray-900 cursor-pointer hover:border-cyan-500/50 transition-all" 
                       alt="avatar" 
                     />
-
-                    <AnimatePresence>
-                      {activeProfileMenuId === post._id && (
-                        <motion.div initial={{ opacity: 0, y: 10, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 10, scale: 0.95 }} className="absolute left-0 mt-2 w-52 bg-[#0d1117] border border-white/10 rounded-2xl shadow-2xl z-[150] p-2 backdrop-blur-xl">
-                          <div className="p-3 border-b border-white/5 mb-1">
-                             <p className="text-xs font-bold text-cyan-500 truncate">{post.authorName}</p>
-                             <p className="text-[10px] text-gray-500 truncate">@{post.authorName?.toLowerCase().replace(/\s/g, '')}</p>
-                          </div>
-                          
-                          <button 
-                            onClick={(e) => handleFollowUser(e, authorId)}
-                            className="w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-300 hover:bg-white/5 rounded-xl transition-colors font-bold"
-                          >
-                            <FaUserPlus size={14} className="text-cyan-500" /> Follow
-                          </button>
-
-                          <button 
-                            onClick={(e) => { e.stopPropagation(); navigate(`/messenger`); }}
-                            className="w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-300 hover:bg-white/5 rounded-xl transition-colors font-bold"
-                          >
-                            <FaEnvelope size={14} className="text-gray-400" /> Message
-                          </button>
-
-                          <div className="my-1 border-t border-white/5" />
-
-                          <button 
-                            onClick={(e) => { e.stopPropagation(); navigate(`/profile/${authorId}`); }}
-                            className="w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-300 hover:bg-white/5 rounded-xl transition-colors font-bold"
-                          >
-                            <FaUser size={14} /> View Profile
-                          </button>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
                   </div>
 
                   {/* Content Section */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-1.5 overflow-hidden group">
-                        <span className="text-[15px] font-bold text-gray-100 truncate">{post.authorName || 'Drifter'}</span>
+                        <span 
+                          onClick={() => navigate(`/profile/${authorId}`)}
+                          className="text-[15px] font-bold text-gray-100 truncate cursor-pointer hover:underline"
+                        >
+                          {post.authorName || 'Drifter'}
+                        </span>
                         <FaCheckCircle className="text-cyan-500 text-[11px] flex-shrink-0" />
+                        
+                        {/* ✅ Follow Button added here */}
+                        {user?.sub !== authorId && (
+                          <button 
+                            onClick={(e) => handleFollowUser(e, authorId)}
+                            className="ml-2 text-[11px] font-black uppercase text-cyan-500 hover:text-white transition-colors"
+                          >
+                            Follow
+                          </button>
+                        )}
+                        
                         <span className="text-gray-600 text-[13px]">· {post.createdAt ? new Date(post.createdAt).toLocaleDateString() : 'Now'}</span>
                       </div>
                       
