@@ -1,6 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FaSearch, FaRegBell, FaSignOutAlt, FaUserCircle, FaUserCheck } from 'react-icons/fa'; 
+import { 
+  FaSearch, FaRegBell, FaSignOutAlt, FaUserCircle, FaUserCheck, 
+  FaPlus, FaFileAlt, FaCamera, FaVideo, FaBroadcastTower 
+} from 'react-icons/fa'; 
 import { HiOutlineMenuAlt4 } from "react-icons/hi"; 
 import { useNavigate } from 'react-router-dom';
 import { useAuth0 } from "@auth0/auth0-react";
@@ -11,12 +14,14 @@ const Navbar = ({ setIsPostModalOpen, toggleSidebar }) => {
   const navigate = useNavigate();
   const { user, logout, getAccessTokenSilently, isAuthenticated } = useAuth0();
   const [showDropdown, setShowDropdown] = useState(false);
+  const [showPlusMenu, setShowPlusMenu] = useState(false);
   const [localSearch, setLocalSearch] = useState("");
   const [showResults, setShowResults] = useState(false);
   const [searchResults, setSearchResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const [hasNewNotification, setHasNewNotification] = useState(false);
 
+  // আপনার Render URL টি একবার চেক করে নিন, ERR_NAME_NOT_RESOLVED মানে ডোমেইন ঠিক নেই
   const API_URL = "https://onyx-drift-app-final.onrender.com";
 
   // ১. সার্চ লজিক (Debounced Search)
@@ -37,7 +42,7 @@ const Navbar = ({ setIsPostModalOpen, toggleSidebar }) => {
         setSearchResults(res.data);
         setShowResults(true);
       } catch (err) {
-        console.error("Search sync failed");
+        console.error("Search sync failed:", err);
       } finally {
         setLoading(false);
       }
@@ -80,7 +85,7 @@ const Navbar = ({ setIsPostModalOpen, toggleSidebar }) => {
         </div>
       </div>
 
-      {/* Center Section: Real-time Identity Search */}
+      {/* Center Section: Search Bar */}
       <div className="flex-1 max-w-[400px] mx-4 relative">
         <div className="relative group">
           <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
@@ -92,7 +97,7 @@ const Navbar = ({ setIsPostModalOpen, toggleSidebar }) => {
             onChange={(e) => setLocalSearch(e.target.value)}
             onFocus={() => localSearch.length > 0 && setShowResults(true)}
             placeholder="Scan Identity or ID..."
-            className="w-full bg-white/5 border border-white/10 rounded-full py-2 pl-10 pr-4 text-[10px] text-white font-black uppercase tracking-widest outline-none focus:border-cyan-500/50 focus:bg-white/10 transition-all placeholder:text-gray-600"
+            className="w-full bg-white/5 border border-white/10 rounded-full py-2 pl-10 pr-4 text-[10px] text-white font-black uppercase tracking-widest outline-none focus:border-cyan-500/50 focus:bg-white/10 transition-all placeholder:text-gray-600 shadow-inner"
           />
         </div>
 
@@ -102,9 +107,7 @@ const Navbar = ({ setIsPostModalOpen, toggleSidebar }) => {
             <>
               <div className="fixed inset-0 z-[10]" onClick={() => setShowResults(false)}></div>
               <motion.div 
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 10 }}
+                initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }}
                 className="absolute top-full left-0 right-0 mt-2 bg-[#0A0A0A] border border-white/10 rounded-2xl shadow-2xl overflow-hidden z-[100]"
               >
                 {searchResults.map((result) => (
@@ -132,17 +135,48 @@ const Navbar = ({ setIsPostModalOpen, toggleSidebar }) => {
         </AnimatePresence>
       </div>
 
-      {/* Right Section: Actions & Profile */}
+      {/* Right Section: Plus Menu, Notifications & Profile */}
       <div className="flex items-center gap-3 lg:gap-6">
-        {/* Broadcast Button */}
-        <button 
-          onClick={() => setIsPostModalOpen(true)}
-          className="hidden md:flex items-center gap-2 bg-cyan-500/10 border border-cyan-500/30 px-3 py-1.5 rounded-lg text-cyan-500 hover:bg-cyan-500 hover:text-black transition-all group"
-        >
-          <div className="w-1.5 h-1.5 rounded-full bg-cyan-500 group-hover:bg-black animate-pulse" />
-          <span className="text-[8px] font-black uppercase tracking-tighter">New Signal</span>
-        </button>
+        
+        {/* NEW: Plus (+) Broadcast Menu (লাল মার্ক করা জায়গায়) */}
+        <div className="relative">
+          <button 
+            onClick={() => setShowPlusMenu(!showPlusMenu)}
+            className="w-8 h-8 lg:w-9 lg:h-9 rounded-full bg-cyan-500 flex items-center justify-center text-black hover:scale-110 transition-all shadow-lg shadow-cyan-500/20 active:scale-95"
+          >
+            <FaPlus size={14} className={`${showPlusMenu ? 'rotate-45' : 'rotate-0'} transition-transform duration-300`} />
+          </button>
 
+          <AnimatePresence>
+            {showPlusMenu && (
+              <>
+                <div className="fixed inset-0 z-[1001]" onClick={() => setShowPlusMenu(false)}></div>
+                <motion.div 
+                  initial={{ opacity: 0, scale: 0.9, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9, y: 10 }}
+                  className="absolute right-0 mt-4 w-52 bg-[#0A0A0A] border border-white/10 rounded-2xl p-2 shadow-2xl z-[1002] overflow-hidden"
+                >
+                  <div className="text-[8px] font-black text-gray-500 px-3 py-2 uppercase tracking-[0.2em]">Signal Type</div>
+                  {[
+                    { icon: <FaFileAlt />, label: 'Text Post', color: 'text-cyan-400' },
+                    { icon: <FaCamera />, label: 'Neural Photo', color: 'text-purple-400' },
+                    { icon: <FaVideo />, label: 'Drift Reel', color: 'text-emerald-400' },
+                    { icon: <FaBroadcastTower />, label: 'Live Broadcast', color: 'text-rose-500' },
+                  ].map((item, i) => (
+                    <button 
+                      key={i} 
+                      onClick={() => { setIsPostModalOpen(true); setShowPlusMenu(false); }}
+                      className="w-full flex items-center gap-3 px-3 py-3 text-[9px] font-black text-gray-400 hover:text-white hover:bg-white/5 rounded-xl uppercase transition-all text-left"
+                    >
+                      <span className={item.color}>{item.icon}</span> {item.label}
+                    </button>
+                  ))}
+                </motion.div>
+              </>
+            )}
+          </AnimatePresence>
+        </div>
+
+        {/* Notifications */}
         <div 
           className="relative cursor-pointer group"
           onClick={() => {
@@ -156,6 +190,7 @@ const Navbar = ({ setIsPostModalOpen, toggleSidebar }) => {
           )}
         </div>
 
+        {/* Profile Dropdown */}
         <div className="relative">
           <div 
             onClick={(e) => {
@@ -175,29 +210,18 @@ const Navbar = ({ setIsPostModalOpen, toggleSidebar }) => {
               <>
                 <div className="fixed inset-0 z-[1001]" onClick={() => setShowDropdown(false)}></div>
                 <motion.div 
-                  initial={{ opacity: 0, scale: 0.95, y: 10 }} 
-                  animate={{ opacity: 1, scale: 1, y: 0 }} 
-                  exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                  initial={{ opacity: 0, scale: 0.95, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 10 }}
                   className="absolute right-0 mt-3 w-44 bg-[#0A0A0A] border border-white/10 rounded-2xl p-2 shadow-2xl overflow-hidden z-[1002]"
                 >
                   <button 
-                    type="button"
-                    onClick={(e) => { 
-                      e.stopPropagation();
-                      navigate(`/profile/${user?.sub}`); 
-                      setShowDropdown(false); 
-                    }}
+                    onClick={() => { navigate(`/profile/${user?.sub}`); setShowDropdown(false); }}
                     className="w-full flex items-center gap-3 px-4 py-3 text-[9px] font-black text-gray-400 hover:text-white hover:bg-white/5 rounded-xl uppercase transition-all text-left"
                   >
                     <FaUserCircle size={14} /> Profile
                   </button>
                   <div className="h-[1px] bg-white/5 my-1"></div>
                   <button 
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      logout({ logoutParams: { returnTo: window.location.origin } });
-                    }}
+                    onClick={() => logout({ logoutParams: { returnTo: window.location.origin } })}
                     className="w-full flex items-center gap-3 px-4 py-3 text-[9px] font-black text-rose-500 hover:bg-rose-500/10 rounded-xl uppercase transition-all text-left"
                   >
                     <FaSignOutAlt size={14} /> Log Out
