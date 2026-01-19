@@ -269,7 +269,7 @@ const PremiumHomeFeed = ({ searchQuery = "", isPostModalOpen, setIsPostModalOpen
                         </span>
                         <FaCheckCircle className="text-cyan-500 text-[11px] flex-shrink-0" />
                         
-                        {/* ✅ Follow & Messenger Buttons (নাম পরিবর্তন এবং রুট ঠিক করা হয়েছে) */}
+                       {/* Follow & Messenger Buttons (UPDATED) */}
                         {user?.sub !== authorId && (
                           <div className="flex items-center gap-3 ml-2">
                              <button 
@@ -279,7 +279,11 @@ const PremiumHomeFeed = ({ searchQuery = "", isPostModalOpen, setIsPostModalOpen
                                 Follow
                               </button>
                               <button 
-                                onClick={(e) => { e.stopPropagation(); navigate('/messages'); }}
+                                onClick={(e) => { 
+                                  e.stopPropagation(); 
+                                  // Navigates directly to chat with the author's ID
+                                  navigate(`/messenger/${encodeURIComponent(authorId)}`); 
+                                }}
                                 className="text-gray-500 hover:text-cyan-400 transition-colors"
                               >
                                 <FaEnvelope size={12} />

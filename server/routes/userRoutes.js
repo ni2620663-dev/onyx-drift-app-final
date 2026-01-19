@@ -22,7 +22,6 @@ const upload = multer({
 
 /**
  * ১. ড্রিপ্টার সার্চ (Search Fix)
- * ইউজারের নাম বা ডাকনাম দিয়ে সার্চ করলে সরাসরি ডাটাবেস থেকে ID সহ তথ্য আসবে।
  */
 router.get('/search', auth, async (req, res) => {
   try {
@@ -32,16 +31,15 @@ router.get('/search', auth, async (req, res) => {
     const currentUserId = req.user.sub || req.user.id;
     const searchRegex = new RegExp(`${query.trim()}`, "i");
 
-    // ডাটাবেস থেকে নাম, ডাকনাম এবং আইডি ম্যাচ করানো হচ্ছে
     const users = await User.find({
-      auth0Id: { $ne: currentUserId }, // নিজেকে সার্চ রেজাল্টে দেখাবে না
+      auth0Id: { $ne: currentUserId },
       $or: [
         { name: { $regex: searchRegex } },
         { nickname: { $regex: searchRegex } },
-        { auth0Id: query } // সরাসরি আইডি দিয়ে সার্চ করলে যেন পাওয়া যায়
+        { auth0Id: query }
       ]
     })
-    .select("name nickname avatar auth0Id bio isVerified followers following") // প্রয়োজনীয় সব ডাটা সিলেক্ট করা হয়েছে
+    .select("name nickname avatar auth0Id bio isVerified followers following")
     .limit(12)
     .lean();
     
@@ -89,7 +87,7 @@ router.put("/update-profile", auth, upload.fields([
 /**
  * ৩. প্রোফাইল এবং পোস্ট একসাথে পাওয়া (Fixes 404 & %7C Error)
  */
-router.get(['/profile/:userId', '/:userId'], auth, async (req, res) => {
+router.get(['/profile/:userId', '/:userId'], auth, async (req, res, next) => {
   try {
     const rawUserId = req.params.userId;
     if (rawUserId === 'search' || rawUserId === 'all') return next();
@@ -99,7 +97,6 @@ router.get(['/profile/:userId', '/:userId'], auth, async (req, res) => {
 
     const user = await User.findOne({ auth0Id: targetId }).lean();
     
-    // বিভিন্ন ফিল্ড নেমে পোস্ট খোঁজা হচ্ছে যাতে কোনো পোস্ট মিস না হয়
     const posts = await Post.find({ 
       $or: [
         { authorAuth0Id: targetId },
@@ -125,31 +122,42 @@ router.get(['/profile/:userId', '/:userId'], auth, async (req, res) => {
 router.post('/create', auth, upload.single('file'), createPost);
 
 /**
- * ৫. ফলো সিস্টেম
+ * ৫. ফলো সিস্টেম (Error Free Version)
  */
 router.post("/follow/:targetId", auth, async (req, res) => {
   try {
     const myId = req.user.sub || req.user.id;
     const targetId = decodeURIComponent(req.params.targetId);
+
     if (myId === targetId) return res.status(400).json({ msg: "Self-link forbidden" });
 
-    const user = await User.findOne({ auth0Id: myId });
-    const isFollowing = user.following?.includes(targetId);
+    // ১. চেক করা যে টার্গেট ইউজার ডাটাবেসে আছে কি না
+    const targetUser = await User.findOne({ auth0Id: targetId });
+    if (!targetUser) return res.status(404).json({ msg: "Target user not found" });
+
+    // ২. বর্তমান ইউজারকে খুঁজে বের করা
+    const currentUser = await User.findOne({ auth0Id: myId });
+    if (!currentUser) return res.status(404).json({ msg: "Your profile not found" });
+
+    const isFollowing = currentUser.following?.includes(targetId);
 
     if (isFollowing) {
+      // আনফলো লজিক
       await Promise.all([
         User.updateOne({ auth0Id: myId }, { $pull: { following: targetId } }),
         User.updateOne({ auth0Id: targetId }, { $pull: { followers: myId } })
       ]);
-      res.json({ followed: false });
+      res.json({ followed: false, message: "Unfollowed" });
     } else {
+      // ফলো লজিক ($addToSet ডুপ্লিকেট এন্ট্রি রোধ করে)
       await Promise.all([
         User.updateOne({ auth0Id: myId }, { $addToSet: { following: targetId } }),
         User.updateOne({ auth0Id: targetId }, { $addToSet: { followers: myId } })
       ]);
-      res.json({ followed: true });
+      res.json({ followed: true, message: "Followed" });
     }
   } catch (err) {
+    console.error("Follow Error:", err);
     res.status(500).json({ msg: "Connection failed" });
   }
 });
