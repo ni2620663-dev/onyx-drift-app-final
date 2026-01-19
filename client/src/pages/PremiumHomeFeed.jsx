@@ -213,13 +213,16 @@ const PremiumHomeFeed = ({ searchQuery = "", isPostModalOpen, setIsPostModalOpen
   };
 
   return (
-    <div className="w-full min-h-screen bg-[#02040a] text-white pt-2 pb-32 overflow-x-hidden font-sans">
+    <div className="w-full min-h-screen bg-[#02040a] text-white pb-32 font-sans">
       
-      {/* --- Header: স্ক্রল করলে এটিও উপরে উঠে যাবে --- */}
+      {/* --- Header: Fixed Class রিমুভ করা হয়েছে যাতে স্ক্রল করলে উপরে উঠে যায় --- */}
       <div className="max-w-[550px] mx-auto px-4 flex justify-between items-center py-6 bg-[#02040a] border-b border-white/5">
           <div className="flex items-center gap-2">
               <div className="w-2.5 h-2.5 bg-cyan-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(6,182,212,0.5)]" />
               <h2 className="text-xs font-black uppercase tracking-[0.3em] text-gray-100">Onyx Drift</h2>
+          </div>
+          <div className="flex items-center gap-3">
+             <img src={user?.picture} className="w-8 h-8 rounded-full border border-white/10" alt="profile" />
           </div>
       </div>
 

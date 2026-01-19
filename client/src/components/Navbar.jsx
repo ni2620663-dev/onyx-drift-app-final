@@ -7,7 +7,6 @@ import { useAuth0 } from "@auth0/auth0-react";
 import axios from 'axios';
 import webSocketService from "../services/WebSocketService"; 
 
-// এখানে toggleSidebar প্রপসটি যোগ করা হয়েছে
 const Navbar = ({ setSearchQuery, setIsPostModalOpen, toggleSidebar }) => { 
   const navigate = useNavigate();
   const { user, logout, getAccessTokenSilently, isAuthenticated } = useAuth0();
@@ -60,10 +59,12 @@ const Navbar = ({ setSearchQuery, setIsPostModalOpen, toggleSidebar }) => {
       
       {/* ১. লোগো এবং মেনু সেকশন */}
       <div className="flex items-center gap-3">
-        {/* এই বাটনে ক্লিক করলে সাইডবার খুলবে */}
         <HiOutlineMenuAlt4 
           size={22} 
-          onClick={toggleSidebar} 
+          onClick={(e) => {
+            e.stopPropagation();
+            toggleSidebar();
+          }} 
           className="text-gray-400 cursor-pointer hover:text-cyan-400 transition-colors" 
         />
         <div className="flex items-center gap-2 cursor-pointer" onClick={() => navigate('/feed')}>
@@ -76,7 +77,7 @@ const Navbar = ({ setSearchQuery, setIsPostModalOpen, toggleSidebar }) => {
         </div>
       </div>
 
-      {/* ২. সেন্টার পোস্ট বার (এটিই আপনার মেইন সার্চ/পোস্ট বার) */}
+      {/* ২. সেন্টার পোস্ট বার */}
       <div className="flex-1 max-w-[400px] mx-4 relative">
         <div 
           onClick={() => setIsPostModalOpen(true)}
@@ -95,12 +96,12 @@ const Navbar = ({ setSearchQuery, setIsPostModalOpen, toggleSidebar }) => {
       {/* ৩. রাইট অ্যাকশন বাটনসমূহ */}
       <div className="flex items-center gap-3 lg:gap-6">
         
-        {/* নোটিফিকেশন - ক্লিক করলে রেড ডট চলে যাবে */}
+        {/* নোটিফিকেশন বাটন */}
         <div 
           className="relative cursor-pointer group"
           onClick={() => {
             setHasNewNotification(false);
-            alert("Opening Notifications...");
+            navigate('/notifications'); // এখানে আপনার নোটিফিকেশন পেজের পাথ দিন
           }}
         >
           <FaRegBell size={18} className="text-gray-400 group-hover:text-cyan-400 transition-colors" />
@@ -112,7 +113,10 @@ const Navbar = ({ setSearchQuery, setIsPostModalOpen, toggleSidebar }) => {
         {/* ইউজার প্রোফাইল ড্রপডাউন */}
         <div className="relative">
           <div 
-            onClick={() => setShowDropdown(!showDropdown)}
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowDropdown(!showDropdown);
+            }}
             className="flex items-center gap-2 bg-white/5 p-1 lg:pr-3 rounded-full border border-white/10 cursor-pointer hover:bg-white/10 transition-all"
           >
             <img 
@@ -128,22 +132,36 @@ const Navbar = ({ setSearchQuery, setIsPostModalOpen, toggleSidebar }) => {
           <AnimatePresence>
             {showDropdown && (
               <>
-                <div className="fixed inset-0 z-[-1]" onClick={() => setShowDropdown(false)}></div>
+                {/* আউটার ক্লিক হ্যান্ডলার */}
+                <div 
+                  className="fixed inset-0 z-[1001]" 
+                  onClick={() => setShowDropdown(false)}
+                ></div>
+                
                 <motion.div 
                   initial={{ opacity: 0, scale: 0.95, y: 10 }} 
                   animate={{ opacity: 1, scale: 1, y: 0 }} 
                   exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                  className="absolute right-0 mt-3 w-44 bg-[#0A0A0A] border border-white/10 rounded-2xl p-2 shadow-2xl overflow-hidden z-[1001]"
+                  className="absolute right-0 mt-3 w-44 bg-[#0A0A0A] border border-white/10 rounded-2xl p-2 shadow-2xl overflow-hidden z-[1002]"
                 >
                   <button 
-                    onClick={() => { navigate(`/profile/${user?.sub}`); setShowDropdown(false); }}
+                    onClick={(e) => { 
+                      e.stopPropagation();
+                      navigate(`/profile/${user?.sub}`); 
+                      setShowDropdown(false); 
+                    }}
                     className="w-full flex items-center gap-3 px-4 py-3 text-[9px] font-black text-gray-400 hover:text-white hover:bg-white/5 rounded-xl uppercase transition-all"
                   >
                     <FaUserCircle size={14} /> Profile
                   </button>
+
                   <div className="h-[1px] bg-white/5 my-1"></div>
+
                   <button 
-                    onClick={() => logout({ logoutParams: { returnTo: window.location.origin } })}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      logout({ logoutParams: { returnTo: window.location.origin } });
+                    }}
                     className="w-full flex items-center gap-3 px-4 py-3 text-[9px] font-black text-rose-500 hover:bg-rose-500/10 rounded-xl uppercase transition-all"
                   >
                     <FaSignOutAlt size={14} /> Log Out
