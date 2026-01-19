@@ -90,13 +90,18 @@ router.put("/update-profile", auth, upload.fields([
 router.get(['/profile/:userId', '/:userId'], auth, async (req, res, next) => {
   try {
     const rawUserId = req.params.userId;
-    if (rawUserId === 'search' || rawUserId === 'all') return next();
+    // Reserved keywords এড়ানো
+    if (!rawUserId || rawUserId === 'search' || rawUserId === 'all' || rawUserId === 'undefined') {
+        return next();
+    }
 
     const targetId = decodeURIComponent(rawUserId);
     console.log(`📡 Neural Sync Request for ID: ${targetId}`);
 
+    // ইউজার খোঁজা
     const user = await User.findOne({ auth0Id: targetId }).lean();
     
+    // পোস্ট খোঁজা (সবগুলো সম্ভাব্য ফিল্ড চেক করা হচ্ছে)
     const posts = await Post.find({ 
       $or: [
         { authorAuth0Id: targetId },
@@ -112,6 +117,7 @@ router.get(['/profile/:userId', '/:userId'], auth, async (req, res, next) => {
       posts: posts || []
     });
   } catch (err) {
+    console.error("Fetch Profile Error:", err);
     res.status(500).json({ message: "Neural Link Error" });
   }
 });
@@ -129,32 +135,36 @@ router.post("/follow/:targetId", auth, async (req, res) => {
     const myId = req.user.sub || req.user.id;
     const targetId = decodeURIComponent(req.params.targetId);
 
-    if (myId === targetId) return res.status(400).json({ msg: "Self-link forbidden" });
+    if (myId === targetId) {
+        return res.status(400).json({ msg: "Self-link forbidden" });
+    }
 
-    // ১. চেক করা যে টার্গেট ইউজার ডাটাবেসে আছে কি না
-    const targetUser = await User.findOne({ auth0Id: targetId });
+    // ১. চেক করা যে টার্গেট ইউজার এবং বর্তমান ইউজার ডাটাবেসে আছে কি না
+    const [targetUser, currentUser] = await Promise.all([
+        User.findOne({ auth0Id: targetId }),
+        User.findOne({ auth0Id: myId })
+    ]);
+
     if (!targetUser) return res.status(404).json({ msg: "Target user not found" });
-
-    // ২. বর্তমান ইউজারকে খুঁজে বের করা
-    const currentUser = await User.findOne({ auth0Id: myId });
     if (!currentUser) return res.status(404).json({ msg: "Your profile not found" });
 
-    const isFollowing = currentUser.following?.includes(targetId);
+    // ২. চেক করা অলরেডি ফলো করা আছে কি না
+    const isFollowing = currentUser.following && currentUser.following.includes(targetId);
 
     if (isFollowing) {
-      // আনফলো লজিক
+      // আনফলো লজিক ($pull ব্যবহার করা হয়েছে)
       await Promise.all([
         User.updateOne({ auth0Id: myId }, { $pull: { following: targetId } }),
         User.updateOne({ auth0Id: targetId }, { $pull: { followers: myId } })
       ]);
-      res.json({ followed: false, message: "Unfollowed" });
+      res.json({ followed: false, message: "Unfollowed successfully" });
     } else {
       // ফলো লজিক ($addToSet ডুপ্লিকেট এন্ট্রি রোধ করে)
       await Promise.all([
         User.updateOne({ auth0Id: myId }, { $addToSet: { following: targetId } }),
         User.updateOne({ auth0Id: targetId }, { $addToSet: { followers: myId } })
       ]);
-      res.json({ followed: true, message: "Followed" });
+      res.json({ followed: true, message: "Followed successfully" });
     }
   } catch (err) {
     console.error("Follow Error:", err);

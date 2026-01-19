@@ -131,15 +131,14 @@ const PremiumHomeFeed = ({ searchQuery = "", isPostModalOpen, setIsPostModalOpen
 
     try {
       const token = await getAccessTokenSilently();
-      // ✅ URL-এ বিশেষ ক্যারেক্টার (যেমন '|') ঠিকমতো পাঠানোর জন্য encodeURIComponent ব্যবহার করা হয়েছে
       const encodedId = encodeURIComponent(targetAuth0Id);
       await axios.post(`${API_URL}/api/user/follow/${encodedId}`, {}, {
         headers: { Authorization: `Bearer ${token}` }
       });
       alert("Neural link established!");
     } catch (err) {
-      console.error("Follow Error Status:", err.response?.status);
-      const msg = err.response?.data?.message || "Follow route not found (404) or failed to connect.";
+      console.error("Follow Error:", err.response?.data);
+      const msg = err.response?.data?.message || "Transmission failed.";
       alert(msg);
     }
   };
@@ -217,6 +216,12 @@ const PremiumHomeFeed = ({ searchQuery = "", isPostModalOpen, setIsPostModalOpen
     } catch (err) { alert("Deletion failed."); }
   };
 
+  // সার্চ অনুযায়ী ফিল্টার করার লজিক এখানে যোগ করা হয়েছে
+  const filteredPosts = posts.filter(post => 
+    post.text?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    post.authorName?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   return (
     <div className="w-full min-h-screen bg-[#02040a] text-white pb-32 font-sans">
       
@@ -238,7 +243,7 @@ const PremiumHomeFeed = ({ searchQuery = "", isPostModalOpen, setIsPostModalOpen
           <div className="flex justify-center py-20"><div className="w-8 h-8 border-2 border-cyan-500/30 border-t-cyan-500 rounded-full animate-spin"></div></div>
         ) : (
           <div className="flex flex-col mt-4">
-            {posts.map((post) => {
+            {filteredPosts.map((post) => {
               const mediaSrc = post.media || post.mediaUrl;
               const isVideo = mediaSrc?.match(/\.(mp4|webm|mov)$/i) || post.mediaType === 'video';
               const isLiked = post.likes?.includes(user?.sub);
@@ -269,7 +274,6 @@ const PremiumHomeFeed = ({ searchQuery = "", isPostModalOpen, setIsPostModalOpen
                         </span>
                         <FaCheckCircle className="text-cyan-500 text-[11px] flex-shrink-0" />
                         
-                       {/* Follow & Messenger Buttons (UPDATED) */}
                         {user?.sub !== authorId && (
                           <div className="flex items-center gap-3 ml-2">
                              <button 
@@ -281,7 +285,6 @@ const PremiumHomeFeed = ({ searchQuery = "", isPostModalOpen, setIsPostModalOpen
                               <button 
                                 onClick={(e) => { 
                                   e.stopPropagation(); 
-                                  // Navigates directly to chat with the author's ID
                                   navigate(`/messenger/${encodeURIComponent(authorId)}`); 
                                 }}
                                 className="text-gray-500 hover:text-cyan-400 transition-colors"

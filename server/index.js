@@ -18,7 +18,7 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET 
 });
 
-// ২. রাুট ইম্পোর্ট
+// ২. রাউট ইম্পোর্ট
 import profileRoutes from "./src/routes/profile.js"; 
 import postRoutes from "./routes/posts.js";
 import userRoutes from './routes/users.js'; 
@@ -50,7 +50,7 @@ const corsOptions = {
     allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"]
 };
 
-// মিডলওয়্যার (অর্ডার খুবই গুরুত্বপূর্ণ)
+// মিডলওয়্যার (অর্ডার খুবই গুরুত্বপূর্ণ)
 app.use(cors(corsOptions));
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
@@ -66,7 +66,7 @@ const io = new Server(server, {
     maxHttpBufferSize: 1e8 
 });
 
-// ৫. Redis Setup (যদি থাকে)
+// ৫. Redis Setup
 const redis = process.env.REDIS_URL ? new Redis(process.env.REDIS_URL, {
     maxRetriesPerRequest: null,
     enableReadyCheck: false,
@@ -76,15 +76,23 @@ const redis = process.env.REDIS_URL ? new Redis(process.env.REDIS_URL, {
 }) : null;
 
 /* ==========================================================
-    📰 নিউজ ইঞ্জিন (Optional: যদি অ্যাপে আর না লাগে তবে ডিলিট করতে পারেন)
+    📡 এপিআই রাুটস (Fixes 404 & Messenger Issues)
 ========================================================== */
+
+// ফলো এবং প্রোফাইল ডাটার জন্য প্রধান রাউট
+app.use("/api/user", userRoutes); 
+app.use("/api/profile", profileRoutes); 
+app.use("/api/posts", postRoutes); 
+app.use("/api/messages", messageRoutes); // মেসেঞ্জার বাটনের ব্যাকএন্ড লজিক এখানে
+app.use("/api/stories", storyRoute);
+app.use("/api/reels", reelRoutes); 
+
+// নিউজ ইঞ্জিন (ঐচ্ছিক)
 app.get("/api/news", async (req, res) => {
     try {
         const apiKey = process.env.NEWS_API_KEY; 
         if (!apiKey) return res.status(500).json({ error: "News API Key missing" });
-
         const response = await axios.get(`https://gnews.io/api/v4/top-headlines?category=technology&lang=en&apikey=${apiKey}`);
-        
         const formattedNews = response.data.articles.map((article, index) => ({
             _id: `news-${index}-${Date.now()}`,
             authorName: article.source.name || "Global News",
@@ -97,24 +105,15 @@ app.get("/api/news", async (req, res) => {
             link: article.url,
             feedType: 'news' 
         }));
-
         res.json(formattedNews);
     } catch (error) {
         res.status(500).json({ error: "Failed to sync world news" });
     }
 });
 
-// ৬. এপিআই রাুটস
-app.use("/api/user", userRoutes); 
-app.use("/api/profile", profileRoutes); 
-app.use("/api/posts", postRoutes); 
-app.use("/api/messages", messageRoutes); 
-app.use("/api/stories", storyRoute);
-app.use("/api/reels", reelRoutes); 
-
 app.get("/", (req, res) => res.send("🚀 OnyxDrift Neural Core is Online!"));
 
-// ৭. গ্লোবাল এরর হ্যান্ডলার
+// ৬. গ্লোবাল এরর হ্যান্ডলার
 app.use((err, req, res, next) => {
     console.error("🔥 SYSTEM_ERROR:", err.stack);
     res.status(err.status || 500).json({ 
