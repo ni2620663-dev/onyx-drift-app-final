@@ -143,7 +143,7 @@ export default function App() {
                     
                     {/* REELS ROUTE */}
                     <Route path="/reels" element={<ProtectedRoute component={ReelsFeed} />} />
-                    
+                    <Route path="/reels-editor" element={<ProtectedRoute component={ReelsEditor} />} />
                     <Route path="/profile/:userId" element={<ProtectedRoute component={Profile} />} />
                     <Route path="/following" element={<ProtectedRoute component={FollowingPage} />} />
 
