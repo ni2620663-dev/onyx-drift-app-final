@@ -2,11 +2,15 @@ import mongoose from "mongoose";
 
 const MessageSchema = new mongoose.Schema(
   {
-    // ১. কন্টিনজেন্সি: এটি ওয়ান-টু-ওয়ান চ্যাট নাকি কমিউনিটি চ্যাট?
+    // ১. কন্টিনজেন্সি: এটি ওয়ান-টু-ওয়ান চ্যাট নাকি গ্রুপ/কমিউনিটি চ্যাট?
     conversationId: {
-      type: String, // ওয়ান-টু-ওয়ান চ্যাটের জন্য (যেমন: senderId + receiverId)
+      type: String, // ওয়ান-টু-ওয়ান বা গ্রুপ চ্যাটের মূল আইডি
       index: true,
-      required: function() { return !this.communityId; } // কমিউনিটি না হলে এটি মাস্ট
+      required: true
+    },
+    isGroup: {
+      type: Boolean,
+      default: false
     },
     communityId: {
       type: mongoose.Schema.Types.ObjectId,
@@ -15,29 +19,35 @@ const MessageSchema = new mongoose.Schema(
       index: true
     },
 
-    // ২. সেন্ডার ডিটেইলস (Fast UI Rendering এর জন্য)
+    // ২. সেন্ডার ডিটেইলস (Fast UI Rendering - যাতে বারবার ইউজার টেবিল পপুলেট করতে না হয়)
     senderId: {
       type: String, // Auth0 ID (e.g., auth0|123...)
       required: true,
       index: true
     },
-    senderName: { type: String },
-    senderAvatar: { type: String },
+    senderName: { 
+      type: String,
+      required: true 
+    },
+    senderAvatar: { 
+      type: String 
+    },
 
-    // ৩. ইউনিক আইডেন্টিফায়ার (Duplicate প্রিভেন্ট করার জন্য)
+    // ৩. ইউনিক আইডেন্টিফায়ার (Optimistic UI & Duplicate Prevention)
     tempId: { 
       type: String, 
-      unique: true, // এটি ডুপ্লিকেট মেসেজ সেভ হওয়া আটকাবে
-      sparse: true  // যাদের tempId নেই তাদের জন্য এরর দিবে না
+      unique: true, // এটি সার্ভারে ডুপ্লিকেট মেসেজ সেভ হওয়া আটকাবে
+      sparse: true  
     },
 
-    // ৪. কন্টেন্ট টাইপস
+    // ৪. কন্টেন্ট টাইপস (Photo, Video, Voice Support)
     text: {
       type: String,
-      trim: true
+      trim: true,
+      default: ""
     },
     media: {
-      type: String, // Cloudinary URL
+      type: String, // Cloudinary বা ফাইল URL
       default: ""
     },
     mediaType: {
@@ -46,7 +56,7 @@ const MessageSchema = new mongoose.Schema(
       default: "text"
     },
 
-    // ৫. রিড রিসিপ্ট এবং রিয়েল-টাইম স্ট্যাটাস
+    // ৫. স্ট্যাটাস এবং মেটাডাটা
     seenBy: [
       {
         userId: String,
@@ -59,7 +69,7 @@ const MessageSchema = new mongoose.Schema(
     }
   },
   { 
-    timestamps: true, 
+    timestamps: true, // এটি স্বয়ংক্রিয়ভাবে createdAt এবং updatedAt তৈরি করবে
     toJSON: { virtuals: true },
     toObject: { virtuals: true }
   }
@@ -68,8 +78,10 @@ const MessageSchema = new mongoose.Schema(
 /* ==========================================================
     🚀 PERFORMANCE OPTIMIZATION (Indexing)
 ========================================================== */
-// লেটেস্ট মেসেজ দ্রুত লোড করার জন্য কম্পাউন্ড ইনডেক্স
+// চ্যাট হিস্ট্রি দ্রুত লোড করার জন্য কম্পাউন্ড ইনডেক্সিং
 MessageSchema.index({ conversationId: 1, createdAt: -1 });
 MessageSchema.index({ communityId: 1, createdAt: -1 });
 
-export default mongoose.model("Message", MessageSchema);
+// মেমরি সেভ করার জন্য মডেল এক্সপোর্ট
+const Message = mongoose.models.Message || mongoose.model("Message", MessageSchema);
+export default Message;

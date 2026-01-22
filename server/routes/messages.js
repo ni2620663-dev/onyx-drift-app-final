@@ -7,8 +7,8 @@ import Conversation from "../models/Conversation.js";
 import Message from "../models/Message.js";      
 
 /* ==========================================================
-   1️⃣ GET ALL CONVERSATIONS (Including Groups)
-   Route: GET /api/messages/conversations
+   1️⃣ GET ALL CONVERSATIONS
+   সব চ্যাট এবং গ্রুপ লিস্ট নিয়ে আসবে
 ========================================================== */
 router.get("/conversations", auth, async (req, res) => {
   try {
@@ -18,7 +18,7 @@ router.get("/conversations", auth, async (req, res) => {
       return res.status(401).json({ error: "Neural identity missing" });
     }
 
-    // ইউজার যে যে কনভারসেশন বা গ্রুপের মেম্বার সেগুলো সব খুঁজে বের করা
+    // ইউজার যে যে চ্যাটের মেম্বার সেগুলো সব খুঁজে বের করা
     const conversations = await Conversation.find({
       members: { $in: [currentUserId] },
     }).sort({ updatedAt: -1 });
@@ -31,8 +31,8 @@ router.get("/conversations", auth, async (req, res) => {
 });
 
 /* ==========================================================
-   2️⃣ CREATE PRIVATE OR GROUP CONVERSATION
-   Route: POST /api/messages/conversation
+   2️⃣ CREATE OR GET CONVERSATION (Private/Group)
+   নতুন চ্যাট বা গ্রুপ তৈরি করবে
 ========================================================== */
 router.post("/conversation", auth, async (req, res) => {
   const { receiverId, isGroup, groupName, members } = req.body;
@@ -41,22 +41,20 @@ router.post("/conversation", auth, async (req, res) => {
   try {
     // যদি এটি গ্রুপ চ্যাট হয়
     if (isGroup) {
-      if (!groupName || !members || members.length === 0) {
-        return res.status(400).json({ error: "Group name and members required" });
-      }
+      if (!groupName || !members) return res.status(400).json({ error: "Group data missing" });
 
       const newGroup = new Conversation({
-        members: [...new Set([...members, senderId])], // ডুপ্লিকেট রিমুভ করে সেন্ডারকে অ্যাড করা
+        members: [...new Set([...members, senderId])], // সেন্ডারসহ মেম্বার লিস্ট
         isGroup: true,
         groupName: groupName,
-        admin: senderId // যে গ্রুপ খুলবে সে অ্যাডমিন
+        admin: senderId
       });
 
       const savedGroup = await newGroup.save();
       return res.status(200).json(savedGroup);
     }
 
-    // যদি এটি প্রাইভেট (One-to-One) চ্যাট হয়
+    // যদি এটি ওয়ান-টু-ওয়ান প্রাইভেট চ্যাট হয়
     if (!receiverId) return res.status(400).json({ error: "Receiver ID required" });
 
     let conversation = await Conversation.findOne({
@@ -74,71 +72,72 @@ router.post("/conversation", auth, async (req, res) => {
 
     res.status(200).json(conversation);
   } catch (err) {
-    console.error("Conversation Post Error:", err);
-    res.status(500).json({ error: "Failed to initialize neural link" });
+    res.status(500).json({ error: "Failed to initialize link" });
   }
 });
 
 /* ==========================================================
-   3️⃣ SAVE NEW MESSAGE (Supports Group Messages)
-   Route: POST /api/messages/message
+   3️⃣ SAVE NEW MESSAGE (Supports Text, Photo, Video)
+   মেসেজ সেভ করবে এবং চ্যাট লিস্টে লাস্ট মেসেজ আপডেট করবে
 ========================================================== */
 router.post("/message", auth, async (req, res) => {
   try {
-    const { conversationId, text, tempId, isGroup } = req.body;
+    const { conversationId, text, media, mediaType, isGroup, tempId } = req.body;
     const senderId = req.user?.sub || req.user?.id;
     const senderName = req.user?.name || "Drifter";
 
-    if (!conversationId || !text) {
-      return res.status(400).json({ error: "Data missing: conversationId or text required" });
+    if (!conversationId) {
+      return res.status(400).json({ error: "Conversation ID required" });
     }
 
-    // মেসেজ অবজেক্ট তৈরি
+    // নতুন মেসেজ অবজেক্ট তৈরি
     const newMessage = new Message({
       conversationId,
       senderId,
-      senderName, // গ্রুপ চ্যাটে দেখার জন্য সেন্ডার নেম সেভ করা ভালো
-      text,
+      senderName,
+      text: text || "",
+      media: media || null,      // ফটো বা ভিডিওর URL
+      mediaType: mediaType || "text", // image, video অথবা text
       tempId,
       isGroup: isGroup || false
     });
 
     const savedMessage = await newMessage.save();
 
-    // চ্যাট লিস্টে লেটেস্ট মেসেজ এবং টাইম আপডেট করা
+    // চ্যাট লিস্টে প্রিভিউ টেক্সট সেট করা
+    let lastMsgPreview = text;
+    if (mediaType === "image") lastMsgPreview = "📷 Photo transmitted";
+    if (mediaType === "video") lastMsgPreview = "🎥 Video transmitted";
+
+    // কনভারসেশন মডেল আপডেট
     await Conversation.findByIdAndUpdate(conversationId, {
       $set: { 
         updatedAt: Date.now(),
-        lastMessage: text 
+        lastMessage: lastMsgPreview 
       },
     });
 
     res.status(200).json(savedMessage);
   } catch (err) {
-    console.error("Message Post Error:", err);
-    res.status(500).json({ 
-      error: "Message delivery failed", 
-      details: err.message 
-    });
+    console.error("Message Save Error:", err);
+    res.status(500).json({ error: "Signal delivery failed" });
   }
 });
 
 /* ==========================================================
    4️⃣ GET MESSAGES OF A CONVERSATION
-   Route: GET /api/messages/message/:conversationId
+   পুরনো মেসেজ হিস্ট্রি লোড করা
 ========================================================== */
 router.get("/message/:conversationId", auth, async (req, res) => {
   try {
     const { conversationId } = req.params;
     
-    // মেসেজগুলো টাইম অনুযায়ী সাজানো
     const messages = await Message.find({
       conversationId: conversationId,
-    }).sort({ createdAt: 1 });
+    }).sort({ createdAt: 1 }); // পুরনো থেকে নতুন সাজানো
     
     res.status(200).json(messages);
   } catch (err) {
-    console.error("Message Get Error:", err);
     res.status(500).json({ error: "Neural history inaccessible" });
   }
 });
