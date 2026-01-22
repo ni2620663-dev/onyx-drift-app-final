@@ -125,6 +125,45 @@ router.post("/message", auth, async (req, res) => {
 });
 
 /* ==========================================================
+    👥 GROUP SETTINGS & MEMBER UPDATE
+========================================================== */
+
+// ১. গ্রুপের নাম বা ছবি পরিবর্তন
+router.patch("/group/settings/:conversationId", auth, async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const { groupName, groupAvatar } = req.body;
+
+    const updatedGroup = await Conversation.findByIdAndUpdate(
+      conversationId,
+      { $set: { groupName, groupAvatar } },
+      { new: true }
+    );
+
+    res.status(200).json(updatedGroup);
+  } catch (err) {
+    res.status(500).json({ error: "Group settings update failed" });
+  }
+});
+
+// ২. গ্রুপে নতুন মেম্বার যুক্ত করা
+router.patch("/group/add-members/:conversationId", auth, async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const { newMembers } = req.body; // এটি একটি অ্যারে হতে হবে [userId1, userId2]
+
+    const updatedGroup = await Conversation.findByIdAndUpdate(
+      conversationId,
+      { $addToSet: { members: { $each: newMembers } } }, // ডুপ্লিকেট হবে না
+      { new: true }
+    );
+
+    res.status(200).json(updatedGroup);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to add new members to the squad" });
+  }
+});
+/* ==========================================================
    4️⃣ GET MESSAGES OF A CONVERSATION
    পুরনো মেসেজ হিস্ট্রি লোড করা
 ========================================================== */

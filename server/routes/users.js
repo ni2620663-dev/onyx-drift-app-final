@@ -90,6 +90,25 @@ router.put("/update-profile", auth, upload.fields([
     res.status(500).json({ msg: 'Identity Sync Failed' });
   }
 });
+/* ==========================================================
+    👤 PROFILE UPDATE ROUTE
+========================================================== */
+router.put("/update-profile", auth, async (req, res) => {
+  try {
+    const userId = req.user.sub || req.user.id;
+    const { name, avatar } = req.body;
+
+    const updatedUser = await User.findOneAndUpdate(
+      { auth0Id: userId },
+      { $set: { name, avatar } },
+      { new: true, upsert: true }
+    );
+
+    res.status(200).json(updatedUser);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to update neural identity" });
+  }
+});
 
 /* ==========================================================
     3️⃣ SEARCH USERS

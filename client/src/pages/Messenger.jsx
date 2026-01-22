@@ -62,6 +62,19 @@ const Messenger = ({ socket }) => {
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+  const updateGroupInfo = async (chatId, newName) => {
+  try {
+    const token = await getAccessTokenSilently();
+    await axios.patch(`${API_URL}/api/messages/group/settings/${chatId}`, 
+      { groupName: newName },
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    alert("Group Neural Identity Updated!");
+    fetchConversations(); // লিস্ট রিফ্রেশ করার জন্য
+  } catch (err) {
+    console.log("Update failed");
+  }
+};
 
   /* =================📦 DATA FETCHING ================= */
   
