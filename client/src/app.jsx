@@ -17,6 +17,7 @@ import ReelsFeed from "./pages/ReelsFeed";
 import ReelsEditor from "./pages/ReelsEditor";     
 import Landing from "./pages/Landing"; 
 import JoinPage from "./pages/JoinPage";
+import CallPage from "./pages/CallPage";
 import CustomCursor from "./components/CustomCursor";
 import MobileNav from "./components/MobileNav";
 
@@ -43,7 +44,7 @@ export default function App() {
   /* =================📡 SOCKET CONFIGURATION ================= */
   useEffect(() => {
     if (isAuthenticated && user?.sub) {
-      const socketUrl = "https://onyx-drift-app-final.onrender.com";
+      const socketUrl = "https://onyx-drift-app-final-u29m.onrender.com";
       
       if (!socket.current) {
         socket.current = io(socketUrl, {
@@ -153,6 +154,7 @@ export default function App() {
                     <Route path="/messenger/:userId?" element={<ProtectedRoute component={() => <Messenger socket={socket.current} />} />} />
                     
                     <Route path="/settings" element={<ProtectedRoute component={Settings} />} />
+                    <Route path="/call/:roomId" element={<ProtectedRoute component={CallPage} />} />
                     
                     {/* Fallback */}
                     <Route path="*" element={<Navigate to="/" />} />
