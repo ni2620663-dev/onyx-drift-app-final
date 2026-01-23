@@ -19,7 +19,7 @@ const PostCard = ({ post, onAction, onDelete, onUserClick }) => {
 
   if (!post) return null;
 
-  const API_URL = (import.meta.env.VITE_API_BASE_URL || "https://onyx-drift-app-final.onrender.com").replace(/\/$/, "");
+  const API_URL = (import.meta.env.VITE_API_BASE_URL || "https://onyx-drift-app-final-u29m.onrender.com").replace(/\/$/, "");
   const likesArray = Array.isArray(post.likes) ? post.likes : [];
   const isLiked = user && likesArray.includes(user.sub);
 

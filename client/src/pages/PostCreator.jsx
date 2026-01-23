@@ -13,7 +13,7 @@ const PostCreator = () => {
     if (!content) return;
     setLoading(true);
     try {
-      const res = await axios.post('https://onyx-drift-app-final.onrender.com/api/ai/enhance', { prompt: content });
+      const res = await axios.post('https://onyx-drift-app-final-u29m.onrender.com/api/ai/enhance', { prompt: content });
       setContent(res.data.enhancedText);
     } catch (err) { console.error("AI Error", err); }
     finally { setLoading(false); }

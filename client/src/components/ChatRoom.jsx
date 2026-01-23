@@ -8,7 +8,7 @@ const ChatRoom = ({ user }) => {
   const socket = useRef();
   const scrollRef = useRef();
 
-  const API_URL = "https://onyx-drift-app-final.onrender.com";
+  const API_URL = "https://onyx-drift-app-final-u29m.onrender.com";
 
   useEffect(() => {
     // সকেট কানেকশন

@@ -23,7 +23,7 @@ const Navbar = ({ setIsPostModalOpen, toggleSidebar, socket }) => {
   const [loading, setLoading] = useState(false);
   const [hasNewNotification, setHasNewNotification] = useState(false);
 
-  const API_URL = "https://onyx-drift-app-final.onrender.com";
+  const API_URL = "https://onyx-drift-app-final-u29m.onrender.com";
 
   /**
    * ১. সার্চ লজিক (Debounced Search)
