@@ -20,7 +20,7 @@ const FollowingPage = () => {
   const queryParams = new URLSearchParams(location.search);
   const targetUserId = queryParams.get('userId');
 
-  const API_URL = "https://onyx-drift-app-final.onrender.com";
+  const API_URL = https://onyx-drift-app-final-u29m.onrender.com"";
 
   /**
    * ১. নির্দিষ্ট প্রোফাইল ও পোস্ট লোড করা
