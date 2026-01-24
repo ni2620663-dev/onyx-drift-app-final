@@ -5,7 +5,8 @@ import { useNavigate } from "react-router-dom";
 import { 
   HiPlus, HiChatBubbleLeftRight, HiUsers, HiCog6Tooth, 
   HiOutlineChevronLeft, HiOutlinePhone, HiOutlineVideoCamera,
-  HiOutlinePaperAirplane, HiShieldCheck, HiBolt, HiSparkles, HiOutlineSearch,
+  HiOutlinePaperAirplane, HiShieldCheck, HiBolt, HiSparkles, 
+  HiMagnifyingGlass, // 🛠️ Fixed: Changed from HiOutlineSearch
   HiOutlinePhoneXMark, HiOutlineMicrophone, HiOutlineSpeakerWave,
   HiOutlineTrash, HiOutlineLockClosed, HiOutlineEyeSlash, HiOutlinePhoto, HiOutlineMicrophone as HiMic,
   HiOutlineClock, HiCheckBadge 
@@ -91,7 +92,7 @@ const Messenger = ({ socket }) => {
         headers: { Authorization: `Bearer ${token}` }
       });
       setIsEditingProfile(false);
-      fetchConversations();
+      fetchConversations(); 
     } catch (err) {
       console.error("Update failed", err);
     }
@@ -139,7 +140,6 @@ const Messenger = ({ socket }) => {
     s.on("getMessage", (data) => {
       if (currentChat?._id === data.conversationId) {
         setMessages((prev) => [...prev, data]);
-        // Phase-10: Handle Self-Destruct
         if(data.isSelfDestruct) {
           setTimeout(() => {
             setMessages(prev => prev.filter(m => m._id !== data._id));
@@ -163,7 +163,6 @@ const Messenger = ({ socket }) => {
     };
   }, [socket, currentChat, user, fetchConversations]);
 
-  // --- PHASE-6 & 10: ENHANCED SEND ---
   const handleSend = async () => {
     if (!newMessage.trim() || !currentChat?._id) return;
 
@@ -175,7 +174,7 @@ const Messenger = ({ socket }) => {
       text: newMessage,
       conversationId: currentChat._id,
       members: currentChat.members || [],
-      isSelfDestruct: isSelfDestruct, // Phase-10
+      isSelfDestruct: isSelfDestruct,
       isPending: true 
     };
 
@@ -192,7 +191,6 @@ const Messenger = ({ socket }) => {
       });
       setMessages(prev => prev.map(m => m._id === tempId ? { ...res.data, isPending: false } : m));
       
-      // Phase-10: Local self-destruct timer
       if (isSelfDestruct) {
         setTimeout(() => {
           setMessages(prev => prev.filter(m => m._id !== tempId && m._id !== res.data._id));
@@ -217,7 +215,6 @@ const Messenger = ({ socket }) => {
   return (
     <div className={`fixed inset-0 text-white font-sans overflow-hidden z-[9999] select-none touch-none transition-colors duration-500 ${isIncognito ? 'bg-[#0a0010]' : 'bg-[#02040a]'}`}>
       
-      {/* --- MAIN LIST VIEW --- */}
       <div className={`flex flex-col h-full w-full ${currentChat || isCalling ? 'hidden md:flex' : 'flex'}`}>
         
         {activeTab === "settings" ? (
@@ -293,9 +290,9 @@ const Messenger = ({ socket }) => {
                 </div>
               </div>
               
-              {/* --- PHASE-9: SEARCH UI --- */}
               <div className="relative">
-                <HiOutlineSearch className={`absolute left-4 top-1/2 -translate-y-1/2 ${isSearching ? 'text-cyan-500 animate-pulse' : 'text-gray-500'}`} />
+                {/* 🛠️ Fixed: Changed to HiMagnifyingGlass */}
+                <HiMagnifyingGlass className={`absolute left-4 top-1/2 -translate-y-1/2 ${isSearching ? 'text-cyan-500 animate-pulse' : 'text-gray-500'}`} />
                 <input 
                   type="text" 
                   value={searchQuery}
@@ -307,7 +304,6 @@ const Messenger = ({ socket }) => {
             </header>
 
             <div className="flex-1 overflow-y-auto pb-32 no-scrollbar px-4 mt-4">
-              {/* Search Results */}
               {searchQuery.length > 0 ? (
                 <div className="space-y-2 mb-10">
                   <p className="text-[10px] font-black text-cyan-500/50 uppercase ml-4 mb-2">Global Discovery</p>
@@ -343,7 +339,6 @@ const Messenger = ({ socket }) => {
                                     {c.isGroup ? c.groupName : getDisplayName(c.userDetails)}
                                     {c.isGroup && <HiShieldCheck className="text-cyan-500" size={14}/>}
                                 </span>
-                                {/* PHASE-10: READ RECEIPT ICON */}
                                 <HiCheckBadge className={c.unreadCount === 0 ? "text-cyan-500" : "text-zinc-600"} size={16}/>
                             </div>
                             <p className="text-[12px] text-zinc-500 truncate">{c.lastMessage || "Start encrypted chat..."}</p>
@@ -357,7 +352,6 @@ const Messenger = ({ socket }) => {
           </>
         )}
 
-        {/* Bottom Nav */}
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[92%] h-20 bg-black/80 backdrop-blur-3xl rounded-[2.5rem] border border-white/10 flex justify-around items-center z-[110] shadow-2xl">
            <button onClick={() => setActiveTab("chats")} className={`p-4 transition-all ${activeTab === "chats" ? 'text-cyan-500' : 'text-zinc-600'}`}><HiChatBubbleLeftRight size={28} /></button>
            <button onClick={() => setActiveTab("groups")} className={`p-4 transition-all ${activeTab === "groups" ? 'text-cyan-500' : 'text-zinc-600'}`}><HiUsers size={28} /></button>
@@ -365,7 +359,6 @@ const Messenger = ({ socket }) => {
         </div>
       </div>
 
-      {/* --- CHAT OVERLAY --- */}
       <AnimatePresence>
       {currentChat && (
         <motion.div initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }} transition={{ type: "spring", damping: 25 }} className={`fixed inset-0 z-[200] flex flex-col ${isIncognito ? 'bg-[#0a0010]' : 'bg-[#02040a]'}`}>
@@ -383,7 +376,6 @@ const Messenger = ({ socket }) => {
                  </div>
               </div>
               <div className="flex gap-1">
-                 {/* PHASE-10: SELF DESTRUCT TOGGLE */}
                  <button onClick={() => setIsSelfDestruct(!isSelfDestruct)} className={`p-3 rounded-2xl transition-all ${isSelfDestruct ? 'bg-orange-500/20 text-orange-500' : 'text-zinc-500'}`}>
                     <HiOutlineClock size={24}/>
                  </button>
@@ -396,7 +388,6 @@ const Messenger = ({ socket }) => {
                 <div key={i} className={`flex flex-col ${m.senderId === user?.sub ? 'items-end' : 'items-start'}`}>
                   <div className={`px-5 py-3 rounded-[1.8rem] max-w-[85%] shadow-lg relative ${m.senderId === user?.sub ? (isIncognito ? 'bg-purple-600' : 'bg-cyan-600 shadow-cyan-900/20') + ' rounded-tr-none' : 'bg-white/10 rounded-tl-none border border-white/5'}`}>
                     <p className="text-sm font-medium leading-relaxed">{m.text}</p>
-                    {/* Phase-10 Indicator */}
                     {m.isSelfDestruct && <HiBolt className="absolute -top-1 -right-1 text-orange-500" size={14}/>}
                     {m.isPending && <span className="absolute -bottom-4 right-2 text-[8px] text-cyan-500/50 animate-pulse italic">Transmitting...</span>}
                   </div>
@@ -422,7 +413,6 @@ const Messenger = ({ socket }) => {
       )}
       </AnimatePresence>
 
-      {/* --- PHASE-3: HD CALLING UI --- */}
       <AnimatePresence>
         {isCalling && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-[#02040a] z-[300] flex flex-col items-center justify-between py-24 px-6 overflow-hidden">
