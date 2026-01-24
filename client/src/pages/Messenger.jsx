@@ -15,13 +15,16 @@ import { AnimatePresence, motion } from "framer-motion";
 
 import CallOverlay from "../components/Messenger/CallOverlay";
 
-// 🧠 PHASE-7: DISPLAY NAME RULE (Updated for better reliability)
+// 🧠 PHASE-7: DISPLAY NAME RULE
 const getDisplayName = (u) => {
   if (!u) return "Drifter";
   const name = u.name?.trim() || u.nickname?.trim() || u.displayName?.trim();
   const fallback = u.userId || u.sub?.slice(-6) || "Drifter";
   return name && name !== "" ? name : `@${fallback}`;
 };
+
+// Fallback image in case placeholder.com fails
+const FALLBACK_AVATAR = "https://ui-avatars.com/api/?background=0D8ABC&color=fff&name=Drifter";
 
 const Messenger = ({ socket }) => {
   const { user, getAccessTokenSilently, isAuthenticated } = useAuth0();
@@ -59,17 +62,17 @@ const Messenger = ({ socket }) => {
   
   const API_URL = (import.meta.env.VITE_API_BASE_URL || "https://onyx-drift-app-final-u29m.onrender.com").replace(/\/$/, "");
 
-  // Sync temp name when user loads
   useEffect(() => {
     if (user?.name) setTempName(user.name);
   }, [user]);
 
-  // --- 🛠 CLOUDINARY UPLOAD (FIXED) ---
+  // --- 🛠 CLOUDINARY UPLOAD (FIXED FOR VOICE/MEDIA) ---
   const uploadToCloudinary = async (file, type) => {
     const formData = new FormData();
     formData.append("file", file);
     formData.append("upload_preset", UPLOAD_PRESET); 
     
+    // Voice/Audio upload must use 'video' resource type in Cloudinary
     const resourceType = type === "voice" ? "video" : "auto"; 
     
     try {
@@ -79,13 +82,12 @@ const Messenger = ({ socket }) => {
       );
       return response.data.secure_url;
     } catch (err) {
-      console.error("Cloudinary Error:", err.response?.data || err);
-      alert("Media upload failed. Check Cloudinary settings.");
+      console.error("Cloudinary Detailed Error:", err.response?.data || err);
+      alert(`Media upload failed: ${err.response?.data?.error?.message || "Check settings"}`);
       return null;
     }
   };
 
-  // --- SEARCH LOGIC ---
   const handleSearch = async (query) => {
     setSearchQuery(query);
     if (query.length < 2) { setSearchResults([]); return; }
@@ -100,7 +102,6 @@ const Messenger = ({ socket }) => {
     setIsSearching(false);
   };
 
-  // --- GROUP ACTIONS ---
   const kickMember = async (targetUserId) => {
     if (!window.confirm("Are you sure you want to purge this drifter?")) return;
     try {
@@ -128,7 +129,6 @@ const Messenger = ({ socket }) => {
     } catch (err) { alert("Power transfer failed."); }
   };
 
-  // --- MEDIA HANDLERS ---
   const handleFileChange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -164,7 +164,6 @@ const Messenger = ({ socket }) => {
     handleSend(null, url, type);
   };
 
-  // --- CONVERSATION & PROFILE ---
   const fetchConversations = useCallback(async () => {
     try {
       const token = await getAccessTokenSilently();
@@ -198,7 +197,6 @@ const Messenger = ({ socket }) => {
     } catch (err) { console.error(err); }
   };
 
-  // --- CORE SEND LOGIC ---
   const handleSend = async (e, mediaUrl = null, mediaType = null) => {
     if (!newMessage.trim() && !mediaUrl) return;
 
@@ -237,7 +235,6 @@ const Messenger = ({ socket }) => {
     } catch (err) { console.error(err); }
   };
 
-  // --- EFFECTS ---
   useEffect(() => {
     if (isAuthenticated) fetchConversations();
   }, [isAuthenticated, fetchConversations]);
@@ -306,7 +303,6 @@ const Messenger = ({ socket }) => {
                 </div>
             </div>
 
-            {/* Group Admin Controls */}
             {currentChat?.isGroup && (
               <div className="mt-6 p-4 bg-white/5 rounded-3xl border border-white/10 mb-10">
                 <h4 className="text-[10px] font-black uppercase text-cyan-500 mb-4 tracking-widest">Squad Members</h4>
@@ -378,7 +374,7 @@ const Messenger = ({ socket }) => {
                 <div className="space-y-2 mb-10">
                   {searchResults.map(u => (
                     <div key={u.userId} onClick={() => startNewConversation(u)} className="p-4 bg-white/5 border border-white/10 rounded-[2rem] flex items-center gap-4 active:bg-cyan-500/10 transition-all">
-                       <img src={u.picture} className="w-12 h-12 rounded-xl object-cover" alt="" />
+                       <img src={u.picture || FALLBACK_AVATAR} className="w-12 h-12 rounded-xl object-cover" alt="" />
                        <div className="flex-1"><p className="font-bold text-sm">{getDisplayName(u)}</p></div>
                        <HiPlus className="text-cyan-500" size={20}/>
                     </div>
@@ -389,7 +385,12 @@ const Messenger = ({ socket }) => {
                   {conversations.map(c => (
                     <div key={c._id} onClick={() => setCurrentChat(c)} className="p-4 flex items-center gap-4 active:bg-white/10 rounded-[2.2rem] transition-all">
                         <div className="relative">
-                          <img src={c.userDetails?.avatar || c.userDetails?.picture || 'https://via.placeholder.com/150'} className="w-14 h-14 rounded-2xl object-cover" alt="" />
+                          <img 
+                            src={c.userDetails?.avatar || c.userDetails?.picture || FALLBACK_AVATAR} 
+                            className="w-14 h-14 rounded-2xl object-cover" 
+                            alt="" 
+                            onError={(e) => { e.target.src = FALLBACK_AVATAR; }}
+                          />
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex justify-between items-center">
@@ -406,7 +407,6 @@ const Messenger = ({ socket }) => {
           </>
         )}
 
-        {/* Bottom Navbar */}
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[92%] h-20 bg-black/80 backdrop-blur-3xl rounded-[2.5rem] border border-white/10 flex justify-around items-center z-[110] shadow-2xl">
             <button onClick={() => setActiveTab("chats")} className={`p-4 ${activeTab === "chats" ? 'text-cyan-500' : 'text-zinc-600'}`}><HiChatBubbleLeftRight size={28} /></button>
             <button onClick={() => setActiveTab("groups")} className={`p-4 ${activeTab === "groups" ? 'text-cyan-500' : 'text-zinc-600'}`}><HiUsers size={28} /></button>
@@ -414,14 +414,18 @@ const Messenger = ({ socket }) => {
         </div>
       </div>
 
-      {/* Chat Overlay */}
       <AnimatePresence>
       {currentChat && (
         <motion.div initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }} transition={{ type: "spring", damping: 25 }} className={`fixed inset-0 z-[200] flex flex-col ${isIncognito ? 'bg-[#0a0010]' : 'bg-[#02040a]'}`}>
            <header className="p-4 pt-10 flex justify-between items-center border-b border-white/5 bg-black/80 backdrop-blur-xl">
               <div className="flex items-center gap-3 min-w-0">
                  <button onClick={() => setCurrentChat(null)} className="text-zinc-400 p-2"><HiOutlineChevronLeft size={30}/></button>
-                 <img src={currentChat.userDetails?.avatar || currentChat.userDetails?.picture || 'https://via.placeholder.com/150'} className="w-10 h-10 rounded-xl" alt="" />
+                 <img 
+                    src={currentChat.userDetails?.avatar || currentChat.userDetails?.picture || FALLBACK_AVATAR} 
+                    className="w-10 h-10 rounded-xl" 
+                    alt="" 
+                    onError={(e) => { e.target.src = FALLBACK_AVATAR; }}
+                 />
                  <div className="min-w-0">
                     <h3 className="text-[15px] font-bold truncate">{currentChat.isGroup ? currentChat.groupName : getDisplayName(currentChat.userDetails)}</h3>
                     <p className="text-[9px] text-cyan-500 uppercase font-black flex items-center gap-1"><HiOutlineLockClosed size={10}/> E2E Encrypted</p>
@@ -439,7 +443,6 @@ const Messenger = ({ socket }) => {
                   <div className={`px-5 py-3 rounded-[1.8rem] max-w-[85%] relative ${m.senderId === user?.sub ? (isIncognito ? 'bg-purple-600' : 'bg-cyan-600') + ' rounded-tr-none' : 'bg-white/10 rounded-tl-none'}`}>
                     {m.text && <p className="text-sm font-medium">{m.text}</p>}
                     
-                    {/* Media Display */}
                     {m.mediaType === "image" && <img src={m.media} className="rounded-xl mt-2 max-h-60 w-full object-cover" alt="Signal" />}
                     
                     {m.mediaType === "voice" && (
@@ -462,7 +465,6 @@ const Messenger = ({ socket }) => {
               <div ref={scrollRef} />
            </div>
 
-           {/* Input Bar */}
            <div className="p-4 pb-12 bg-black/60 backdrop-blur-md">
               <div className="flex items-center gap-2 bg-white/5 p-2 rounded-[2.2rem] border border-white/10">
                  <label className="p-3 text-zinc-400 cursor-pointer hover:text-cyan-500">
@@ -486,13 +488,17 @@ const Messenger = ({ socket }) => {
       )}
       </AnimatePresence>
 
-      {/* Calling UI */}
       <AnimatePresence>
         {isCalling && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-[#02040a] z-[300] flex flex-col items-center justify-between py-24 px-6">
             <div className="text-center">
               <div className="w-32 h-32 mx-auto rounded-[3rem] border-2 border-cyan-500/30 overflow-hidden p-1 shadow-2xl">
-                <img src={currentChat?.userDetails?.avatar || 'https://via.placeholder.com/150'} className="w-full h-full rounded-[2.8rem] object-cover" alt="" />
+                <img 
+                  src={currentChat?.userDetails?.avatar || currentChat?.userDetails?.picture || FALLBACK_AVATAR} 
+                  className="w-full h-full rounded-[2.8rem] object-cover" 
+                  alt="" 
+                  onError={(e) => { e.target.src = FALLBACK_AVATAR; }}
+                />
               </div>
               <h2 className="mt-8 text-3xl font-black">{getDisplayName(currentChat?.userDetails)}</h2>
               <p className="text-cyan-500 text-[10px] font-black uppercase tracking-widest mt-2 animate-pulse">Encrypted Call Active</p>
