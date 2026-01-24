@@ -15,16 +15,21 @@ import { AnimatePresence, motion } from "framer-motion";
 
 import CallOverlay from "../components/Messenger/CallOverlay";
 
-// 🧠 PHASE-7: DISPLAY NAME RULE
+// 🧠 PHASE-7: DISPLAY NAME RULE (Updated for better reliability)
 const getDisplayName = (u) => {
-  const name = u?.name?.trim();
-  const fallback = u?.userId || u?.nickname || u?.sub?.slice(-6) || "Drifter";
+  if (!u) return "Drifter";
+  const name = u.name?.trim() || u.nickname?.trim() || u.displayName?.trim();
+  const fallback = u.userId || u.sub?.slice(-6) || "Drifter";
   return name && name !== "" ? name : `@${fallback}`;
 };
 
 const Messenger = ({ socket }) => {
   const { user, getAccessTokenSilently, isAuthenticated } = useAuth0();
   const navigate = useNavigate();
+
+  // Cloudinary Configs
+  const CLOUD_NAME = "dx0cf0ggu";
+  const UPLOAD_PRESET = "onyxdrift_unsigned"; 
 
   const [conversations, setConversations] = useState([]);
   const [currentChat, setCurrentChat] = useState(null);
@@ -38,7 +43,7 @@ const Messenger = ({ socket }) => {
 
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [statusText, setStatusText] = useState("Vibing with OnyxDrift ⚡");
-  const [tempName, setTempName] = useState(user?.name || "");
+  const [tempName, setTempName] = useState("");
 
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState([]);
@@ -54,22 +59,28 @@ const Messenger = ({ socket }) => {
   
   const API_URL = (import.meta.env.VITE_API_BASE_URL || "https://onyx-drift-app-final-u29m.onrender.com").replace(/\/$/, "");
 
-  // --- CLOUDINARY UPLOAD ---
+  // Sync temp name when user loads
+  useEffect(() => {
+    if (user?.name) setTempName(user.name);
+  }, [user]);
+
+  // --- 🛠 CLOUDINARY UPLOAD (FIXED) ---
   const uploadToCloudinary = async (file, type) => {
     const formData = new FormData();
     formData.append("file", file);
-    formData.append("upload_preset", "onyxdrift_unsigned"); 
+    formData.append("upload_preset", UPLOAD_PRESET); 
     
     const resourceType = type === "voice" ? "video" : "auto"; 
     
     try {
       const response = await axios.post(
-        `https://api.cloudinary.com/v1_1/YOUR_CLOUD_NAME/${resourceType}/upload`,
+        `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/${resourceType}/upload`,
         formData
       );
       return response.data.secure_url;
     } catch (err) {
-      console.error("Cloudinary Error", err);
+      console.error("Cloudinary Error:", err.response?.data || err);
+      alert("Media upload failed. Check Cloudinary settings.");
       return null;
     }
   };
@@ -102,7 +113,6 @@ const Messenger = ({ socket }) => {
         ...prev,
         members: prev.members.filter(id => id !== targetUserId)
       }));
-      alert("Member purged from the squad.");
     } catch (err) { alert(err.response?.data?.error || "Purge failed."); }
   };
 
@@ -113,8 +123,8 @@ const Messenger = ({ socket }) => {
         { newAdminId },
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      alert("New Admin established.");
       setCurrentChat(prev => ({ ...prev, admin: newAdminId }));
+      alert("New Admin established.");
     } catch (err) { alert("Power transfer failed."); }
   };
 
@@ -128,22 +138,26 @@ const Messenger = ({ socket }) => {
   };
 
   const startRecording = async () => {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    mediaRecorder.current = new MediaRecorder(stream);
-    audioChunks.current = [];
-    mediaRecorder.current.ondataavailable = (e) => audioChunks.current.push(e.data);
-    mediaRecorder.current.onstop = async () => {
-      const audioBlob = new Blob(audioChunks.current, { type: 'audio/wav' });
-      const url = await uploadToCloudinary(audioBlob, "voice");
-      if (url) sendMediaMessage(url, "voice");
-    };
-    mediaRecorder.current.start();
-    setIsRecording(true);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaRecorder.current = new MediaRecorder(stream);
+      audioChunks.current = [];
+      mediaRecorder.current.ondataavailable = (e) => audioChunks.current.push(e.data);
+      mediaRecorder.current.onstop = async () => {
+        const audioBlob = new Blob(audioChunks.current, { type: 'audio/wav' });
+        const url = await uploadToCloudinary(audioBlob, "voice");
+        if (url) sendMediaMessage(url, "voice");
+      };
+      mediaRecorder.current.start();
+      setIsRecording(true);
+    } catch (err) { alert("Mic access denied"); }
   };
 
   const stopRecording = () => {
-    mediaRecorder.current.stop();
-    setIsRecording(false);
+    if (mediaRecorder.current) {
+      mediaRecorder.current.stop();
+      setIsRecording(false);
+    }
   };
 
   const sendMediaMessage = async (url, type) => {
@@ -249,6 +263,7 @@ const Messenger = ({ socket }) => {
   useEffect(() => { scrollRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
   const startCall = (type) => {
+    if (!currentChat?.userDetails?.userId) return;
     setIsCalling(true);
     const s = socket?.current || socket;
     s.emit("callUser", {
@@ -260,7 +275,7 @@ const Messenger = ({ socket }) => {
   };
 
   return (
-    <div className={`fixed inset-0 text-white font-sans overflow-hidden z-[9999] select-none touch-none transition-colors duration-500 ${isIncognito ? 'bg-[#0a0010]' : 'bg-[#02040a]'}`}>
+    <div className={`fixed inset-0 text-white font-sans overflow-hidden z-[9999] transition-colors duration-500 ${isIncognito ? 'bg-[#0a0010]' : 'bg-[#02040a]'}`}>
       
       <div className={`flex flex-col h-full w-full ${currentChat || isCalling ? 'hidden md:flex' : 'flex'}`}>
         
@@ -283,7 +298,7 @@ const Messenger = ({ socket }) => {
                         </div>
                     ) : (
                         <>
-                            <h3 className="text-2xl font-bold">{tempName || getDisplayName(user)}</h3>
+                            <h3 className="text-2xl font-bold">{getDisplayName(user)}</h3>
                             <p className="text-cyan-500/60 font-black text-[10px] uppercase tracking-widest">{statusText}</p>
                             <button onClick={() => setIsEditingProfile(true)} className="text-[10px] text-zinc-500 underline uppercase mt-2">Edit Profile</button>
                         </>
@@ -299,7 +314,7 @@ const Messenger = ({ socket }) => {
                   {currentChat.members.map((memberId) => (
                     <div key={memberId} className="flex justify-between items-center bg-black/20 p-3 rounded-2xl">
                       <span className="text-xs font-bold text-zinc-300">
-                        {memberId === user.sub ? "You (Me)" : memberId.slice(-8)}
+                        {memberId === user.sub ? "You (Me)" : `@${memberId.slice(-6)}`}
                         {memberId === currentChat.admin && <span className="ml-2 text-[8px] bg-cyan-500 text-black px-1.5 py-0.5 rounded">ADMIN</span>}
                       </span>
                       {user.sub === currentChat.admin && memberId !== user.sub && (
@@ -340,7 +355,7 @@ const Messenger = ({ socket }) => {
                   </div>
                   <div>
                     <h1 className="text-xl font-black italic text-cyan-500 uppercase tracking-tighter">OnyxDrift</h1>
-                    <p className="text-[10px] text-gray-500 font-bold tracking-widest uppercase">{isIncognito ? "Privacy Mode ON" : "Mobile Active"}</p>
+                    <p className="text-[10px] text-gray-500 font-bold tracking-widest uppercase">{getDisplayName(user)}</p>
                   </div>
                 </div>
                 <div className="flex gap-2">
@@ -374,7 +389,7 @@ const Messenger = ({ socket }) => {
                   {conversations.map(c => (
                     <div key={c._id} onClick={() => setCurrentChat(c)} className="p-4 flex items-center gap-4 active:bg-white/10 rounded-[2.2rem] transition-all">
                         <div className="relative">
-                          <img src={c.userDetails?.avatar || c.userDetails?.picture} className="w-14 h-14 rounded-2xl object-cover" alt="" />
+                          <img src={c.userDetails?.avatar || c.userDetails?.picture || 'https://via.placeholder.com/150'} className="w-14 h-14 rounded-2xl object-cover" alt="" />
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex justify-between items-center">
@@ -406,7 +421,7 @@ const Messenger = ({ socket }) => {
            <header className="p-4 pt-10 flex justify-between items-center border-b border-white/5 bg-black/80 backdrop-blur-xl">
               <div className="flex items-center gap-3 min-w-0">
                  <button onClick={() => setCurrentChat(null)} className="text-zinc-400 p-2"><HiOutlineChevronLeft size={30}/></button>
-                 <img src={currentChat.userDetails?.avatar || currentChat.userDetails?.picture} className="w-10 h-10 rounded-xl" alt="" />
+                 <img src={currentChat.userDetails?.avatar || currentChat.userDetails?.picture || 'https://via.placeholder.com/150'} className="w-10 h-10 rounded-xl" alt="" />
                  <div className="min-w-0">
                     <h3 className="text-[15px] font-bold truncate">{currentChat.isGroup ? currentChat.groupName : getDisplayName(currentChat.userDetails)}</h3>
                     <p className="text-[9px] text-cyan-500 uppercase font-black flex items-center gap-1"><HiOutlineLockClosed size={10}/> E2E Encrypted</p>
@@ -477,7 +492,7 @@ const Messenger = ({ socket }) => {
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-[#02040a] z-[300] flex flex-col items-center justify-between py-24 px-6">
             <div className="text-center">
               <div className="w-32 h-32 mx-auto rounded-[3rem] border-2 border-cyan-500/30 overflow-hidden p-1 shadow-2xl">
-                <img src={currentChat?.userDetails?.avatar} className="w-full h-full rounded-[2.8rem] object-cover" alt="" />
+                <img src={currentChat?.userDetails?.avatar || 'https://via.placeholder.com/150'} className="w-full h-full rounded-[2.8rem] object-cover" alt="" />
               </div>
               <h2 className="mt-8 text-3xl font-black">{getDisplayName(currentChat?.userDetails)}</h2>
               <p className="text-cyan-500 text-[10px] font-black uppercase tracking-widest mt-2 animate-pulse">Encrypted Call Active</p>
