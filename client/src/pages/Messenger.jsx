@@ -32,7 +32,7 @@ const Messenger = ({ socket }) => {
 
   // Cloudinary Configs
   const CLOUD_NAME = "dx0cf0ggu";
-  const UPLOAD_PRESET = "onyxdrift_unsigned"; 
+  const UPLOAD_PRESET = "onyx_upload"; 
 
   const [conversations, setConversations] = useState([]);
   const [currentChat, setCurrentChat] = useState(null);
@@ -69,11 +69,18 @@ const Messenger = ({ socket }) => {
   // --- 🛠 CLOUDINARY UPLOAD (FIXED FOR VOICE/MEDIA) ---
   const uploadToCloudinary = async (file, type) => {
     const formData = new FormData();
-    formData.append("file", file);
+    
+    // Voice/Audio Blob হলে সেটিকে ফাইলে রূপান্তর করা জরুরি
+    let fileToUpload = file;
+    if (type === "voice" || type === "audio") {
+      fileToUpload = new File([file], `voice-${Date.now()}.wav`, { type: "audio/wav" });
+    }
+
+    formData.append("file", fileToUpload);
     formData.append("upload_preset", UPLOAD_PRESET); 
     
-    // Voice/Audio upload must use 'video' resource type in Cloudinary
-    const resourceType = type === "voice" ? "video" : "auto"; 
+    // Voice এর জন্য 'video' এবং বাকি সব 'auto' বা 'image'
+    const resourceType = (type === "voice" || type === "audio") ? "video" : "auto"; 
     
     try {
       const response = await axios.post(
@@ -82,11 +89,11 @@ const Messenger = ({ socket }) => {
       );
       return response.data.secure_url;
     } catch (err) {
-      console.error("Cloudinary Detailed Error:", err.response?.data || err);
-      alert(`Media upload failed: ${err.response?.data?.error?.message || "Check settings"}`);
+      console.error("Cloudinary Error Detail:", err.response?.data || err);
       return null;
     }
   };
+    
 
   const handleSearch = async (query) => {
     setSearchQuery(query);
@@ -417,7 +424,7 @@ const Messenger = ({ socket }) => {
       <AnimatePresence>
       {currentChat && (
         <motion.div initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }} transition={{ type: "spring", damping: 25 }} className={`fixed inset-0 z-[200] flex flex-col ${isIncognito ? 'bg-[#0a0010]' : 'bg-[#02040a]'}`}>
-           <header className="p-4 pt-10 flex justify-between items-center border-b border-white/5 bg-black/80 backdrop-blur-xl">
+            <header className="p-4 pt-10 flex justify-between items-center border-b border-white/5 bg-black/80 backdrop-blur-xl">
               <div className="flex items-center gap-3 min-w-0">
                  <button onClick={() => setCurrentChat(null)} className="text-zinc-400 p-2"><HiOutlineChevronLeft size={30}/></button>
                  <img 
@@ -435,9 +442,9 @@ const Messenger = ({ socket }) => {
                  <button onClick={() => setIsSelfDestruct(!isSelfDestruct)} className={`p-3 rounded-2xl ${isSelfDestruct ? 'bg-orange-500/20 text-orange-500' : 'text-zinc-500'}`}><HiOutlineClock size={24}/></button>
                  <button onClick={() => startCall('video')} className="p-3 text-cyan-500"><HiOutlineVideoCamera size={24}/></button>
               </div>
-           </header>
-           
-           <div className="flex-1 overflow-y-auto p-6 space-y-4 no-scrollbar">
+            </header>
+            
+            <div className="flex-1 overflow-y-auto p-6 space-y-4 no-scrollbar">
               {messages.map((m, i) => (
                 <div key={i} className={`flex flex-col ${m.senderId === user?.sub ? 'items-end' : 'items-start'}`}>
                   <div className={`px-5 py-3 rounded-[1.8rem] max-w-[85%] relative ${m.senderId === user?.sub ? (isIncognito ? 'bg-purple-600' : 'bg-cyan-600') + ' rounded-tr-none' : 'bg-white/10 rounded-tl-none'}`}>
@@ -463,9 +470,9 @@ const Messenger = ({ socket }) => {
                 </div>
               ))}
               <div ref={scrollRef} />
-           </div>
+            </div>
 
-           <div className="p-4 pb-12 bg-black/60 backdrop-blur-md">
+            <div className="p-4 pb-12 bg-black/60 backdrop-blur-md">
               <div className="flex items-center gap-2 bg-white/5 p-2 rounded-[2.2rem] border border-white/10">
                  <label className="p-3 text-zinc-400 cursor-pointer hover:text-cyan-500">
                     <HiOutlinePhoto size={22}/>
@@ -483,7 +490,7 @@ const Messenger = ({ socket }) => {
                     </button>
                  )}
               </div>
-           </div>
+            </div>
         </motion.div>
       )}
       </AnimatePresence>
