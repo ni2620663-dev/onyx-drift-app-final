@@ -19,9 +19,9 @@ const MessageSchema = new mongoose.Schema(
       index: true
     },
 
-    // ২. সেন্ডার ডিটেইলস (Fast UI Rendering - যাতে বারবার ইউজার টেবিল পপুলেট করতে না হয়)
+    // ২. সেন্ডার ডিটেইলস (Fast UI Rendering)
     senderId: {
-      type: String, // Auth0 ID (e.g., auth0|123...)
+      type: String, // Auth0 ID
       required: true,
       index: true
     },
@@ -33,21 +33,21 @@ const MessageSchema = new mongoose.Schema(
       type: String 
     },
 
-    // ৩. ইউনিক আইডেন্টিফায়ার (Optimistic UI & Duplicate Prevention)
+    // ৩. ইউনিক আইডেন্টিফায়ার
     tempId: { 
       type: String, 
-      unique: true, // এটি সার্ভারে ডুপ্লিকেট মেসেজ সেভ হওয়া আটকাবে
+      unique: true, 
       sparse: true  
     },
 
-    // ৪. কন্টেন্ট টাইপস (Photo, Video, Voice Support)
+    // ৪. কন্টেন্ট টাইপস
     text: {
       type: String,
       trim: true,
       default: ""
     },
     media: {
-      type: String, // Cloudinary বা ফাইল URL
+      type: String, 
       default: ""
     },
     mediaType: {
@@ -66,22 +66,39 @@ const MessageSchema = new mongoose.Schema(
     isEdited: {
       type: Boolean,
       default: false
+    },
+
+    // 🚀 PHASE-10: SELF-DESTRUCT & PRIVACY
+    isSelfDestruct: {
+      type: Boolean,
+      default: false
+    },
+    // এই ফিল্ডটি সেট করা থাকলে MongoDB স্বয়ংক্রিয়ভাবে মেসেজ ডিলিট করবে
+    expireAt: {
+      type: Date,
+      default: null,
+      index: true
     }
   },
   { 
-    timestamps: true, // এটি স্বয়ংক্রিয়ভাবে createdAt এবং updatedAt তৈরি করবে
+    timestamps: true, 
     toJSON: { virtuals: true },
     toObject: { virtuals: true }
   }
 );
 
 /* ==========================================================
-    🚀 PERFORMANCE OPTIMIZATION (Indexing)
+    🚀 PERFORMANCE & PRIVACY OPTIMIZATION (Indexing)
 ========================================================== */
-// চ্যাট হিস্ট্রি দ্রুত লোড করার জন্য কম্পাউন্ড ইনডেক্সিং
+
+// ১. TTL ইনডেক্স: expireAt-এ দেওয়া সময় পার হওয়ামাত্রই ডিলিট হবে
+// (expireAfterSeconds: 0 মানে একদম ওই নির্দিষ্ট সময়েই ডিলিট হবে)
+MessageSchema.index({ expireAt: 1 }, { expireAfterSeconds: 0 });
+
+// ২. চ্যাট হিস্ট্রি দ্রুত লোড করার জন্য কম্পাউন্ড ইনডেক্সিং
 MessageSchema.index({ conversationId: 1, createdAt: -1 });
 MessageSchema.index({ communityId: 1, createdAt: -1 });
 
-// মেমরি সেভ করার জন্য মডেল এক্সপোর্ট
+// মডেল এক্সপোর্ট
 const Message = mongoose.models.Message || mongoose.model("Message", MessageSchema);
 export default Message;
