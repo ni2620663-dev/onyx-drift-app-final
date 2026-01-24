@@ -7,7 +7,7 @@ import {
 } from 'react-icons/fa';
 import { useNavigate, useLocation } from 'react-router-dom';
 
-// 🧠 PHASE-8: DISPLAY NAME HELPER (WORLD-CLASS UX)
+// 🧠 DISPLAY NAME HELPER (WORLD-CLASS UX)
 const getDisplayName = (u) => {
   if (!u) return "Drifter";
   const name = u.name?.trim() || u.nickname?.trim() || u.displayName?.trim();
@@ -28,10 +28,11 @@ const FollowingPage = () => {
   const queryParams = new URLSearchParams(location.search);
   const targetUserId = queryParams.get('userId');
 
+  // Base API URL
   const API_URL = "https://onyx-drift-app-final-u29m.onrender.com";
 
   /**
-   * ১. নির্দিষ্ট প্রোফাইল ও পোস্ট লোড করা
+   * ১. প্রোফাইল ও পোস্ট লোড করা
    */
   const loadProfileData = useCallback(async (id) => {
     try {
@@ -59,21 +60,23 @@ const FollowingPage = () => {
   }, [getAccessTokenSilently]);
 
   /**
-   * ২. ইউজার সার্চ বা ডিসকভারি লিস্ট (Fixed API Params)
+   * ২. ইউজার সার্চ (Endpoint fixed: /api/user/search)
    */
   const loadDiscoveryList = useCallback(async (query = "") => {
     try {
       setLoading(true);
       const token = await getAccessTokenSilently();
+      
+      // ✅ FIXED: Changed /api/users/search to /api/user/search
       const res = await axios.get(`${API_URL}/api/user/search`, {
-        // Backend compatible 'q' and 'query' both handled
-        params: { q: query, query: query, limit: 20 },
+        params: { q: query, limit: 20 },
         headers: { Authorization: `Bearer ${token}` }
       });
+      
       setUsers(res.data || []);
       setPosts([]); 
     } catch (err) {
-      console.error("Search Error:", err);
+      console.error("🔍 Search Error:", err?.response?.data || err.message);
     } finally {
       setLoading(false);
     }
@@ -125,7 +128,7 @@ const FollowingPage = () => {
           <div className="relative w-full md:w-96">
             <input 
               type="text" 
-              placeholder="Search Name or ID (onyx_...)" 
+              placeholder="Search Name or ID..." 
               className="w-full bg-white/5 border border-white/10 rounded-2xl py-3.5 pl-12 pr-4 text-white text-xs outline-none focus:border-cyan-500/50 transition-all backdrop-blur-xl"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -148,13 +151,13 @@ const FollowingPage = () => {
                 onClick={() => navigate(`/following?userId=${encodeURIComponent(u.auth0Id || u.userId)}`)}
               >
                 <img 
-                  src={u.avatar || u.picture || `https://ui-avatars.com/api/?background=0d1117&color=00f2ff&name=${encodeURIComponent(getDisplayName(u))}`} 
-                  className="w-24 h-24 rounded-[2.2rem] object-cover border-4 border-white/5" 
+                  src={u.avatar || u.picture || `https://ui-avatars.com/api/?background=0d1117&color=00f2ff&bold=true&name=${encodeURIComponent(getDisplayName(u))}`} 
+                  className="w-24 h-24 rounded-[2.2rem] object-cover border-4 border-white/5 shadow-inner" 
                   alt="Avatar" 
                   onError={(e) => { e.target.src = "https://ui-avatars.com/api/?name=Drifter"; }}
                 />
                 {u.isVerified && (
-                  <div className="absolute -bottom-1 -right-1 bg-cyan-500 text-black p-1.5 rounded-full">
+                  <div className="absolute -bottom-1 -right-1 bg-cyan-500 text-black p-1.5 rounded-full ring-4 ring-[#0f172a]">
                     <FaUserCheck size={10} />
                   </div>
                 )}
@@ -168,7 +171,7 @@ const FollowingPage = () => {
             </div>
             
             <div className="mt-8 grid grid-cols-3 gap-3">
-                <button onClick={() => handleFollow(u.auth0Id || u.userId)} className="flex flex-col items-center p-3 bg-white/5 rounded-2xl text-cyan-500 hover:bg-cyan-500 hover:text-black transition-all">
+                <button onClick={() => handleFollow(u.auth0Id || u.userId)} className="flex flex-col items-center p-3 bg-white/5 rounded-2xl text-cyan-500 hover:bg-cyan-500 hover:text-black transition-all group">
                   <FaUserPlus size={16} />
                   <span className="text-[7px] font-black mt-1 uppercase">Follow</span>
                 </button>
@@ -182,7 +185,11 @@ const FollowingPage = () => {
                 </button>
             </div>
           </div>
-        )) : !loading && <p className="text-gray-500 text-center col-span-full py-20 font-black italic uppercase tracking-widest">No Drifter Signal Found.</p>}
+        )) : !loading && (
+          <div className="col-span-full py-20 text-center">
+            <p className="text-gray-500 font-black italic uppercase tracking-[0.3em] text-xs">No Drifter Signal Found</p>
+          </div>
+        )}
       </div>
 
       {/* Target User Posts */}
@@ -193,26 +200,26 @@ const FollowingPage = () => {
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {posts.length > 0 ? posts.map(post => (
-              <div key={post._id} className="bg-white/5 border border-white/10 p-5 rounded-[2rem] hover:border-cyan-500/30 transition-all">
+              <div key={post._id} className="bg-white/5 border border-white/10 p-5 rounded-[2rem] hover:border-cyan-500/30 transition-all group">
                 {post.media && (
-                  <div className="rounded-2xl overflow-hidden mb-4 aspect-video bg-black/40">
+                  <div className="rounded-2xl overflow-hidden mb-4 aspect-video bg-black/40 border border-white/5">
                     {post.mediaType === 'video' ? (
                       <video src={post.media} className="w-full h-full object-contain" controls />
                     ) : (
-                      <img src={post.media} className="w-full h-full object-cover" alt="Post" />
+                      <img src={post.media} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" alt="Post" />
                     )}
                   </div>
                 )}
                 <p className="text-gray-300 text-sm leading-relaxed">{post.text || post.content}</p>
               </div>
-            )) : <p className="text-gray-600 text-xs italic">No public signals transmitted yet...</p>}
+            )) : <p className="text-gray-600 text-xs italic tracking-widest">NO SIGNALS TRANSMITTED IN THIS SECTOR...</p>}
           </div>
         </div>
       )}
 
       {loading && (
         <div className="fixed inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm z-[100]">
-          <div className="w-10 h-10 border-4 border-t-cyan-500 border-cyan-500/20 rounded-full animate-spin shadow-[0_0_20px_rgba(6,182,212,0.5)]"></div>
+          <div className="w-10 h-10 border-4 border-t-cyan-500 border-cyan-500/20 rounded-full animate-spin shadow-[0_0_20px_rgba(6,182,212,0.3)]"></div>
         </div>
       )}
     </div>
