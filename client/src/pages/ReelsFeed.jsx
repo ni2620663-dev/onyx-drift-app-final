@@ -6,7 +6,24 @@ import { useAuth0 } from "@auth0/auth0-react";
 import axios from 'axios';
 import toast from 'react-hot-toast';
 
-// --- হেল্পার কম্পোনেন্ট: শেয়ার মেনু ---
+// --- হেল্পার: ডিসপ্লে নাম এবং ছবি বের করার লজিক ---
+const getUserData = (reel) => {
+  // ১. ইউজার অবজেক্ট বের করা (reel.user অথবা reel.author থেকে)
+  const u = reel.user || reel.author || {};
+  
+  // ২. আসল নাম খুঁজে বের করা
+  const name = u.name || reel.authorName || u.nickname || "Drifter";
+  
+  // ৩. প্রোফাইল পিকচার খুঁজে বের করা
+  const avatar = u.avatar || u.picture || reel.authorAvatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=0d1117&color=00f2ff&bold=true`;
+  
+  // ৪. আইডি বের করা
+  const id = u.auth0Id || u.userId || reel.authorAuth0Id || reel.author || "";
+
+  return { name, avatar, id };
+};
+
+// --- শেয়ার মেনু ---
 const ShareSheet = ({ reel, onClose }) => {
   const handleCopyLink = () => {
     const link = `${window.location.origin}/reels/${reel._id}`;
@@ -58,7 +75,7 @@ const ShareSheet = ({ reel, onClose }) => {
   );
 };
 
-// --- হেল্পার কম্পোনেন্ট: কমেন্ট সেকশন ---
+// --- কমেন্ট সেকশন ---
 const CommentSheet = ({ reel, onClose, API_URL }) => {
   const [comments, setComments] = useState(reel.comments || []);
   const [newComment, setNewComment] = useState("");
@@ -68,7 +85,7 @@ const CommentSheet = ({ reel, onClose, API_URL }) => {
     if (!newComment.trim()) return;
     const temp = { 
       text: newComment, 
-      userName: user?.nickname || "User", 
+      userName: user?.name || user?.nickname || "User", 
       userAvatar: user?.picture, 
       createdAt: new Date().toISOString() 
     };
@@ -84,7 +101,7 @@ const CommentSheet = ({ reel, onClose, API_URL }) => {
   return (
     <motion.div 
       initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
-      className="fixed bottom-0 left-0 right-0 bg-zinc-900/95 backdrop-blur-xl h-[70vh] rounded-t-[2rem] z-[3000] flex flex-col"
+      className="fixed bottom-0 left-0 right-0 bg-zinc-900/95 backdrop-blur-xl h-[70vh] rounded-t-[2rem] z-[3000] flex flex-col shadow-2xl"
     >
       <div className="p-4 border-b border-white/5 flex justify-between items-center">
         <span className="text-[10px] font-black uppercase tracking-widest text-cyan-400">Feedback ({comments.length})</span>
@@ -92,29 +109,29 @@ const CommentSheet = ({ reel, onClose, API_URL }) => {
       </div>
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {comments.map((c, i) => (
-          <div key={i} className="flex gap-3">
-            <img src={c.userAvatar} className="w-8 h-8 rounded-full border border-white/10" alt="" />
-            <div>
+          <div key={i} className="flex gap-3 items-start">
+            <img src={c.userAvatar || `https://ui-avatars.com/api/?name=${c.userName}`} className="w-8 h-8 rounded-full border border-white/10" alt="" />
+            <div className="bg-white/5 p-3 rounded-2xl rounded-tl-none flex-1">
               <p className="text-[10px] font-bold text-cyan-400">@{c.userName}</p>
-              <p className="text-sm text-white/90">{c.text}</p>
+              <p className="text-sm text-white/90 leading-tight mt-1">{c.text}</p>
             </div>
           </div>
         ))}
       </div>
-      <div className="p-4 flex gap-2 mb-4">
-        <input value={newComment} onChange={(e) => setNewComment(e.target.value)} placeholder="Type here..." className="flex-1 bg-white/5 border border-white/10 rounded-full px-5 py-2 text-white outline-none" />
-        <button onClick={handleSendComment} className="p-3 bg-cyan-500 rounded-full text-black"><Send size={18} /></button>
+      <div className="p-4 flex gap-2 mb-4 bg-zinc-900">
+        <input value={newComment} onChange={(e) => setNewComment(e.target.value)} placeholder="Signal your feedback..." className="flex-1 bg-white/5 border border-white/10 rounded-full px-5 py-3 text-white text-sm outline-none focus:border-cyan-500/50" />
+        <button onClick={handleSendComment} className="p-4 bg-cyan-500 rounded-full text-black hover:scale-105 transition-transform"><Send size={18} /></button>
       </div>
     </motion.div>
   );
 };
 
-// --- মেইন ফিড কম্পোনেন্ট ---
+// --- মেইন ফিড ---
 const ReelsFeed = () => {
   const [reels, setReels] = useState([]);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
-  const API_URL = "https://onyx-drift-app-final.onrender.com";
+  const API_URL = "https://onyx-drift-app-final-u29m.onrender.com";
 
   useEffect(() => {
     const fetchReels = async () => {
@@ -135,9 +152,9 @@ const ReelsFeed = () => {
     <div className="fixed inset-0 bg-black z-[100] overflow-y-scroll snap-y snap-mandatory hide-scrollbar">
       <button 
         onClick={() => navigate('/feed')} 
-        className="fixed top-6 left-4 z-[110] p-2 bg-black/40 backdrop-blur-md rounded-full text-white border border-white/10"
+        className="fixed top-6 left-4 z-[110] p-3 bg-black/40 backdrop-blur-md rounded-full text-white border border-white/10 hover:bg-white/10 transition-all"
       >
-        <ArrowLeft size={24} />
+        <ArrowLeft size={20} />
       </button>
       
       {loading ? (
@@ -148,7 +165,7 @@ const ReelsFeed = () => {
         reels.length > 0 ? (
           reels.map((reel) => <ReelItem key={reel._id} reel={reel} API_URL={API_URL} />)
         ) : (
-          <div className="h-full flex items-center justify-center text-white/50 font-bold">No Neural Reels Found.</div>
+          <div className="h-full flex items-center justify-center text-white/50 font-bold tracking-widest uppercase text-xs">No Neural Reels Signal.</div>
         )
       )}
       
@@ -160,35 +177,37 @@ const ReelsFeed = () => {
   );
 };
 
-// --- রিল আইটেম কম্পোনেন্ট ---
+// --- রিল আইটেম ---
 const ReelItem = ({ reel, API_URL }) => {
   const videoRef = useRef(null);
   const navigate = useNavigate();
-  const { getAccessTokenSilently, user } = useAuth0();
+  const { getAccessTokenSilently, user: currentUser } = useAuth0();
   const [isLiked, setIsLiked] = useState(false);
   const [likesCount, setLikesCount] = useState(reel.likes?.length || 0);
   const [isCommentOpen, setIsCommentOpen] = useState(false);
   const [isShareOpen, setIsShareOpen] = useState(false);
   const [showHeart, setShowHeart] = useState(false);
 
-  // লাইক স্ট্যাটাস ইনিশিয়ালাইজ করা
+  // ইউজারের ডাটা বের করা (Fixed Logic)
+  const drifter = getUserData(reel);
+
   useEffect(() => {
-    if (user && reel.likes) {
-      const myId = user.sub || user.id;
+    if (currentUser && reel.likes) {
+      const myId = currentUser.sub || currentUser.id;
       setIsLiked(reel.likes.includes(myId));
     }
-  }, [user, reel.likes]);
+  }, [currentUser, reel.likes]);
 
   useEffect(() => {
     const observer = new IntersectionObserver((entries) => {
       entries.forEach(entry => {
         if (entry.isIntersecting) {
-            videoRef.current?.play().catch(error => console.log("Autoplay prevented"));
+            videoRef.current?.play().catch(() => {});
         } else {
             videoRef.current?.pause();
         }
       });
-    }, { threshold: 0.6 });
+    }, { threshold: 0.8 });
     
     if (videoRef.current) observer.observe(videoRef.current);
     return () => observer.disconnect();
@@ -197,20 +216,14 @@ const ReelItem = ({ reel, API_URL }) => {
   const handleLike = async () => {
     try {
       const token = await getAccessTokenSilently();
-      // Optimistic UI Update
       setIsLiked(!isLiked);
       setLikesCount(prev => isLiked ? prev - 1 : prev + 1);
-      
-      // Fixed: changed .put to .post to match your backend route
       await axios.post(`${API_URL}/api/posts/${reel._id}/like`, {}, { 
         headers: { Authorization: `Bearer ${token}` } 
       });
     } catch (err) { 
-        console.error("Like failed");
-        // Revert on error
         setIsLiked(isLiked);
         setLikesCount(reel.likes?.length || 0);
-        toast.error("Neural Sync Failed");
     }
   };
 
@@ -245,38 +258,70 @@ const ReelItem = ({ reel, API_URL }) => {
         )}
       </AnimatePresence>
 
-      <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-black/60 z-[1005] pointer-events-none">
-        <div className="absolute bottom-0 left-0 right-0 p-5 pb-24 flex items-end justify-between pointer-events-auto">
+      <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/80 z-[1005] pointer-events-none">
+        <div className="absolute bottom-0 left-0 right-0 p-5 pb-28 flex items-end justify-between pointer-events-auto">
           
-          <div className="flex-1 text-white pr-10">
-            <div className="flex items-center gap-3 mb-3" onClick={() => navigate(`/profile/${reel.authorAuth0Id || reel.author}`)}>
-              <img src={reel.authorAvatar || `https://ui-avatars.com/api/?name=${reel.authorName}`} className="w-10 h-10 rounded-full border-2 border-white shadow-lg cursor-pointer" alt="" />
+          <div className="flex-1 text-white pr-12">
+            <div 
+              className="flex items-center gap-3 mb-4 cursor-pointer group" 
+              onClick={() => navigate(`/profile/${drifter.id}`)}
+            >
+              <div className="relative">
+                <img 
+                  src={drifter.avatar} 
+                  className="w-11 h-11 rounded-full border-2 border-cyan-500 shadow-[0_0_15px_rgba(6,182,212,0.5)] object-cover" 
+                  alt="" 
+                />
+                <div className="absolute -bottom-1 -right-1 bg-cyan-500 rounded-full p-0.5 border-2 border-black">
+                  <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
+                </div>
+              </div>
               <div className="flex flex-col">
-                <h4 className="font-bold text-[14px] hover:underline cursor-pointer">@{reel.authorName || "drifter"}</h4>
+                <h4 className="font-black text-sm tracking-tight text-white group-hover:text-cyan-400 transition-colors italic uppercase">
+                  {drifter.name}
+                </h4>
+                <p className="text-[9px] text-cyan-400/60 font-black tracking-widest uppercase">ID: {drifter.id?.slice(-8)}</p>
               </div>
             </div>
-            <p className="text-[13px] leading-tight mb-3 line-clamp-2">{reel.text}</p>
-            <div className="flex items-center gap-2 bg-black/40 backdrop-blur-md px-3 py-1 rounded-full w-fit">
+            
+            <p className="text-[13px] leading-relaxed mb-4 line-clamp-2 font-medium text-gray-200">
+              {reel.text || reel.content || "Neural transmission active..."}
+            </p>
+            
+            <div className="flex items-center gap-2 bg-white/5 backdrop-blur-md px-3 py-1.5 rounded-full w-fit border border-white/5">
               <Music size={12} className="animate-pulse text-cyan-400" />
-              <span className="text-[10px] text-cyan-500 font-medium">Neural Audio - {reel.authorName}</span>
+              <marquee className="text-[10px] text-cyan-500 font-black uppercase w-24">Neural Sync: {drifter.name}</marquee>
             </div>
           </div>
 
+          {/* Side Actions */}
           <div className="flex flex-col gap-6 items-center">
-            <div className="flex flex-col items-center gap-1 cursor-pointer" onClick={handleLike}>
-              <Heart fill={isLiked ? "#ff0050" : "none"} className={isLiked ? "text-[#ff0050]" : "text-white"} size={32} />
-              <span className="text-[10px] font-bold">{likesCount}</span>
+            <div className="flex flex-col items-center gap-1.5 cursor-pointer group" onClick={handleLike}>
+              <div className="p-2 rounded-full bg-black/20 backdrop-blur-md group-active:scale-125 transition-transform">
+                <Heart fill={isLiked ? "#ff0050" : "none"} className={isLiked ? "text-[#ff0050]" : "text-white"} size={30} />
+              </div>
+              <span className="text-[10px] font-black">{likesCount}</span>
             </div>
-            <div className="flex flex-col items-center gap-1 cursor-pointer" onClick={() => setIsCommentOpen(true)}>
-              <MessageCircle size={32} className="text-white" />
-              <span className="text-[10px] font-bold">{reel.comments?.length || 0}</span>
+            
+            <div className="flex flex-col items-center gap-1.5 cursor-pointer group" onClick={() => setIsCommentOpen(true)}>
+              <div className="p-2 rounded-full bg-black/20 backdrop-blur-md">
+                <MessageCircle size={30} className="text-white" />
+              </div>
+              <span className="text-[10px] font-black">{reel.comments?.length || 0}</span>
             </div>
-            <div className="flex flex-col items-center gap-1 cursor-pointer" onClick={() => setIsShareOpen(true)}>
-              <Share2 size={32} className="text-white" />
-              <span className="text-[10px] font-bold uppercase">Share</span>
+            
+            <div className="flex flex-col items-center gap-1.5 cursor-pointer group" onClick={() => setIsShareOpen(true)}>
+              <div className="p-2 rounded-full bg-black/20 backdrop-blur-md">
+                <Share2 size={30} className="text-white" />
+              </div>
+              <span className="text-[10px] font-black uppercase tracking-tighter text-[8px]">Share</span>
             </div>
-            <div className="w-10 h-10 rounded-full border-2 border-cyan-500/50 p-1 animate-spin-slow">
-              <img src={reel.authorAvatar} className="w-full h-full rounded-full object-cover" alt="" />
+            
+            <div className="mt-2 relative">
+               <div className="w-12 h-12 rounded-full border-2 border-dashed border-cyan-500/50 p-1 animate-spin-slow">
+                  <img src={drifter.avatar} className="w-full h-full rounded-full object-cover" alt="" />
+               </div>
+               <div className="absolute inset-0 bg-cyan-500/10 rounded-full animate-pulse pointer-events-none" />
             </div>
           </div>
         </div>
@@ -288,7 +333,7 @@ const ReelItem = ({ reel, API_URL }) => {
       </AnimatePresence>
 
       <style>{`
-        .animate-spin-slow { animation: spin 5s linear infinite; }
+        .animate-spin-slow { animation: spin 8s linear infinite; }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
       `}</style>
     </div>
