@@ -58,6 +58,15 @@ const Messenger = ({ socket }) => {
   
   const API_URL = (import.meta.env.VITE_API_BASE_URL || "https://onyx-drift-app-final-u29m.onrender.com").replace(/\/$/, "");
 
+  // 🛡️ Helper to get valid JWT token for Backend
+  const getAuthToken = useCallback(async () => {
+    return await getAccessTokenSilently({
+      authorizationParams: {
+        audience: "https://onyx-drift-api.com", // This fixes the 401 error
+      },
+    });
+  }, [getAccessTokenSilently]);
+
   useEffect(() => {
     if (user) setTempName(getDisplayName(user));
   }, [user]);
@@ -79,32 +88,31 @@ const Messenger = ({ socket }) => {
 
   const fetchConversations = useCallback(async () => {
     try {
-      const token = await getAccessTokenSilently();
+      const token = await getAuthToken();
       const res = await axios.get(`${API_URL}/api/messages/conversations`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setConversations(Array.isArray(res.data) ? res.data : []);
     } catch (err) { console.error(err); }
-  }, [getAccessTokenSilently, API_URL]);
+  }, [getAuthToken, API_URL]);
 
   const fetchMessages = useCallback(async (conversationId) => {
     if (!conversationId) return;
     try {
-      const token = await getAccessTokenSilently();
+      const token = await getAuthToken();
       const res = await axios.get(`${API_URL}/api/messages/${conversationId}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setMessages(Array.isArray(res.data) ? res.data : []);
     } catch (err) { if (err.response?.status === 404) setMessages([]); }
-  }, [getAccessTokenSilently, API_URL]);
+  }, [getAuthToken, API_URL]);
 
-  // 🔍 Handle Global User Search (Name/Email)
   const handleUserSearch = async (val) => {
     setSearchQuery(val);
     if (val.length > 2) {
       setIsSearching(true);
       try {
-        const token = await getAccessTokenSilently();
+        const token = await getAuthToken();
         const res = await axios.get(`${API_URL}/api/messages/search-users/${val}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
@@ -119,10 +127,9 @@ const Messenger = ({ socket }) => {
     }
   };
 
-  // 🤝 Start Conversation with Selected User
   const startConversation = async (receiverId) => {
     try {
-      const token = await getAccessTokenSilently();
+      const token = await getAuthToken();
       const res = await axios.post(`${API_URL}/api/messages/conversation`, 
         { receiverId },
         { headers: { Authorization: `Bearer ${token}` } }
@@ -146,7 +153,7 @@ const Messenger = ({ socket }) => {
     e.stopPropagation();
     if (window.confirm("Permanently purge this signal history?")) {
       try {
-        const token = await getAccessTokenSilently();
+        const token = await getAuthToken();
         await axios.delete(`${API_URL}/api/messages/conversation/${convId}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
@@ -194,7 +201,7 @@ const Messenger = ({ socket }) => {
     const s = socket?.current || socket;
     if (s) s.emit("sendMessage", { ...msgData, receiverId: currentChat.userDetails?.userId });
     try {
-      const token = await getAccessTokenSilently();
+      const token = await getAuthToken();
       await axios.post(`${API_URL}/api/messages/message`, msgData, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -289,7 +296,7 @@ const Messenger = ({ socket }) => {
                     {searchResults.map((u) => (
                       <div 
                         key={u._id} 
-                        onClick={() => startConversation(u.userId || u.sub)}
+                        onClick={() => startConversation(u.userId || u.sub || u.auth0Id)}
                         className="p-4 hover:bg-white/5 flex items-center gap-3 cursor-pointer border-b border-white/5 last:border-0"
                       >
                         <img src={getAvatar(u)} className="w-10 h-10 rounded-xl border border-white/10" alt="" />
