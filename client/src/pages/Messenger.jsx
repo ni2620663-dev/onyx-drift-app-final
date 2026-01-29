@@ -39,7 +39,11 @@ const Messenger = ({ socket }) => {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState("");
   const [activeTab, setActiveTab] = useState("chats");
-  const [searchQuery, setSearchQuery] = useState(""); // 🔍 Search State
+  const [searchQuery, setSearchQuery] = useState(""); 
+  
+  // 🔍 New Search States
+  const [searchResults, setSearchResults] = useState([]);
+  const [isSearching, setIsSearching] = useState(false);
   
   const [isIncognito, setIsIncognito] = useState(false);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
@@ -94,23 +98,50 @@ const Messenger = ({ socket }) => {
     } catch (err) { if (err.response?.status === 404) setMessages([]); }
   }, [getAccessTokenSilently, API_URL]);
 
-  // 🔍 ID Search Logic
-  const handleIdSearch = async (e) => {
-    if (e.key === "Enter" && searchQuery.trim()) {
+  // 🔍 Handle Global User Search (Name/Email)
+  const handleUserSearch = async (val) => {
+    setSearchQuery(val);
+    if (val.length > 2) {
+      setIsSearching(true);
       try {
         const token = await getAccessTokenSilently();
-        const res = await axios.post(`${API_URL}/api/messages/conversation`, 
-          { receiverId: searchQuery.trim() },
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-        fetchConversations();
-        setCurrentChat(res.data);
-        setSearchQuery("");
-      } catch (err) { alert("Signal identity not found!"); }
+        const res = await axios.get(`${API_URL}/api/messages/search-users/${val}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        setSearchResults(res.data);
+      } catch (err) {
+        console.error("Search failed");
+      } finally {
+        setIsSearching(false);
+      }
+    } else {
+      setSearchResults([]);
     }
   };
 
-  // 🗑️ Delete Chat Logic
+  // 🤝 Start Conversation with Selected User
+  const startConversation = async (receiverId) => {
+    try {
+      const token = await getAccessTokenSilently();
+      const res = await axios.post(`${API_URL}/api/messages/conversation`, 
+        { receiverId },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      fetchConversations();
+      setCurrentChat(res.data);
+      setSearchQuery("");
+      setSearchResults([]);
+    } catch (err) {
+      alert("Failed to sync with drifter.");
+    }
+  };
+
+  const handleIdSearch = async (e) => {
+    if (e.key === "Enter" && searchQuery.trim()) {
+      startConversation(searchQuery.trim());
+    }
+  };
+
   const deleteChat = async (e, convId) => {
     e.stopPropagation();
     if (window.confirm("Permanently purge this signal history?")) {
@@ -218,7 +249,7 @@ const Messenger = ({ socket }) => {
           </motion.div>
         ) : (
           <>
-            <header className="p-6 pt-12 flex flex-col gap-4 bg-black/40 border-b border-white/5 backdrop-blur-3xl">
+            <header className="p-6 pt-12 flex flex-col gap-4 bg-black/40 border-b border-white/5 backdrop-blur-3xl relative z-[300]">
               <div className="flex justify-between items-center">
                 <div className="flex items-center gap-4">
                   <div className="relative">
@@ -235,16 +266,42 @@ const Messenger = ({ socket }) => {
                 </button>
               </div>
 
-              {/* 🔍 Search Bar UI */}
-              <div className="relative flex items-center bg-white/5 border border-white/10 rounded-2xl px-4 py-2 mt-2 focus-within:border-cyan-500/50 transition-all">
-                <HiMagnifyingGlass size={20} className="text-zinc-500 mr-2" />
-                <input 
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  onKeyDown={handleIdSearch}
-                  placeholder="Enter User ID to Sync..."
-                  className="bg-transparent flex-1 outline-none text-sm text-white placeholder:text-zinc-600"
-                />
+              {/* 🔍 Enhanced Search Bar */}
+              <div className="relative">
+                <div className="relative flex items-center bg-white/5 border border-white/10 rounded-2xl px-4 py-2 mt-2 focus-within:border-cyan-500/50 transition-all">
+                  <HiMagnifyingGlass size={20} className={isSearching ? "text-cyan-500 animate-pulse" : "text-zinc-500 mr-2"} />
+                  <input 
+                    value={searchQuery}
+                    onChange={(e) => handleUserSearch(e.target.value)}
+                    onKeyDown={handleIdSearch}
+                    placeholder="Scan Identity or ID..."
+                    className="bg-transparent flex-1 outline-none text-sm text-white placeholder:text-zinc-600 ml-2"
+                  />
+                </div>
+
+                {/* 📑 Global Search Dropdown */}
+                {searchResults.length > 0 && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: -10 }} 
+                    animate={{ opacity: 1, y: 0 }} 
+                    className="absolute top-full left-0 w-full bg-[#121212] border border-white/10 rounded-2xl mt-2 z-[500] overflow-hidden shadow-2xl backdrop-blur-3xl"
+                  >
+                    {searchResults.map((u) => (
+                      <div 
+                        key={u._id} 
+                        onClick={() => startConversation(u.userId || u.sub)}
+                        className="p-4 hover:bg-white/5 flex items-center gap-3 cursor-pointer border-b border-white/5 last:border-0"
+                      >
+                        <img src={getAvatar(u)} className="w-10 h-10 rounded-xl border border-white/10" alt="" />
+                        <div className="flex-1">
+                          <p className="text-sm font-bold text-gray-200">{getDisplayName(u)}</p>
+                          <p className="text-[10px] text-zinc-500 uppercase font-black tracking-widest">Active Drifter</p>
+                        </div>
+                        <HiPlus className="text-cyan-500" size={18} />
+                      </div>
+                    ))}
+                  </motion.div>
+                )}
               </div>
             </header>
 
@@ -263,7 +320,6 @@ const Messenger = ({ socket }) => {
                           </div>
                       </div>
                       
-                      {/* 🗑️ Delete Button UI */}
                       <button 
                         onClick={(e) => deleteChat(e, c._id)}
                         className="absolute right-6 top-1/2 -translate-y-1/2 p-2 bg-red-500/10 text-red-500 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"

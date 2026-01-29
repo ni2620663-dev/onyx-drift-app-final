@@ -5,6 +5,36 @@ import auth from "../middleware/auth.js";
 // মডেল ইম্পোর্ট
 import Conversation from "../models/Conversation.js"; 
 import Message from "../models/Message.js";      
+import User from "../models/User.js"; // ইউজার সার্চ করার জন্য এটি প্রয়োজন
+
+/* ==========================================================
+   🔍 SEARCH USERS BY NAME/EMAIL
+========================================================== */
+router.get("/search-users/:query", auth, async (req, res) => {
+  try {
+    const { query } = req.params;
+    const currentUserId = req.user?.sub || req.user?.id;
+
+    // নাম, নিকনেম বা ইমেইল অনুযায়ী ইউজার খোঁজা (কেস সেনসিটিভ নয়)
+    const users = await User.find({
+      $and: [
+        { _id: { $ne: currentUserId } }, // নিজেকে সার্চ রেজাল্টে দেখাবে না
+        {
+          $or: [
+            { name: { $regex: query, $options: "i" } },
+            { nickname: { $regex: query, $options: "i" } },
+            { email: { $regex: query, $options: "i" } }
+          ]
+        }
+      ]
+    }).limit(10).select("-password"); // সিকিউরিটির জন্য পাসওয়ার্ড বাদ দিয়ে শুধু ১০ জন ইউজার
+
+    res.status(200).json(users);
+  } catch (err) {
+    console.error("User Search Error:", err);
+    res.status(500).json({ error: "Failed to locate drifters" });
+  }
+});
 
 /* ==========================================================
    1️⃣ GET ALL CONVERSATIONS
@@ -72,14 +102,12 @@ router.post("/conversation", auth, async (req, res) => {
 });
 
 /* ==========================================================
-   🗑️ DELETE CONVERSATION (New Option)
+   🗑️ DELETE CONVERSATION
 ========================================================== */
 router.delete("/conversation/:id", auth, async (req, res) => {
   try {
     const { id } = req.params;
-    // চ্যাট ডিলিট করা
     await Conversation.findByIdAndDelete(id);
-    // ওই চ্যাটের সব মেসেজও ডিলিট করা
     await Message.deleteMany({ conversationId: id });
     
     res.status(200).json({ message: "Conversation purged from neural link" });
