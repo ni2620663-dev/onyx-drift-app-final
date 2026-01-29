@@ -1,28 +1,35 @@
 import express from "express";
 const router = express.Router();
-import auth from "../middleware/auth.js"; 
+import { auth } from 'express-oauth2-jwt-bearer'; // সরাসরি ভেরিফিকেশন ব্যবহার করা ভালো
 
 // মডেল ইম্পোর্ট
 import Conversation from "../models/Conversation.js"; 
 import Message from "../models/Message.js";      
 import User from "../models/User.js"; 
 
+// 🛡️ JWT Middleware (যদি server.js এ ইতিমধ্যে app.use(checkJwt) করে থাকেন, তবে এখান থেকে বাদ দিতে পারেন)
+const checkJwt = auth({
+  audience: 'https://onyx-drift-api.com',
+  issuerBaseURL: `https://dev-6d0nxccsaycctfl1.us.auth0.com/`,
+  tokenSigningAlg: 'RS256'
+});
+
 /* ==========================================================
-   🔍 SEARCH USERS BY NAME/EMAIL (Optimized for your Model)
+    🔍 SEARCH USERS BY NAME/EMAIL
 ========================================================== */
-router.get("/search-users/:query", auth, async (req, res) => {
+router.get("/search-users/:query", checkJwt, async (req, res) => {
   try {
     const { query } = req.params;
-    const currentUserId = req.user?.sub || req.user?.id; // Auth0 থেকে আসা ID
+    // express-oauth2-jwt-bearer এ ডাটা req.auth.payload এ থাকে
+    const currentUserId = req.auth?.payload.sub; 
 
     if (!query || query.length < 2) {
       return res.status(400).json({ error: "Search query too short" });
     }
 
-    // আপনার মডেলের 'auth0Id' ফিল্ড অনুযায়ী সার্চ ফিল্টার
     const users = await User.find({
       $and: [
-        { auth0Id: { $ne: currentUserId } }, // নিজেকে লিস্ট থেকে বাদ দেওয়া
+        { auth0Id: { $ne: currentUserId } },
         {
           $or: [
             { name: { $regex: query, $options: "i" } },
@@ -38,16 +45,16 @@ router.get("/search-users/:query", auth, async (req, res) => {
     res.status(200).json(users);
   } catch (err) {
     console.error("User Search Error:", err);
-    res.status(500).json({ error: "Failed to locate drifters in the neural net" });
+    res.status(500).json({ error: "Failed to locate drifters" });
   }
 });
 
 /* ==========================================================
-   1️⃣ GET ALL CONVERSATIONS
+    1️⃣ GET ALL CONVERSATIONS
 ========================================================== */
-router.get("/conversations", auth, async (req, res) => {
+router.get("/conversations", checkJwt, async (req, res) => {
   try {
-    const currentUserId = req.user?.sub || req.user?.id;
+    const currentUserId = req.auth?.payload.sub;
 
     if (!currentUserId) {
       return res.status(401).json({ error: "Neural identity missing" });
@@ -65,11 +72,11 @@ router.get("/conversations", auth, async (req, res) => {
 });
 
 /* ==========================================================
-   2️⃣ CREATE OR GET CONVERSATION
+    2️⃣ CREATE OR GET CONVERSATION
 ========================================================== */
-router.post("/conversation", auth, async (req, res) => {
+router.post("/conversation", checkJwt, async (req, res) => {
   const { receiverId, isGroup, groupName, members } = req.body;
-  const senderId = req.user?.sub || req.user?.id;
+  const senderId = req.auth?.payload.sub;
 
   try {
     if (isGroup) {
@@ -88,7 +95,6 @@ router.post("/conversation", auth, async (req, res) => {
 
     if (!receiverId) return res.status(400).json({ error: "Receiver ID required" });
 
-    // receiverId এখানে ইউজারের auth0Id হিসেবে কাজ করবে
     let conversation = await Conversation.findOne({
       isGroup: false,
       members: { $all: [senderId, receiverId], $size: 2 },
@@ -109,28 +115,15 @@ router.post("/conversation", auth, async (req, res) => {
 });
 
 /* ==========================================================
-   🗑️ DELETE CONVERSATION
+    3️⃣ SAVE NEW MESSAGE
 ========================================================== */
-router.delete("/conversation/:id", auth, async (req, res) => {
-  try {
-    const { id } = req.params;
-    await Conversation.findByIdAndDelete(id);
-    await Message.deleteMany({ conversationId: id });
-    
-    res.status(200).json({ message: "Conversation purged from neural link" });
-  } catch (err) {
-    res.status(500).json({ error: "Failed to delete conversation" });
-  }
-});
-
-/* ==========================================================
-   3️⃣ SAVE NEW MESSAGE
-========================================================== */
-router.post("/message", auth, async (req, res) => {
+router.post("/message", checkJwt, async (req, res) => {
   try {
     const { conversationId, text, media, mediaType, isGroup, tempId, isSelfDestruct } = req.body;
-    const senderId = req.user?.sub || req.user?.id;
-    const senderName = req.user?.name || "Drifter";
+    const senderId = req.auth?.payload.sub;
+    
+    // নোট: ইউজারনেম ডাটাবেস থেকে আনা ভালো, অথবা ফ্রন্টএন্ড থেকে পাঠানো যেতে পারে
+    const senderName = "Drifter"; 
 
     if (!conversationId) {
       return res.status(400).json({ error: "Conversation ID required" });
@@ -176,9 +169,9 @@ router.post("/message", auth, async (req, res) => {
 });
 
 /* ==========================================================
-   4️⃣ GET MESSAGES
+    4️⃣ GET MESSAGES
 ========================================================== */
-router.get("/:conversationId", auth, async (req, res) => {
+router.get("/:conversationId", checkJwt, async (req, res) => {
   try {
     const { conversationId } = req.params;
     

@@ -5,11 +5,20 @@ import cors from "cors";
 import dotenv from "dotenv";
 import Redis from "ioredis"; 
 import { v2 as cloudinary } from 'cloudinary';
+import { auth } from 'express-oauth2-jwt-bearer'; // <--- নতুন ইম্পোর্ট
 
 // ১. কনফিগারেশন ও ডাটাবেস কানেকশন
 dotenv.config();
 import connectDB from "./config/db.js"; 
 connectDB();
+
+// 🛡️ Auth0 JWT ভেরিফিকেশন মিডলওয়্যার
+// এটি নিশ্চিত করবে যে আপনার ফ্রন্টএন্ড থেকে পাঠানো টোকেনটি ভ্যালিড কি না
+const checkJwt = auth({
+  audience: 'https://onyx-drift-api.com', // আপনার Auth0 API Identifier
+  issuerBaseURL: `https://dev-6d0nxccsaycctfl1.us.auth0.com/`, // আপনার Auth0 Domain
+  tokenSigningAlg: 'RS256'
+});
 
 cloudinary.config({ 
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME, 
@@ -28,12 +37,12 @@ import reelRoutes from "./routes/reels.js";
 const app = express();
 const server = http.createServer(app);
 
-// ৩. CORS কনফিগারেশন (আপনার Vercel লিঙ্কটি এখানে যোগ করুন)
+// ৩. CORS কনফিগারেশন
 const allowedOrigins = [
     "http://localhost:5173", 
-    "https://onyx-drift-app-final.onrender.com", // আপনার নতুন রেন্ডার ইউআরএল
+    "https://onyx-drift-app-final.onrender.com",
     "https://onyx-drift-app-final-u29m.onrender.com",
-    "https://onyx-drift-app-final-llhhmwcfh-naimusshakib582-pixels-projects.vercel.app", // আপনার Vercel ফ্রন্টএন্ড ইউআরএল এখানে দিন
+    "https://onyx-drift-app-final-llhhmwcfh-naimusshakib582-pixels-projects.vercel.app", 
     "https://www.onyx-drift.com",
     "https://onyx-drift.com"
 ];
@@ -64,7 +73,7 @@ const io = new Server(server, {
     pingInterval: 25000
 });
 
-// ৫. Redis Setup (Render-এ যদি Redis না থাকে তবে এটি অটো স্কিপ করবে)
+// ৫. Redis Setup
 const redis = process.env.REDIS_URL ? new Redis(process.env.REDIS_URL, {
     maxRetriesPerRequest: null,
     enableReadyCheck: false
@@ -74,7 +83,10 @@ const redis = process.env.REDIS_URL ? new Redis(process.env.REDIS_URL, {
 app.use("/api/user", userRoutes); 
 app.use("/api/profile", profileRoutes); 
 app.use("/api/posts", postRoutes); 
-app.use("/api/messages", messageRoutes); 
+
+// 🚨 এখানে checkJwt যোগ করা হয়েছে যাতে মেসেজিং সুরক্ষিত থাকে
+app.use("/api/messages", checkJwt, messageRoutes); 
+
 app.use("/api/stories", storyRoute);
 app.use("/api/reels", reelRoutes); 
 
@@ -85,7 +97,6 @@ app.get("/", (req, res) => res.send("🚀 OnyxDrift Neural Core is Online!"));
 ========================================================== */
 io.on("connection", (socket) => {
     
-    // ইউজার অনলাইন হ্যান্ডলিং
     socket.on("addNewUser", async (userId) => {
         if (!userId) return;
         socket.join(userId); 
@@ -96,10 +107,8 @@ io.on("connection", (socket) => {
         }
     });
 
-    // মেসেজিং (প্রাইভেট ও গ্রুপ)
     socket.on("sendMessage", async (data) => {
         const { receiverId, isGroup, members } = data;
-
         if (isGroup && members) {
             members.forEach(memberId => {
                 if (memberId !== data.senderId) {
@@ -111,7 +120,6 @@ io.on("connection", (socket) => {
         }
     });
 
-    // টাইপিং ইন্ডিকেটর
     socket.on("typing", (data) => {
         if (data.isGroup && data.members) {
             data.members.forEach(mId => {
@@ -122,7 +130,6 @@ io.on("connection", (socket) => {
         }
     });
 
-    // ভিডিও কল ও সিগন্যালিং
     socket.on("callUser", (data) => {
         io.to(data.userToCall).emit("incomingCall", {
             signal: data.signalData,
@@ -152,7 +159,6 @@ io.on("connection", (socket) => {
     });
 });
 
-// Render পোর্টের জন্য ফিক্স
 const PORT = process.env.PORT || 10000;
 server.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Core Active on Port: ${PORT}`);
