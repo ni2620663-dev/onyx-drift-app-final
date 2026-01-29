@@ -72,6 +72,23 @@ router.post("/conversation", auth, async (req, res) => {
 });
 
 /* ==========================================================
+   🗑️ DELETE CONVERSATION (New Option)
+========================================================== */
+router.delete("/conversation/:id", auth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    // চ্যাট ডিলিট করা
+    await Conversation.findByIdAndDelete(id);
+    // ওই চ্যাটের সব মেসেজও ডিলিট করা
+    await Message.deleteMany({ conversationId: id });
+    
+    res.status(200).json({ message: "Conversation purged from neural link" });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to delete conversation" });
+  }
+});
+
+/* ==========================================================
    3️⃣ SAVE NEW MESSAGE
 ========================================================== */
 router.post("/message", auth, async (req, res) => {
@@ -104,7 +121,6 @@ router.post("/message", auth, async (req, res) => {
 
     const savedMessage = await newMessage.save();
 
-    // চ্যাট লিস্ট প্রিভিউ আপডেট (Front-end expectation অনুযায়ী object format)
     let lastMsgText = text;
     if (isSelfDestruct) lastMsgText = "👻 Self-destructing message";
     else if (mediaType === "image") lastMsgText = "📷 Photo transmitted";
@@ -125,10 +141,8 @@ router.post("/message", auth, async (req, res) => {
 });
 
 /* ==========================================================
-   4️⃣ GET MESSAGES (Fixed 404 Error)
+   4️⃣ GET MESSAGES
 ========================================================== */
-// 💡 এখানে "/message/:conversationId" এর বদলে শুধু "/:conversationId" হবে
-// কারণ server.js এ অলরেডি "/api/messages" ডিফাইন করা আছে।
 router.get("/:conversationId", auth, async (req, res) => {
   try {
     const { conversationId } = req.params;
@@ -137,7 +151,6 @@ router.get("/:conversationId", auth, async (req, res) => {
       conversationId: conversationId,
     }).sort({ createdAt: 1 });
     
-    // মেসেজ না থাকলেও empty array পাঠানো উচিত, যাতে 404 না আসে
     res.status(200).json(messages || []);
   } catch (err) {
     res.status(500).json({ error: "Neural history inaccessible" });
@@ -170,7 +183,6 @@ router.patch("/group/kick/:conversationId", auth, async (req, res) => {
   }
 });
 
-// Admin promote and other routes remain same...
 router.patch("/group/promote/:conversationId", auth, async (req, res) => {
   try {
     const { conversationId } = req.params;

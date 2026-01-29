@@ -13,10 +13,9 @@ import {
 } from "react-icons/hi2";
 import { AnimatePresence, motion } from "framer-motion";
 
-// 🧠 Phase-7: Display Name & Avatar Logic (Fixed & Secure)
+// 🧠 Phase-7: Display Name & Avatar Logic
 const getDisplayName = (u) => {
   if (!u) return "Drifter";
-  // নাম খোঁজার ক্রমানুসারে চেক করা
   const name = u.name || u.nickname || u.displayName || u.username || (u.email ? u.email.split('@')[0] : null);
   const fallback = u.userId?.slice(-6) || u.sub?.slice(-6) || "User";
   return name ? name.trim() : `@${fallback}`;
@@ -24,7 +23,6 @@ const getDisplayName = (u) => {
 
 const getAvatar = (u) => {
   if (u?.picture || u?.avatar || u?.image) return u.picture || u.avatar || u.image;
-  // ছবি না থাকলে ডাইনামিক এভাতার জেনারেট করা
   const name = getDisplayName(u);
   return `https://ui-avatars.com/api/?background=0D8ABC&color=fff&name=${encodeURIComponent(name)}`;
 };
@@ -33,25 +31,20 @@ const Messenger = ({ socket }) => {
   const { user, getAccessTokenSilently, isAuthenticated } = useAuth0();
   const navigate = useNavigate();
 
-  // Cloudinary Configs
   const CLOUD_NAME = "dx0cf0ggu";
   const UPLOAD_PRESET = "onyx_upload"; 
 
-  // States
   const [conversations, setConversations] = useState([]);
   const [currentChat, setCurrentChat] = useState(null);
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState("");
   const [activeTab, setActiveTab] = useState("chats");
+  const [searchQuery, setSearchQuery] = useState(""); // 🔍 Search State
   
-  const [incomingCall, setIncomingCall] = useState(null);
-  const [isCalling, setIsCalling] = useState(false);
   const [isIncognito, setIsIncognito] = useState(false);
-
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [statusText, setStatusText] = useState("Vibing with OnyxDrift ⚡");
   const [tempName, setTempName] = useState("");
-
   const [isSelfDestruct, setIsSelfDestruct] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
 
@@ -61,39 +54,25 @@ const Messenger = ({ socket }) => {
   
   const API_URL = (import.meta.env.VITE_API_BASE_URL || "https://onyx-drift-app-final-u29m.onrender.com").replace(/\/$/, "");
 
-  // নাম ইনিশিয়ালাইজ করা
   useEffect(() => {
-    if (user) {
-      setTempName(getDisplayName(user));
-    }
+    if (user) setTempName(getDisplayName(user));
   }, [user]);
 
-  // --- 🛠 Cloudinary Upload ---
   const uploadToCloudinary = async (file, type) => {
     const formData = new FormData();
     let fileToUpload = file;
-
     if (type === "voice" || type === "audio") {
       fileToUpload = new File([file], `voice-${Date.now()}.wav`, { type: "audio/wav" });
     }
-
     formData.append("file", fileToUpload);
     formData.append("upload_preset", UPLOAD_PRESET); 
     const resourceType = (type === "voice" || type === "audio") ? "video" : "auto"; 
-    
     try {
-      const response = await axios.post(
-        `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/${resourceType}/upload`,
-        formData
-      );
+      const response = await axios.post(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/${resourceType}/upload`, formData);
       return response.data.secure_url;
-    } catch (err) {
-      console.error("Cloudinary Error:", err);
-      return null;
-    }
+    } catch (err) { return null; }
   };
 
-  // --- 📡 Data Fetching ---
   const fetchConversations = useCallback(async () => {
     try {
       const token = await getAccessTokenSilently();
@@ -101,7 +80,7 @@ const Messenger = ({ socket }) => {
         headers: { Authorization: `Bearer ${token}` }
       });
       setConversations(Array.isArray(res.data) ? res.data : []);
-    } catch (err) { console.error("Fetch Conv Error", err); }
+    } catch (err) { console.error(err); }
   }, [getAccessTokenSilently, API_URL]);
 
   const fetchMessages = useCallback(async (conversationId) => {
@@ -112,54 +91,61 @@ const Messenger = ({ socket }) => {
         headers: { Authorization: `Bearer ${token}` }
       });
       setMessages(Array.isArray(res.data) ? res.data : []);
-    } catch (err) { 
-        console.error("Fetch Msgs Error", err);
-        // 404 হলে মেসেজ লিস্ট খালি করে দেওয়া যাতে পুরনো এরর ডাটা না দেখায়
-        if (err.response?.status === 404) {
-            setMessages([]);
-        }
-    }
+    } catch (err) { if (err.response?.status === 404) setMessages([]); }
   }, [getAccessTokenSilently, API_URL]);
 
-  useEffect(() => {
-    if (currentChat?._id) fetchMessages(currentChat._id);
-  }, [currentChat, fetchMessages]);
+  // 🔍 ID Search Logic
+  const handleIdSearch = async (e) => {
+    if (e.key === "Enter" && searchQuery.trim()) {
+      try {
+        const token = await getAccessTokenSilently();
+        const res = await axios.post(`${API_URL}/api/messages/conversation`, 
+          { receiverId: searchQuery.trim() },
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        fetchConversations();
+        setCurrentChat(res.data);
+        setSearchQuery("");
+      } catch (err) { alert("Signal identity not found!"); }
+    }
+  };
 
-  useEffect(() => {
-    if (isAuthenticated) fetchConversations();
-  }, [isAuthenticated, fetchConversations]);
+  // 🗑️ Delete Chat Logic
+  const deleteChat = async (e, convId) => {
+    e.stopPropagation();
+    if (window.confirm("Permanently purge this signal history?")) {
+      try {
+        const token = await getAccessTokenSilently();
+        await axios.delete(`${API_URL}/api/messages/conversation/${convId}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        setConversations(prev => prev.filter(c => c._id !== convId));
+        if (currentChat?._id === convId) setCurrentChat(null);
+      } catch (err) { alert("Failed to delete."); }
+    }
+  };
 
-  // --- ⚡ Socket Events ---
+  useEffect(() => { if (currentChat?._id) fetchMessages(currentChat._id); }, [currentChat, fetchMessages]);
+  useEffect(() => { if (isAuthenticated) fetchConversations(); }, [isAuthenticated, fetchConversations]);
+
   useEffect(() => {
     const s = socket?.current || socket;
     if (!s || !user?.sub) return;
-
     s.emit("addNewUser", user.sub);
-
     const messageHandler = (data) => {
       if (currentChat?._id === data.conversationId) {
         setMessages((prev) => [...prev, data]);
-        if(data.isSelfDestruct) {
-          setTimeout(() => setMessages(prev => prev.filter(m => m._id !== data._id)), 10000);
-        }
+        if(data.isSelfDestruct) setTimeout(() => setMessages(prev => prev.filter(m => m._id !== data._id)), 10000);
       }
       fetchConversations();
     };
-
     s.on("getMessage", messageHandler);
-    s.on("incomingCall", (data) => setIncomingCall(data));
-
-    return () => {
-      s.off("getMessage", messageHandler);
-      s.off("incomingCall");
-    };
+    return () => s.off("getMessage", messageHandler);
   }, [socket, currentChat, user, fetchConversations]);
 
-  // --- 🖊 Message Actions ---
   const handleSend = async (e, mediaUrl = null, mediaType = null) => {
     if (e) e.preventDefault();
     if (!newMessage.trim() && !mediaUrl) return;
-
     const tempId = Date.now().toString();
     const msgData = {
       _id: tempId,
@@ -172,25 +158,19 @@ const Messenger = ({ socket }) => {
       isSelfDestruct: isSelfDestruct,
       createdAt: new Date()
     };
-
     setMessages((prev) => [...prev, msgData]);
     setNewMessage("");
-
     const s = socket?.current || socket;
     if (s) s.emit("sendMessage", { ...msgData, receiverId: currentChat.userDetails?.userId });
-
     try {
       const token = await getAccessTokenSilently();
       await axios.post(`${API_URL}/api/messages/message`, msgData, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      if (isSelfDestruct) {
-        setTimeout(() => setMessages(prev => prev.filter(m => m._id !== tempId)), 10000);
-      }
-    } catch (err) { console.error("Send Error", err); }
+      if (isSelfDestruct) setTimeout(() => setMessages(prev => prev.filter(m => m._id !== tempId)), 10000);
+    } catch (err) { console.error(err); }
   };
 
-  // --- 🎙 Voice Recording ---
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -207,32 +187,23 @@ const Messenger = ({ socket }) => {
     } catch (err) { alert("Mic access denied"); }
   };
 
-  const stopRecording = () => {
-    if (mediaRecorder.current) {
-      mediaRecorder.current.stop();
-      setIsRecording(false);
-    }
-  };
-
+  const stopRecording = () => { if (mediaRecorder.current) { mediaRecorder.current.stop(); setIsRecording(false); } };
   useEffect(() => { scrollRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
   return (
     <div className={`fixed inset-0 text-white font-sans overflow-hidden z-[9999] transition-colors duration-500 ${isIncognito ? 'bg-[#0a0010]' : 'bg-[#02040a]'}`}>
       
-      {/* 📱 Sidebar / Main List */}
-      <div className={`flex flex-col h-full w-full ${currentChat || isCalling ? 'hidden md:flex' : 'flex'}`}>
+      <div className={`flex flex-col h-full w-full ${currentChat ? 'hidden md:flex' : 'flex'}`}>
         
         {activeTab === "settings" ? (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex-1 overflow-y-auto p-6 pt-12 no-scrollbar">
             <h2 className="text-3xl font-black mb-8 uppercase italic text-cyan-500 tracking-tighter">System Config</h2>
             <div className="flex flex-col items-center gap-6 mb-10">
-                <div className="relative group">
-                    <img src={getAvatar(user)} className="w-28 h-28 rounded-[3rem] border-4 border-cyan-500/20 object-cover" alt="Me" />
-                </div>
+                <img src={getAvatar(user)} className="w-28 h-28 rounded-[3rem] border-4 border-cyan-500/20 object-cover" alt="Me" />
                 <div className="text-center w-full space-y-2">
                     {isEditingProfile ? (
                         <div className="space-y-3">
-                            <input value={tempName} onChange={(e) => setTempName(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-2xl py-3 px-4 text-center text-white" placeholder="Display Name" />
+                            <input value={tempName} onChange={(e) => setTempName(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-2xl py-3 px-4 text-center text-white outline-none focus:border-cyan-500" placeholder="Display Name" />
                             <button onClick={() => setIsEditingProfile(false)} className="w-full bg-cyan-500 text-black py-3 rounded-2xl font-black uppercase text-xs">Save Changes</button>
                         </div>
                     ) : (
@@ -263,20 +234,42 @@ const Messenger = ({ socket }) => {
                     <HiOutlineEyeSlash size={24}/>
                 </button>
               </div>
+
+              {/* 🔍 Search Bar UI */}
+              <div className="relative flex items-center bg-white/5 border border-white/10 rounded-2xl px-4 py-2 mt-2 focus-within:border-cyan-500/50 transition-all">
+                <HiMagnifyingGlass size={20} className="text-zinc-500 mr-2" />
+                <input 
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onKeyDown={handleIdSearch}
+                  placeholder="Enter User ID to Sync..."
+                  className="bg-transparent flex-1 outline-none text-sm text-white placeholder:text-zinc-600"
+                />
+              </div>
             </header>
 
             <div className="flex-1 overflow-y-auto pb-32 px-4 mt-4 no-scrollbar">
                 <div className="space-y-1">
                   {conversations.map(c => (
-                    <div key={c._id} onClick={() => setCurrentChat(c)} className="p-4 flex items-center gap-4 active:bg-white/10 rounded-[2.2rem] transition-all cursor-pointer">
-                        <img src={getAvatar(c.userDetails)} className="w-14 h-14 rounded-2xl object-cover" alt="" />
-                        <div className="flex-1 min-w-0">
-                          <div className="flex justify-between items-center">
-                              <span className="font-bold text-gray-100 truncate">{getDisplayName(c.userDetails)}</span>
-                              <HiCheckBadge className="text-cyan-500" size={16}/>
+                    <div key={c._id} className="group relative">
+                      <div onClick={() => setCurrentChat(c)} className="p-4 flex items-center gap-4 active:bg-white/10 rounded-[2.2rem] transition-all cursor-pointer">
+                          <img src={getAvatar(c.userDetails)} className="w-14 h-14 rounded-2xl object-cover shadow-lg shadow-black/50" alt="" />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex justify-between items-center">
+                                <span className="font-bold text-gray-100 truncate">{getDisplayName(c.userDetails)}</span>
+                                <HiCheckBadge className="text-cyan-500" size={16}/>
+                            </div>
+                            <p className="text-[12px] text-zinc-500 truncate">{c.lastMessage?.text || "New signal transmission..."}</p>
                           </div>
-                          <p className="text-[12px] text-zinc-500 truncate">{c.lastMessage?.text || "New signal transmission..."}</p>
-                        </div>
+                      </div>
+                      
+                      {/* 🗑️ Delete Button UI */}
+                      <button 
+                        onClick={(e) => deleteChat(e, c._id)}
+                        className="absolute right-6 top-1/2 -translate-y-1/2 p-2 bg-red-500/10 text-red-500 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <HiOutlineTrash size={18} />
+                      </button>
                     </div>
                   ))}
                 </div>
@@ -284,7 +277,6 @@ const Messenger = ({ socket }) => {
           </>
         )}
 
-        {/* 🧭 Navigation Bar */}
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[92%] h-20 bg-black/80 backdrop-blur-3xl rounded-[2.5rem] border border-white/10 flex justify-around items-center z-[110]">
             <button onClick={() => setActiveTab("chats")} className={`p-4 ${activeTab === "chats" ? 'text-cyan-500' : 'text-zinc-600'}`}><HiChatBubbleLeftRight size={28} /></button>
             <button onClick={() => setActiveTab("groups")} className={`p-4 ${activeTab === "groups" ? 'text-cyan-500' : 'text-zinc-600'}`}><HiUsers size={28} /></button>
@@ -292,7 +284,6 @@ const Messenger = ({ socket }) => {
         </div>
       </div>
 
-      {/* 💬 Chat View */}
       <AnimatePresence>
       {currentChat && (
         <motion.div initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }} transition={{ type: "spring", stiffness: 300, damping: 30 }} className={`fixed inset-0 z-[200] flex flex-col ${isIncognito ? 'bg-[#0a0010]' : 'bg-[#02040a]'}`}>
