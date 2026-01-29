@@ -182,6 +182,7 @@ const PremiumHomeFeed = ({ searchQuery = "", isPostModalOpen, setIsPostModalOpen
       const formData = new FormData();
       formData.append("text", postText);
       
+      // ফাইল পাঠানোর লজিক ফিক্স করা হয়েছে (Field Name: 'media')
       if (mediaFile) {
         formData.append("media", mediaFile);
       }
@@ -216,7 +217,6 @@ const PremiumHomeFeed = ({ searchQuery = "", isPostModalOpen, setIsPostModalOpen
     } catch (err) { alert("Deletion failed."); }
   };
 
-  // সার্চ অনুযায়ী ফিল্টার করার লজিক এখানে যোগ করা হয়েছে
   const filteredPosts = posts.filter(post => 
     post.text?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     post.authorName?.toLowerCase().includes(searchQuery.toLowerCase())
@@ -225,10 +225,10 @@ const PremiumHomeFeed = ({ searchQuery = "", isPostModalOpen, setIsPostModalOpen
   return (
     <div className="w-full min-h-screen bg-[#02040a] text-white pb-32 font-sans">
       
-      {/* --- Header --- */}
+      {/* --- Simple Header --- */}
       <div className="max-w-[550px] mx-auto px-4 flex justify-between items-center py-6 bg-[#02040a] border-b border-white/5">
           <div className="flex items-center gap-2">
-              <div className="w-2.5 h-2.5 bg-cyan-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(6,182,212,0.5)]" />
+              <div className="w-2.5 h-2.5 bg-cyan-500 rounded-full shadow-[0_0_10px_rgba(6,182,212,0.5)]" />
               <h2 className="text-xs font-black uppercase tracking-[0.3em] text-gray-100">Onyx Drift</h2>
           </div>
           <div className="flex items-center gap-3">
@@ -251,8 +251,6 @@ const PremiumHomeFeed = ({ searchQuery = "", isPostModalOpen, setIsPostModalOpen
               
               return (
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} key={post._id} className="flex gap-3 py-6 border-b border-white/5 relative">
-                  
-                  {/* Avatar Section */}
                   <div className="relative flex-shrink-0">
                     <img 
                       onClick={(e) => { e.stopPropagation(); navigate(`/profile/${authorId}`); }}
@@ -262,7 +260,6 @@ const PremiumHomeFeed = ({ searchQuery = "", isPostModalOpen, setIsPostModalOpen
                     />
                   </div>
 
-                  {/* Content Section */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-1.5 overflow-hidden group">
@@ -398,7 +395,7 @@ const PremiumHomeFeed = ({ searchQuery = "", isPostModalOpen, setIsPostModalOpen
         {isPostModalOpen && (
           <div className="fixed inset-0 z-[2000] flex items-start sm:items-center justify-center pt-4">
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsPostModalOpen(false)} className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
-            <motion.div initial={{ scale: 0.95, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.95, opacity: 0, y: 20 }} className="relative w-full max-lg bg-[#0d1117] rounded-2xl border border-white/10 shadow-2xl mx-4 overflow-hidden">
+            <motion.div initial={{ scale: 0.95, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.95, opacity: 0, y: 20 }} className="relative w-full max-w-lg bg-[#0d1117] rounded-2xl border border-white/10 shadow-2xl mx-4 overflow-hidden">
               <div className="p-5">
                 <div className="flex justify-between items-center mb-4">
                   <button onClick={() => setIsPostModalOpen(false)} className="text-gray-400 hover:text-white p-2"><FaTimes size={18}/></button>
@@ -410,6 +407,14 @@ const PremiumHomeFeed = ({ searchQuery = "", isPostModalOpen, setIsPostModalOpen
                   <img src={user?.picture} className="w-10 h-10 rounded-full border border-white/10" alt="me" />
                   <textarea autoFocus value={postText} onChange={(e) => setPostText(e.target.value)} placeholder="What's happening?" className="w-full bg-transparent text-[19px] text-gray-100 placeholder-gray-600 outline-none resize-none min-h-[150px]" />
                 </div>
+
+                {mediaFile && (
+                  <div className="mt-2 text-xs text-cyan-500 bg-cyan-500/10 p-2 rounded border border-cyan-500/20 flex justify-between items-center">
+                    <span>Selected: {mediaFile.name}</span>
+                    <FaTimes className="cursor-pointer" onClick={() => setMediaFile(null)} />
+                  </div>
+                )}
+
                 <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-between">
                     <button onClick={() => postMediaRef.current.click()} className="text-cyan-500 hover:bg-cyan-500/10 p-2.5 rounded-full transition-colors"><FaImage size={22} /></button>
                     <input type="file" ref={postMediaRef} onChange={(e) => setMediaFile(e.target.files[0])} hidden accept="image/*,video/*" />
