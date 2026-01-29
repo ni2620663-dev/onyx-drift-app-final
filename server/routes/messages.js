@@ -5,20 +5,24 @@ import auth from "../middleware/auth.js";
 // মডেল ইম্পোর্ট
 import Conversation from "../models/Conversation.js"; 
 import Message from "../models/Message.js";      
-import User from "../models/User.js"; // ইউজার সার্চ করার জন্য এটি প্রয়োজন
+import User from "../models/User.js"; 
 
 /* ==========================================================
-   🔍 SEARCH USERS BY NAME/EMAIL
+   🔍 SEARCH USERS BY NAME/EMAIL (Optimized for your Model)
 ========================================================== */
 router.get("/search-users/:query", auth, async (req, res) => {
   try {
     const { query } = req.params;
-    const currentUserId = req.user?.sub || req.user?.id;
+    const currentUserId = req.user?.sub || req.user?.id; // Auth0 থেকে আসা ID
 
-    // নাম, নিকনেম বা ইমেইল অনুযায়ী ইউজার খোঁজা (কেস সেনসিটিভ নয়)
+    if (!query || query.length < 2) {
+      return res.status(400).json({ error: "Search query too short" });
+    }
+
+    // আপনার মডেলের 'auth0Id' ফিল্ড অনুযায়ী সার্চ ফিল্টার
     const users = await User.find({
       $and: [
-        { _id: { $ne: currentUserId } }, // নিজেকে সার্চ রেজাল্টে দেখাবে না
+        { auth0Id: { $ne: currentUserId } }, // নিজেকে লিস্ট থেকে বাদ দেওয়া
         {
           $or: [
             { name: { $regex: query, $options: "i" } },
@@ -27,12 +31,14 @@ router.get("/search-users/:query", auth, async (req, res) => {
           ]
         }
       ]
-    }).limit(10).select("-password"); // সিকিউরিটির জন্য পাসওয়ার্ড বাদ দিয়ে শুধু ১০ জন ইউজার
+    })
+    .limit(10)
+    .select("name nickname email avatar auth0Id isVerified neuralRank"); 
 
     res.status(200).json(users);
   } catch (err) {
     console.error("User Search Error:", err);
-    res.status(500).json({ error: "Failed to locate drifters" });
+    res.status(500).json({ error: "Failed to locate drifters in the neural net" });
   }
 });
 
@@ -59,7 +65,7 @@ router.get("/conversations", auth, async (req, res) => {
 });
 
 /* ==========================================================
-   2️⃣ CREATE OR GET CONVERSATION (Private/Group)
+   2️⃣ CREATE OR GET CONVERSATION
 ========================================================== */
 router.post("/conversation", auth, async (req, res) => {
   const { receiverId, isGroup, groupName, members } = req.body;
@@ -82,6 +88,7 @@ router.post("/conversation", auth, async (req, res) => {
 
     if (!receiverId) return res.status(400).json({ error: "Receiver ID required" });
 
+    // receiverId এখানে ইউজারের auth0Id হিসেবে কাজ করবে
     let conversation = await Conversation.findOne({
       isGroup: false,
       members: { $all: [senderId, receiverId], $size: 2 },
@@ -182,55 +189,6 @@ router.get("/:conversationId", auth, async (req, res) => {
     res.status(200).json(messages || []);
   } catch (err) {
     res.status(500).json({ error: "Neural history inaccessible" });
-  }
-});
-
-/* ==========================================================
-   🛡️ GROUP ADMIN POWERS
-========================================================== */
-router.patch("/group/kick/:conversationId", auth, async (req, res) => {
-  try {
-    const { conversationId } = req.params;
-    const { userIdToRemove } = req.body;
-    const currentUserId = req.user?.sub || req.user?.id;
-
-    const group = await Conversation.findById(conversationId);
-    if (group.admin !== currentUserId) {
-      return res.status(403).json({ error: "Access Denied: Only Admins can kick." });
-    }
-
-    const updatedGroup = await Conversation.findByIdAndUpdate(
-      conversationId,
-      { $pull: { members: userIdToRemove } },
-      { new: true }
-    );
-
-    res.status(200).json({ message: "Drifter removed", updatedGroup });
-  } catch (err) {
-    res.status(500).json({ error: "Failed to purge member." });
-  }
-});
-
-router.patch("/group/promote/:conversationId", auth, async (req, res) => {
-  try {
-    const { conversationId } = req.params;
-    const { newAdminId } = req.body;
-    const currentUserId = req.user?.sub || req.user?.id;
-
-    const group = await Conversation.findById(conversationId);
-    if (group.admin !== currentUserId) {
-      return res.status(403).json({ error: "Only Admin can transfer power." });
-    }
-
-    const updatedGroup = await Conversation.findByIdAndUpdate(
-      conversationId,
-      { $set: { admin: newAdminId } },
-      { new: true }
-    );
-
-    res.status(200).json({ message: "New Admin established.", updatedGroup });
-  } catch (err) {
-    res.status(500).json({ error: "Power transfer failed." });
   }
 });
 
