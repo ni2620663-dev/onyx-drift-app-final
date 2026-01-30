@@ -43,13 +43,13 @@ router.get("/", async (req, res) => {
       .limit(30)
       .lean();
     
-    // নিশ্চিত করা হচ্ছে যে প্রতিটি পোস্টে প্রয়োজনীয় ফিল্ড আছে
     const safePosts = posts.map(post => ({
       ...post,
       authorName: post.authorName || "Unknown Drifter",
       authorAvatar: post.authorAvatar || "https://ui-avatars.com/api/?name=Drifter",
       likes: post.likes || [],
-      comments: post.comments || []
+      comments: post.comments || [],
+      rankClicks: post.rankClicks || [] // র‍্যাঙ্ক ক্লিক লিস্ট নিশ্চিত করা
     }));
 
     res.json(safePosts);
@@ -63,20 +63,19 @@ router.get("/", async (req, res) => {
 ========================================================== */
 router.get("/reels/all", async (req, res) => {
   try {
-    // এখানে mediaType চেক করার পাশাপাশি data null কিনা তা হ্যান্ডেল করা হয়েছে
     const reels = await Post.find({ 
       mediaType: { $in: ["video", "reel"] } 
     })
     .sort({ createdAt: -1 })
     .lean();
 
-    // ফ্রন্টেন্ডে map করার সময় যেন crash না করে তার জন্য empty array handle
     if (!reels || reels.length === 0) return res.json([]);
 
     const safeReels = reels.map(reel => ({
       ...reel,
       authorName: reel.authorName || "Unknown Drifter",
-      authorAvatar: reel.authorAvatar || "https://ui-avatars.com/api/?name=Drifter"
+      authorAvatar: reel.authorAvatar || "https://ui-avatars.com/api/?name=Drifter",
+      rankClicks: reel.rankClicks || []
     }));
 
     res.json(safeReels);
@@ -96,13 +95,11 @@ router.post("/", auth, upload.single("media"), async (req, res) => {
     }
 
     const currentUserId = req.user?.sub || req.user?.id;
-    // ইউজারের লেটেস্ট প্রোফাইল ডেটা আনা হচ্ছে
     const userProfile = await User.findOne({ auth0Id: currentUserId }).lean();
 
     const isVideo = req.file.mimetype ? req.file.mimetype.includes("video") : false;
     let detectedType = isVideo ? "video" : "image";
     
-    // Reels কন্ডিশন চেক
     if (req.body.isStory === "true" || req.body.type === "story") {
       detectedType = "story";
     } else if ((req.body.isReel === "true" || req.body.type === "reel") && isVideo) {
@@ -120,6 +117,7 @@ router.post("/", auth, upload.single("media"), async (req, res) => {
       mediaType: detectedType,
       likes: [],
       comments: [],
+      rankClicks: [], // নতুন পোস্টের জন্য খালি র‍্যাঙ্ক লিস্ট
     };
 
     const post = await Post.create(postData);
@@ -181,7 +179,51 @@ router.post("/:id/like", auth, async (req, res) => {
 });
 
 /* ==========================================================
-    🗑️ 5. DELETE POST
+    ⚡ 5. RANK UP SYSTEM (10 Clicks = +1 Global Rank)
+========================================================== */
+router.post("/:id/rank-up", auth, async (req, res) => {
+  try {
+    const userId = req.user.sub || req.user.id;
+    const post = await Post.findById(req.params.id);
+    if (!post) return res.status(404).json({ msg: "Post not found" });
+
+    // ১. চেক করা যে ইউজার অলরেডি র‍্যাঙ্ক ক্লিক করেছে কি না
+    if (post.rankClicks && post.rankClicks.includes(userId)) {
+      return res.status(400).json({ msg: "Neural Pulse already sent to this signal!" });
+    }
+
+    // ২. র‍্যাঙ্ক ক্লিক লিস্ট আপডেট করা
+    const updatedPost = await Post.findByIdAndUpdate(
+      req.params.id,
+      { $addToSet: { rankClicks: userId } },
+      { new: true }
+    );
+
+    // ৩. যদি ১০টি ক্লিক পূর্ণ হয়, ক্রিয়েটরের গ্লোবাল র‍্যাঙ্ক ১ বাড়ানো
+    const clickCount = updatedPost.rankClicks.length;
+    let rankIncreased = false;
+
+    if (clickCount > 0 && clickCount % 10 === 0) {
+      await User.findOneAndUpdate(
+        { auth0Id: updatedPost.authorAuth0Id },
+        { $inc: { neuralRank: 1 } }
+      );
+      rankIncreased = true;
+    }
+
+    res.json({ 
+      success: true, 
+      clicks: clickCount, 
+      rankUp: rankIncreased,
+      msg: rankIncreased ? "Milestone Reached! Creator Rank Increased! ⚡" : "Neural Pulse Synced"
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/* ==========================================================
+    🗑️ 6. DELETE POST
 ========================================================== */
 router.delete("/:id", auth, async (req, res) => {
   try {
@@ -200,7 +242,7 @@ router.delete("/:id", auth, async (req, res) => {
 });
 
 /* ==========================================================
-    ✅ 6. GET POSTS BY USER ID
+    ✅ 7. GET POSTS BY USER ID
 ========================================================== */
 router.get("/user/:userId", async (req, res) => {
   try {

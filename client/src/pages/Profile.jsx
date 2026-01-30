@@ -9,7 +9,7 @@ import {
   FaUserPlus, FaEnvelope, FaSearch, FaMagic, FaAward,
   FaThLarge, FaPlay, FaUsers, FaHeart 
 } from "react-icons/fa";
-import { BRAND_NAME } from "../utils/constants";
+import { HiBolt, HiOutlineLink, HiOutlineLinkSlash } from "react-icons/hi2";
 import PostCard from "../components/PostCard";
 
 // --- 🚀 GenesisCard Component ---
@@ -66,8 +66,8 @@ const GenesisCard = ({ userData }) => {
                <p className="text-[8px] text-gray-500 uppercase font-bold tracking-widest mt-1">Recruits</p>
             </div>
             <div className="flex-1 text-center p-3 bg-white/5 rounded-2xl border border-white/5 backdrop-blur-md">
-               <p className="text-xl font-black text-cyan-400 uppercase tracking-tighter">{userData?.neuralRank || "Neophyte"}</p>
-               <p className="text-[8px] text-gray-500 uppercase font-bold tracking-widest mt-1">Neural Rank</p>
+               <p className="text-xl font-black text-cyan-400 uppercase tracking-tighter">{userData?.neuralRank || 0}</p>
+               <p className="text-[8px] text-gray-500 uppercase font-bold tracking-widest mt-1">Rank Points</p>
             </div>
         </div>
       </div>
@@ -105,6 +105,10 @@ const Profile = () => {
 
   const [editData, setEditData] = useState({ nickname: "", bio: "" });
   const [isUpdating, setIsUpdating] = useState(false);
+  const [isLinking, setIsLinking] = useState(false);
+
+  const isOwnProfile = !userId || userId === currentUser?.sub;
+  const isLinked = userProfile?.followers?.includes(currentUser?.sub);
 
   const fetchProfileData = async () => {
     if (!isAuthenticated) return;
@@ -120,7 +124,7 @@ const Profile = () => {
         axios.get(`${API_URL}/api/user/profile/${targetId}`, {
           headers: { Authorization: `Bearer ${token}` }
         }),
-        axios.get(`${API_URL}/api/posts/user/${targetId}`, {
+        axios.get(`${API_URL}/api/user/posts/user/${targetId}`, {
           headers: { Authorization: `Bearer ${token}` }
         }),
         axios.get(`${API_URL}/api/user/all`, {
@@ -138,9 +142,25 @@ const Profile = () => {
 
     } catch (err) {
       console.error("📡 Neural Link Error:", err.message);
-      setUserPosts([]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleLinkProtocol = async () => {
+    if (isOwnProfile || isLinking) return;
+    setIsLinking(true);
+    try {
+      const token = await getAccessTokenSilently();
+      const targetId = encodeURIComponent(userProfile.auth0Id);
+      const res = await axios.post(`${API_URL}/api/user/establish-link/${targetId}`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      fetchProfileData();
+    } catch (err) {
+      console.error("Link Protocol Failed");
+    } finally {
+      setIsLinking(false);
     }
   };
 
@@ -151,18 +171,16 @@ const Profile = () => {
     try {
       const token = await getAccessTokenSilently();
       const formData = new FormData();
-      formData.append("image", photoFile);
-      formData.append("type", type);
+      formData.append(type === "profile" ? "avatar" : "cover", photoFile);
 
-      await axios.post(`${API_URL}/api/user/update-photo`, formData, {
+      await axios.put(`${API_URL}/api/user/update-profile`, formData, {
         headers: { 
           Authorization: `Bearer ${token}`,
           "Content-Type": "multipart/form-data" 
         }
       });
       
-      fetchProfileData(); // রিফ্রেশ
-      // alert সরিয়ে দেওয়া হয়েছে
+      fetchProfileData();
     } catch (err) {
       console.error("Neural Sync Failed");
     }
@@ -211,7 +229,7 @@ const Profile = () => {
       formData.append("mediaType", postType);
       if (file) formData.append("media", file);
 
-      const res = await axios.post(`${API_URL}/api/posts`, formData, { 
+      await axios.post(`${API_URL}/api/posts`, formData, { 
         headers: { 
           Authorization: `Bearer ${token}`,
           "Content-Type": "multipart/form-data"
@@ -239,8 +257,6 @@ const Profile = () => {
       SYNCING NEURAL IDENTITY...
     </div>
   );
-
-  const isOwnProfile = !userId || userId === currentUser?.sub;
 
   return (
     <div className={`w-full min-h-screen transition-all duration-700 ${isGhostMode ? 'bg-black' : 'bg-[#020617]'} text-gray-200 overflow-x-hidden flex flex-col`}>
@@ -271,7 +287,7 @@ const Profile = () => {
                 <img src={u.avatar} className="w-10 h-10 rounded-xl object-cover grayscale group-hover:grayscale-0" alt="" />
                 <div className="flex-1">
                   <p className="text-[11px] font-bold text-white truncate">{u.name || u.nickname}</p>
-                  <p className="text-[9px] text-gray-600 uppercase">Drifter</p>
+                  <p className="text-[9px] text-gray-600 uppercase font-mono">{u.drifterLevel || "Drifter"}</p>
                 </div>
               </div>
             ))}
@@ -329,8 +345,8 @@ const Profile = () => {
                         </h1>
                         {userProfile?.isVerified && <FaCheckCircle className="text-cyan-400" />}
                       </div>
-                      <p className="text-xs text-cyan-400/60 uppercase font-black tracking-widest mt-1">
-                        {isGhostMode ? "Ghost Mode Active" : "Neural Drifter"}
+                      <p className="text-xs text-cyan-400 font-black tracking-widest mt-1 uppercase font-mono">
+                         {userProfile?.drifterLevel || "Novice Drifter"}
                       </p>
                     </div>
                   </div>
@@ -346,8 +362,20 @@ const Profile = () => {
                         </button>
                       </>
                     ) : (
-                      <button className="px-8 py-3 bg-cyan-600 rounded-2xl text-[10px] font-black uppercase tracking-widest text-white">
-                        Connect
+                      <button 
+                        onClick={handleLinkProtocol}
+                        disabled={isLinking}
+                        className={`px-8 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-all ${
+                          isLinked 
+                          ? "bg-zinc-800 text-zinc-400" 
+                          : "bg-cyan-600 text-white shadow-[0_0_20px_rgba(8,145,178,0.4)]"
+                        }`}
+                      >
+                        {isLinked ? (
+                          <><HiOutlineLinkSlash size={14}/> Sever Link</>
+                        ) : (
+                          <><HiBolt size={14} className="animate-pulse"/> Establish Link</>
+                        )}
                       </button>
                     )}
                   </div>
@@ -357,13 +385,13 @@ const Profile = () => {
                    <div className="text-center md:text-left">
                       <p className="text-lg font-black text-white">{userProfile?.followers?.length || 0}</p>
                       <p className="text-[8px] text-gray-500 uppercase font-bold tracking-[0.2em] flex items-center gap-1 justify-center md:justify-start">
-                        <FaUsers className="text-cyan-500" /> Followers
+                        Nodes
                       </p>
                    </div>
                    <div className="w-[1px] bg-white/5"></div>
                    <div className="text-center md:text-left">
                       <p className="text-lg font-black text-white">{userProfile?.following?.length || 0}</p>
-                      <p className="text-[8px] text-gray-500 uppercase font-bold tracking-[0.2em]">Following</p>
+                      <p className="text-[8px] text-gray-500 uppercase font-bold tracking-[0.2em]">Syncing</p>
                    </div>
                    <div className="w-[1px] bg-white/5"></div>
                    <div className="text-center md:text-left">
@@ -447,51 +475,26 @@ const Profile = () => {
       <AnimatePresence>
         {isEditOpen && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-xl">
-            <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} className="bg-[#0f172a] w-full max-md rounded-[2.5rem] p-8 border border-white/10">
+            <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} className="bg-[#0f172a] w-full max-w-md rounded-[2.5rem] p-8 border border-white/10">
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-cyan-400 font-black uppercase italic tracking-tighter">Edit Identity</h2>
                 <FaTimes className="cursor-pointer" onClick={() => setIsEditOpen(false)} />
               </div>
               <input 
                 type="text" 
-                className="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-sm mb-4 outline-none focus:border-cyan-500" 
+                className="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-sm mb-4 outline-none focus:border-cyan-500 text-white" 
                 placeholder="Nickname" 
                 value={editData.nickname} 
                 onChange={(e) => setEditData({...editData, nickname: e.target.value})} 
               />
               <textarea 
-                className="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-sm h-32 outline-none focus:border-cyan-500" 
+                className="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-sm h-32 outline-none focus:border-cyan-500 text-white" 
                 placeholder="Neural Bio" 
                 value={editData.bio} 
                 onChange={(e) => setEditData({...editData, bio: e.target.value})} 
               />
               <button onClick={handleUpdateIdentity} disabled={isUpdating} className="w-full mt-6 py-4 bg-cyan-500 rounded-xl font-black uppercase text-[10px] tracking-widest text-black">
                 {isUpdating ? "Syncing..." : "Update Node"}
-              </button>
-            </motion.div>
-          </motion.div>
-        )}
-
-        {isCreateOpen && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-xl">
-            <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} className="bg-[#0f172a] w-full max-md rounded-[2.5rem] p-8 border border-white/10">
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-purple-400 font-black uppercase italic tracking-tighter">New Echo</h2>
-                <FaTimes className="cursor-pointer" onClick={() => setIsCreateOpen(false)} />
-              </div>
-              <textarea 
-                className="w-full bg-transparent border-none outline-none text-white text-lg h-32 mb-6" 
-                placeholder="Broadcast your signal..." 
-                value={content} 
-                onChange={(e) => setContent(e.target.value)} 
-              />
-              <input type="file" ref={fileInputRef} className="hidden" onChange={(e) => setFile(e.target.files[0])} />
-              <div className="flex gap-4 mb-6">
-                <button onClick={() => handleFileSelect('photo')} className={`p-4 rounded-xl border ${file && postType === 'image' ? 'border-cyan-500' : 'border-white/10'} bg-white/5 flex-1`}><FaImage className="mx-auto"/></button>
-                <button onClick={() => handleFileSelect('video')} className={`p-4 rounded-xl border ${file && postType === 'video' ? 'border-purple-500' : 'border-white/10'} bg-white/5 flex-1`}><FaFilm className="mx-auto"/></button>
-              </div>
-              <button onClick={handleTransmit} disabled={isTransmitting} className="w-full py-4 bg-white text-black rounded-xl font-black uppercase text-[10px] tracking-widest">
-                {isTransmitting ? "Transmitting..." : "Send Echo"}
               </button>
             </motion.div>
           </motion.div>

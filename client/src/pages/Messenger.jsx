@@ -3,88 +3,62 @@ import { useAuth0 } from "@auth0/auth0-react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { 
-  HiPlus, HiChatBubbleLeftRight, HiUsers, HiCog6Tooth, 
-  HiOutlineChevronLeft, HiOutlinePhone, HiOutlineVideoCamera,
-  HiOutlinePaperAirplane, HiShieldCheck, HiBolt, HiSparkles, 
-  HiMagnifyingGlass, 
-  HiOutlinePhoneXMark, HiOutlineMicrophone, HiOutlineSpeakerWave,
-  HiOutlineTrash, HiOutlineLockClosed, HiOutlineEyeSlash, HiOutlinePhoto,
-  HiOutlineClock, HiCheckBadge 
+  HiChatBubbleLeftRight, HiCog6Tooth, 
+  HiOutlineChevronLeft, HiOutlineVideoCamera,
+  HiOutlinePaperAirplane, HiOutlineEyeSlash, HiOutlinePhoto,
+  HiOutlineClock
 } from "react-icons/hi2";
+import { FaLock } from "react-icons/fa";
 import { AnimatePresence, motion } from "framer-motion";
 
-// 🧠 Phase-7: Display Name & Avatar Logic
+// 🚀 Neural Components
+import TimeVaultPicker from "./TimeVaultPicker";
+import MoodSelector from "./MoodSelector";
+
 const getDisplayName = (u) => {
   if (!u) return "Drifter";
-  const name = u.name || u.nickname || u.displayName || u.username || (u.email ? u.email.split('@')[0] : null);
-  const fallback = u.userId?.slice(-6) || u.sub?.slice(-6) || "User";
-  return name ? name.trim() : `@${fallback}`;
+  return u.name || u.nickname || u.username || (u.email ? u.email.split('@')[0] : "Unknown");
 };
 
 const getAvatar = (u) => {
-  if (u?.picture || u?.avatar || u?.image) return u.picture || u.avatar || u.image;
+  if (u?.picture || u?.avatar) return u.picture || u.avatar;
   const name = getDisplayName(u);
   return `https://ui-avatars.com/api/?background=0D8ABC&color=fff&name=${encodeURIComponent(name)}`;
 };
 
 const Messenger = ({ socket }) => {
   const { user, getAccessTokenSilently, isAuthenticated } = useAuth0();
-  const navigate = useNavigate();
-
-  const CLOUD_NAME = "dx0cf0ggu";
-  const UPLOAD_PRESET = "onyx_upload"; 
-
+  
+  // States
   const [conversations, setConversations] = useState([]);
   const [currentChat, setCurrentChat] = useState(null);
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState("");
   const [activeTab, setActiveTab] = useState("chats");
-  const [searchQuery, setSearchQuery] = useState(""); 
-  
-  // 🔍 New Search States
-  const [searchResults, setSearchResults] = useState([]);
-  const [isSearching, setIsSearching] = useState(false);
-  
+  const [capsuleDate, setCapsuleDate] = useState(null);
+  const [selectedMood, setSelectedMood] = useState("Neural-Flow");
   const [isIncognito, setIsIncognito] = useState(false);
-  const [isEditingProfile, setIsEditingProfile] = useState(false);
-  const [statusText, setStatusText] = useState("Vibing with OnyxDrift ⚡");
-  const [tempName, setTempName] = useState("");
   const [isSelfDestruct, setIsSelfDestruct] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
+
+  // 📈 Progress Logic State
+  const [messageCount, setMessageCount] = useState(0); 
 
   const scrollRef = useRef();
-  const mediaRecorder = useRef(null);
-  const audioChunks = useRef([]);
-  
   const API_URL = (import.meta.env.VITE_API_BASE_URL || "https://onyx-drift-app-final-u29m.onrender.com").replace(/\/$/, "");
 
-  // 🛡️ Helper to get valid JWT token for Backend
+  // 🏅 Neural Rank Config
+  const getRankBadge = (score = 0) => {
+    if (score >= 5000) return { label: "Neural Overlord", color: "text-purple-500", icon: "🌌" };
+    if (score >= 2000) return { label: "Time Architect", color: "text-cyan-400", icon: "⏳" };
+    if (score >= 500) return { label: "Signal Voyager", color: "text-green-400", icon: "🛰️" };
+    return { label: "Novice Drifter", color: "text-zinc-500", icon: "🌑" };
+  };
+
   const getAuthToken = useCallback(async () => {
     return await getAccessTokenSilently({
-      authorizationParams: {
-        audience: "https://onyx-drift-api.com", // This fixes the 401 error
-      },
+      authorizationParams: { audience: "https://onyx-drift-api.com" },
     });
   }, [getAccessTokenSilently]);
-
-  useEffect(() => {
-    if (user) setTempName(getDisplayName(user));
-  }, [user]);
-
-  const uploadToCloudinary = async (file, type) => {
-    const formData = new FormData();
-    let fileToUpload = file;
-    if (type === "voice" || type === "audio") {
-      fileToUpload = new File([file], `voice-${Date.now()}.wav`, { type: "audio/wav" });
-    }
-    formData.append("file", fileToUpload);
-    formData.append("upload_preset", UPLOAD_PRESET); 
-    const resourceType = (type === "voice" || type === "audio") ? "video" : "auto"; 
-    try {
-      const response = await axios.post(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/${resourceType}/upload`, formData);
-      return response.data.secure_url;
-    } catch (err) { return null; }
-  };
 
   const fetchConversations = useCallback(async () => {
     try {
@@ -107,302 +81,203 @@ const Messenger = ({ socket }) => {
     } catch (err) { if (err.response?.status === 404) setMessages([]); }
   }, [getAuthToken, API_URL]);
 
-  const handleUserSearch = async (val) => {
-    setSearchQuery(val);
-    if (val.length > 2) {
-      setIsSearching(true);
-      try {
-        const token = await getAuthToken();
-        const res = await axios.get(`${API_URL}/api/messages/search-users/${val}`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        setSearchResults(res.data);
-      } catch (err) {
-        console.error("Search failed");
-      } finally {
-        setIsSearching(false);
-      }
-    } else {
-      setSearchResults([]);
-    }
-  };
-
-  const startConversation = async (receiverId) => {
-    try {
-      const token = await getAuthToken();
-      const res = await axios.post(`${API_URL}/api/messages/conversation`, 
-        { receiverId },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      fetchConversations();
-      setCurrentChat(res.data);
-      setSearchQuery("");
-      setSearchResults([]);
-    } catch (err) {
-      alert("Failed to sync with drifter.");
-    }
-  };
-
-  const handleIdSearch = async (e) => {
-    if (e.key === "Enter" && searchQuery.trim()) {
-      startConversation(searchQuery.trim());
-    }
-  };
-
-  const deleteChat = async (e, convId) => {
-    e.stopPropagation();
-    if (window.confirm("Permanently purge this signal history?")) {
-      try {
-        const token = await getAuthToken();
-        await axios.delete(`${API_URL}/api/messages/conversation/${convId}`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        setConversations(prev => prev.filter(c => c._id !== convId));
-        if (currentChat?._id === convId) setCurrentChat(null);
-      } catch (err) { alert("Failed to delete."); }
-    }
-  };
-
-  useEffect(() => { if (currentChat?._id) fetchMessages(currentChat._id); }, [currentChat, fetchMessages]);
-  useEffect(() => { if (isAuthenticated) fetchConversations(); }, [isAuthenticated, fetchConversations]);
-
-  useEffect(() => {
-    const s = socket?.current || socket;
-    if (!s || !user?.sub) return;
-    s.emit("addNewUser", user.sub);
-    const messageHandler = (data) => {
-      if (currentChat?._id === data.conversationId) {
-        setMessages((prev) => [...prev, data]);
-        if(data.isSelfDestruct) setTimeout(() => setMessages(prev => prev.filter(m => m._id !== data._id)), 10000);
-      }
-      fetchConversations();
-    };
-    s.on("getMessage", messageHandler);
-    return () => s.off("getMessage", messageHandler);
-  }, [socket, currentChat, user, fetchConversations]);
-
-  const handleSend = async (e, mediaUrl = null, mediaType = null) => {
+  const handleSend = async (e) => {
     if (e) e.preventDefault();
-    if (!newMessage.trim() && !mediaUrl) return;
-    const tempId = Date.now().toString();
+    if (!newMessage.trim()) return;
+
     const msgData = {
-      _id: tempId,
       senderId: user.sub,
       senderName: getDisplayName(user),
       text: newMessage,
-      media: mediaUrl,
-      mediaType: mediaType,
       conversationId: currentChat._id,
       isSelfDestruct: isSelfDestruct,
+      isTimeCapsule: !!capsuleDate,
+      deliverAt: capsuleDate || new Date(),
+      neuralMood: selectedMood,
       createdAt: new Date()
     };
-    setMessages((prev) => [...prev, msgData]);
+
+    setMessages((prev) => [...prev, { ...msgData, _id: Date.now().toString() }]);
     setNewMessage("");
+    setCapsuleDate(null);
+
     const s = socket?.current || socket;
     if (s) s.emit("sendMessage", { ...msgData, receiverId: currentChat.userDetails?.userId });
+
     try {
       const token = await getAuthToken();
       await axios.post(`${API_URL}/api/messages/message`, msgData, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      if (isSelfDestruct) setTimeout(() => setMessages(prev => prev.filter(m => m._id !== tempId)), 10000);
+
+      // 🚀 100 Messages = 1 Rank Point Logic
+      const nextCount = messageCount + 1;
+      if (nextCount >= 100) {
+        await axios.patch(`${API_URL}/api/users/update-rank`, { points: 1 }, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        setMessageCount(0); 
+      } else {
+        setMessageCount(nextCount);
+      }
     } catch (err) { console.error(err); }
   };
 
-  const startRecording = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      mediaRecorder.current = new MediaRecorder(stream);
-      audioChunks.current = [];
-      mediaRecorder.current.ondataavailable = (e) => audioChunks.current.push(e.data);
-      mediaRecorder.current.onstop = async () => {
-        const audioBlob = new Blob(audioChunks.current, { type: 'audio/wav' });
-        const url = await uploadToCloudinary(audioBlob, "voice");
-        if (url) handleSend(null, url, "voice");
-      };
-      mediaRecorder.current.start();
-      setIsRecording(true);
-    } catch (err) { alert("Mic access denied"); }
-  };
-
-  const stopRecording = () => { if (mediaRecorder.current) { mediaRecorder.current.stop(); setIsRecording(false); } };
+  useEffect(() => { if (currentChat?._id) fetchMessages(currentChat._id); }, [currentChat, fetchMessages]);
+  useEffect(() => { if (isAuthenticated) fetchConversations(); }, [isAuthenticated, fetchConversations]);
   useEffect(() => { scrollRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
+  const moodStyles = {
+    "Enraged": "shadow-[0_0_15px_rgba(239,68,68,0.4)] border-red-500/50 bg-red-900/20",
+    "Ecstatic": "shadow-[0_0_15px_rgba(168,85,247,0.4)] border-purple-500/50 bg-purple-900/20",
+    "Neural-Flow": "shadow-[0_0_15px_rgba(6,182,212,0.4)] border-cyan-500/50 bg-cyan-900/20",
+    "Sad": "shadow-[0_0_15px_rgba(59,130,246,0.4)] border-blue-500/50 bg-blue-900/20",
+    "Excited": "shadow-[0_0_15px_rgba(234,179,8,0.4)] border-yellow-500/50 bg-yellow-900/20",
+  };
+
   return (
-    <div className={`fixed inset-0 text-white font-sans overflow-hidden z-[9999] transition-colors duration-500 ${isIncognito ? 'bg-[#0a0010]' : 'bg-[#02040a]'}`}>
+    <div className={`fixed inset-0 text-white transition-colors duration-500 ${isIncognito ? 'bg-[#0a0010]' : 'bg-[#02040a]'}`}>
       
       <div className={`flex flex-col h-full w-full ${currentChat ? 'hidden md:flex' : 'flex'}`}>
         
-        {activeTab === "settings" ? (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex-1 overflow-y-auto p-6 pt-12 no-scrollbar">
-            <h2 className="text-3xl font-black mb-8 uppercase italic text-cyan-500 tracking-tighter">System Config</h2>
-            <div className="flex flex-col items-center gap-6 mb-10">
-                <img src={getAvatar(user)} className="w-28 h-28 rounded-[3rem] border-4 border-cyan-500/20 object-cover" alt="Me" />
-                <div className="text-center w-full space-y-2">
-                    {isEditingProfile ? (
-                        <div className="space-y-3">
-                            <input value={tempName} onChange={(e) => setTempName(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-2xl py-3 px-4 text-center text-white outline-none focus:border-cyan-500" placeholder="Display Name" />
-                            <button onClick={() => setIsEditingProfile(false)} className="w-full bg-cyan-500 text-black py-3 rounded-2xl font-black uppercase text-xs">Save Changes</button>
-                        </div>
-                    ) : (
-                        <>
-                            <h3 className="text-2xl font-bold">{tempName || getDisplayName(user)}</h3>
-                            <p className="text-cyan-500/60 font-black text-[10px] uppercase tracking-widest">{statusText}</p>
-                            <button onClick={() => setIsEditingProfile(true)} className="text-[10px] text-zinc-500 underline uppercase mt-2">Edit Signal Identity</button>
-                        </>
-                    )}
-                </div>
-            </div>
-          </motion.div>
-        ) : (
-          <>
-            <header className="p-6 pt-12 flex flex-col gap-4 bg-black/40 border-b border-white/5 backdrop-blur-3xl relative z-[300]">
-              <div className="flex justify-between items-center">
-                <div className="flex items-center gap-4">
-                  <div className="relative">
-                    <img src={getAvatar(user)} className="w-12 h-12 rounded-2xl border-2 border-cyan-500/20 object-cover" alt="Me" />
-                    <div className={`absolute -bottom-1 -right-1 w-4 h-4 border-2 border-[#02040a] rounded-full ${isIncognito ? 'bg-purple-500' : 'bg-green-500'}`} />
-                  </div>
-                  <div>
-                    <h1 className="text-xl font-black italic text-cyan-500 uppercase tracking-tighter">OnyxDrift</h1>
-                    <p className="text-[10px] text-gray-500 font-bold uppercase">{getDisplayName(user)}</p>
-                  </div>
-                </div>
-                <button onClick={() => setIsIncognito(!isIncognito)} className={`p-3 rounded-2xl ${isIncognito ? 'bg-purple-500/20 text-purple-400' : 'bg-white/5 text-zinc-500'}`}>
-                    <HiOutlineEyeSlash size={24}/>
-                </button>
-              </div>
-
-              {/* 🔍 Enhanced Search Bar */}
+        {/* Header with Rank & Progress Bar */}
+        <header className="p-6 pt-12 flex flex-col gap-4 bg-black/40 border-b border-white/5 backdrop-blur-3xl relative overflow-hidden">
+          <div className="flex justify-between items-center">
+            <div className="flex items-center gap-4">
               <div className="relative">
-                <div className="relative flex items-center bg-white/5 border border-white/10 rounded-2xl px-4 py-2 mt-2 focus-within:border-cyan-500/50 transition-all">
-                  <HiMagnifyingGlass size={20} className={isSearching ? "text-cyan-500 animate-pulse" : "text-zinc-500 mr-2"} />
-                  <input 
-                    value={searchQuery}
-                    onChange={(e) => handleUserSearch(e.target.value)}
-                    onKeyDown={handleIdSearch}
-                    placeholder="Scan Identity or ID..."
-                    className="bg-transparent flex-1 outline-none text-sm text-white placeholder:text-zinc-600 ml-2"
-                  />
-                </div>
-
-                {/* 📑 Global Search Dropdown */}
-                {searchResults.length > 0 && (
-                  <motion.div 
-                    initial={{ opacity: 0, y: -10 }} 
-                    animate={{ opacity: 1, y: 0 }} 
-                    className="absolute top-full left-0 w-full bg-[#121212] border border-white/10 rounded-2xl mt-2 z-[500] overflow-hidden shadow-2xl backdrop-blur-3xl"
-                  >
-                    {searchResults.map((u) => (
-                      <div 
-                        key={u._id} 
-                        onClick={() => startConversation(u.userId || u.sub || u.auth0Id)}
-                        className="p-4 hover:bg-white/5 flex items-center gap-3 cursor-pointer border-b border-white/5 last:border-0"
-                      >
-                        <img src={getAvatar(u)} className="w-10 h-10 rounded-xl border border-white/10" alt="" />
-                        <div className="flex-1">
-                          <p className="text-sm font-bold text-gray-200">{getDisplayName(u)}</p>
-                          <p className="text-[10px] text-zinc-500 uppercase font-black tracking-widest">Active Drifter</p>
-                        </div>
-                        <HiPlus className="text-cyan-500" size={18} />
-                      </div>
-                    ))}
-                  </motion.div>
-                )}
+                <img src={getAvatar(user)} className="w-12 h-12 rounded-2xl border-2 border-cyan-500/20" alt="" />
+                <div className="absolute -bottom-1 -right-1 bg-green-500 w-3 h-3 rounded-full border-2 border-black" />
               </div>
-            </header>
-
-            <div className="flex-1 overflow-y-auto pb-32 px-4 mt-4 no-scrollbar">
-                <div className="space-y-1">
-                  {conversations.map(c => (
-                    <div key={c._id} className="group relative">
-                      <div onClick={() => setCurrentChat(c)} className="p-4 flex items-center gap-4 active:bg-white/10 rounded-[2.2rem] transition-all cursor-pointer">
-                          <img src={getAvatar(c.userDetails)} className="w-14 h-14 rounded-2xl object-cover shadow-lg shadow-black/50" alt="" />
-                          <div className="flex-1 min-w-0">
-                            <div className="flex justify-between items-center">
-                                <span className="font-bold text-gray-100 truncate">{getDisplayName(c.userDetails)}</span>
-                                <HiCheckBadge className="text-cyan-500" size={16}/>
-                            </div>
-                            <p className="text-[12px] text-zinc-500 truncate">{c.lastMessage?.text || "New signal transmission..."}</p>
-                          </div>
-                      </div>
-                      
-                      <button 
-                        onClick={(e) => deleteChat(e, c._id)}
-                        className="absolute right-6 top-1/2 -translate-y-1/2 p-2 bg-red-500/10 text-red-500 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                      >
-                        <HiOutlineTrash size={18} />
-                      </button>
-                    </div>
-                  ))}
+              <div>
+                <div className="flex items-center gap-2">
+                  <h1 className="text-xl font-black italic text-cyan-500 tracking-tighter">ONYXDRIFT</h1>
+                  <span>{getRankBadge(user?.neuralRank).icon}</span>
                 </div>
+                <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">
+                  ID: {user?.sub?.slice(-8)} | {getDisplayName(user)}
+                </p>
+              </div>
             </div>
-          </>
-        )}
+            <button onClick={() => setIsIncognito(!isIncognito)} className={`p-3 rounded-2xl ${isIncognito ? 'bg-purple-500/20 text-purple-400' : 'bg-white/5 text-zinc-500'}`}>
+              <HiOutlineEyeSlash size={24}/>
+            </button>
+          </div>
 
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-[92%] h-20 bg-black/80 backdrop-blur-3xl rounded-[2.5rem] border border-white/10 flex justify-around items-center z-[110]">
-            <button onClick={() => setActiveTab("chats")} className={`p-4 ${activeTab === "chats" ? 'text-cyan-500' : 'text-zinc-600'}`}><HiChatBubbleLeftRight size={28} /></button>
-            <button onClick={() => setActiveTab("groups")} className={`p-4 ${activeTab === "groups" ? 'text-cyan-500' : 'text-zinc-600'}`}><HiUsers size={28} /></button>
-            <button onClick={() => setActiveTab("settings")} className={`p-4 ${activeTab === "settings" ? 'text-cyan-500' : 'text-zinc-600'}`}><HiCog6Tooth size={28} /></button>
+          {/* 📊 Neural Progress Bar UI */}
+          <div className="mt-2 space-y-1">
+            <div className="flex justify-between items-end">
+              <span className="text-[8px] font-black text-zinc-600 uppercase tracking-widest">Neural Sync Progress</span>
+              <span className="text-[9px] font-mono text-cyan-500/80">{messageCount}/100 Signals</span>
+            </div>
+            <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
+              <motion.div 
+                initial={{ width: 0 }}
+                animate={{ width: `${messageCount}%` }}
+                className="h-full bg-gradient-to-r from-cyan-600 to-blue-500 shadow-[0_0_8px_rgba(6,182,212,0.6)]"
+              />
+            </div>
+          </div>
+        </header>
+
+        {/* Conversation List */}
+        <div className="flex-1 overflow-y-auto px-4 mt-4 space-y-2">
+          {conversations.map(c => (
+            <div key={c._id} onClick={() => setCurrentChat(c)} className="p-4 flex items-center gap-4 hover:bg-white/5 rounded-[2rem] cursor-pointer transition-all border border-transparent hover:border-white/5">
+              <img src={getAvatar(c.userDetails)} className="w-14 h-14 rounded-2xl object-cover" alt="" />
+              <div className="flex-1 min-w-0">
+                <div className="flex justify-between items-center">
+                  <span className="font-bold truncate">{getDisplayName(c.userDetails)}</span>
+                  <span className="text-[9px] text-zinc-600 font-mono">RANK_{c.userDetails?.neuralRank || 0}</span>
+                </div>
+                <p className="text-xs text-zinc-500 truncate">{c.lastMessage?.text || "Awaiting signal..."}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Bottom Navigation */}
+        <div className="p-6 flex justify-around items-center bg-black/80 backdrop-blur-2xl border-t border-white/5">
+          <button onClick={() => setActiveTab("chats")} className={`p-4 ${activeTab === "chats" ? 'text-cyan-500' : 'text-zinc-600'}`}><HiChatBubbleLeftRight size={28} /></button>
+          <button onClick={() => setActiveTab("settings")} className={`p-4 ${activeTab === "settings" ? 'text-cyan-500' : 'text-zinc-600'}`}><HiCog6Tooth size={28} /></button>
         </div>
       </div>
 
+      {/* 🟢 ACTIVE CHAT WINDOW */}
       <AnimatePresence>
-      {currentChat && (
-        <motion.div initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }} transition={{ type: "spring", stiffness: 300, damping: 30 }} className={`fixed inset-0 z-[200] flex flex-col ${isIncognito ? 'bg-[#0a0010]' : 'bg-[#02040a]'}`}>
+        {currentChat && (
+          <motion.div initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }} transition={{ type: "spring", damping: 25 }} className={`fixed inset-0 z-[200] flex flex-col ${isIncognito ? 'bg-[#0a0010]' : 'bg-[#02040a]'}`}>
             <header className="p-4 pt-10 flex justify-between items-center border-b border-white/5 bg-black/80 backdrop-blur-xl">
               <div className="flex items-center gap-3">
-                 <button onClick={() => setCurrentChat(null)} className="text-zinc-400 p-2"><HiOutlineChevronLeft size={30}/></button>
-                 <img src={getAvatar(currentChat.userDetails)} className="w-10 h-10 rounded-xl object-cover" alt="" />
-                 <div>
-                    <h3 className="text-[15px] font-bold">{getDisplayName(currentChat.userDetails)}</h3>
-                    <p className="text-[9px] text-cyan-500 font-black uppercase flex items-center gap-1"><HiOutlineLockClosed size={10}/> Secured</p>
-                 </div>
+                <button onClick={() => setCurrentChat(null)} className="text-zinc-400 p-2"><HiOutlineChevronLeft size={30}/></button>
+                <img src={getAvatar(currentChat.userDetails)} className="w-10 h-10 rounded-xl" alt="" />
+                <div>
+                  <h3 className="font-bold text-sm">{getDisplayName(currentChat.userDetails)}</h3>
+                  <p className="text-[9px] text-cyan-500 font-black uppercase tracking-widest">Secure Link Established</p>
+                </div>
               </div>
-              <div className="flex gap-1">
-                 <button onClick={() => setIsSelfDestruct(!isSelfDestruct)} className={`p-3 rounded-2xl ${isSelfDestruct ? 'bg-orange-500/20 text-orange-500' : 'text-zinc-500'}`}><HiOutlineClock size={24}/></button>
-                 <button className="p-3 text-cyan-500"><HiOutlineVideoCamera size={24}/></button>
+              <div className="flex gap-2">
+                <button onClick={() => setIsSelfDestruct(!isSelfDestruct)} className={`p-2 rounded-xl ${isSelfDestruct ? 'bg-orange-500/20 text-orange-500' : 'text-zinc-500'}`}><HiOutlineClock size={22}/></button>
+                <button className="text-zinc-500 p-2"><HiOutlineVideoCamera size={22}/></button>
               </div>
             </header>
             
-            <div className="flex-1 overflow-y-auto p-6 space-y-4 no-scrollbar">
-              {messages.map((m, i) => (
-                <div key={m._id || i} className={`flex flex-col ${m.senderId === user?.sub ? 'items-end' : 'items-start'}`}>
-                  <div className={`px-5 py-3 rounded-[1.8rem] max-w-[85%] relative ${m.senderId === user?.sub ? (isIncognito ? 'bg-purple-600' : 'bg-cyan-600') + ' rounded-tr-none' : 'bg-white/10 rounded-tl-none'}`}>
-                    {m.text && <p className="text-sm">{m.text}</p>}
-                    {m.mediaType === "image" && <img src={m.media} className="rounded-xl mt-2 max-h-60 w-full object-cover" alt="media" />}
-                    {m.mediaType === "voice" && <audio controls className="h-8 w-40 filter invert mt-2"><source src={m.media} type="audio/wav" /></audio>}
-                    {m.isSelfDestruct && <HiBolt className="absolute -top-1 -right-1 text-orange-500" size={14}/>}
+            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+              {messages.map((m, i) => {
+                const isLocked = m.isTimeCapsule && new Date() < new Date(m.deliverAt);
+                const moodClass = moodStyles[m.neuralMood] || "bg-white/10";
+                const isMe = m.senderId === user?.sub;
+
+                return (
+                  <div key={m._id || i} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
+                    {isLocked ? (
+                      <div className="flex items-center gap-3 bg-zinc-900/50 border border-dashed border-zinc-700 p-4 rounded-2xl">
+                        <FaLock className="text-cyan-500 animate-pulse" />
+                        <span className="text-[10px] text-zinc-500 font-black uppercase tracking-tighter">Encrypted Vault: {new Date(m.deliverAt).toLocaleDateString()}</span>
+                      </div>
+                    ) : (
+                      <div className={`px-5 py-3 rounded-[1.8rem] max-w-[85%] border transition-all duration-500 ${moodClass} ${isMe ? 'rounded-tr-none border-white/10' : 'rounded-tl-none border-white/5'}`}>
+                        {m.text && <p className="text-sm leading-relaxed">{m.text}</p>}
+                        <div className="flex items-center justify-between mt-1 gap-4">
+                          <span className="text-[7px] opacity-40 uppercase font-black tracking-widest">{m.neuralMood}</span>
+                          <span className="text-[7px] opacity-30 font-mono">{new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
               <div ref={scrollRef} />
             </div>
 
-            <div className="p-4 pb-12 bg-black/60 backdrop-blur-md">
-              <form onSubmit={handleSend} className="flex items-center gap-2 bg-white/5 p-2 rounded-[2.2rem] border border-white/10">
-                 <label className="p-3 text-zinc-400 cursor-pointer">
-                    <HiOutlinePhoto size={22}/>
-                    <input type="file" className="hidden" onChange={(e) => {
-                        const file = e.target.files[0];
-                        if(file) uploadToCloudinary(file, file.type.startsWith("image") ? "image" : "file").then(url => handleSend(null, url, "image"));
-                    }} />
-                 </label>
-                 <input value={newMessage} onChange={(e) => setNewMessage(e.target.value)} placeholder="Send signal..." className="bg-transparent flex-1 px-2 outline-none text-white text-sm" />
-                 
-                 {!newMessage.trim() ? (
-                    <button type="button" onMouseDown={startRecording} onMouseUp={stopRecording} className={`p-4 rounded-full ${isRecording ? 'bg-red-500 animate-pulse' : 'bg-white/10 text-zinc-400'}`}>
-                       <HiOutlineMicrophone size={22} />
-                    </button>
-                 ) : (
-                    <button type="submit" className="p-4 bg-cyan-500 rounded-full">
-                       <HiOutlinePaperAirplane size={22} className="-rotate-45 text-black" />
-                    </button>
-                 )}
-              </form>
+            {/* Input Area */}
+            <div className="p-4 pb-12 bg-black/60 backdrop-blur-xl border-t border-white/5">
+              <MoodSelector currentMood={selectedMood} onSelectMood={setSelectedMood} />
+              <div className="flex items-center gap-2 mt-4 bg-white/5 p-2 rounded-[2.2rem] border border-white/10 relative">
+                {capsuleDate && (
+                  <div className="absolute -top-7 left-10 bg-cyan-600 text-[9px] px-3 py-1 rounded-full animate-pulse font-bold">
+                    VAULT ACTIVE
+                  </div>
+                )}
+                <button className="p-3 text-zinc-400"><HiOutlinePhoto size={22}/></button>
+                <TimeVaultPicker onSelectTime={(date) => setCapsuleDate(date)} />
+                <input 
+                  value={newMessage} 
+                  onChange={(e) => setNewMessage(e.target.value)} 
+                  onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+                  placeholder={capsuleDate ? "Message for the future..." : "Type signal..."} 
+                  className="bg-transparent flex-1 px-2 outline-none text-white text-sm" 
+                />
+                <button 
+                  onClick={handleSend}
+                  disabled={!newMessage.trim()}
+                  className={`p-4 rounded-full transition-all ${newMessage.trim() ? 'bg-cyan-500 text-black shadow-[0_0_20px_rgba(6,182,212,0.4)]' : 'bg-white/10 text-zinc-600'}`}
+                >
+                  <HiOutlinePaperAirplane size={22} className="-rotate-45" />
+                </button>
+              </div>
             </div>
-        </motion.div>
-      )}
+          </motion.div>
+        )}
       </AnimatePresence>
     </div>
   );

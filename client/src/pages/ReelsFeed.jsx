@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Heart, MessageCircle, Share2, Music, Send, X, ArrowLeft, Copy, Download, MessageSquare } from 'lucide-react';
+import { Heart, MessageCircle, Share2, Music, Send, X, ArrowLeft, Copy, Download, MessageSquare, Award } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth0 } from "@auth0/auth0-react";
 import axios from 'axios';
@@ -8,18 +8,10 @@ import toast from 'react-hot-toast';
 
 // --- হেল্পার: ডিসপ্লে নাম এবং ছবি বের করার লজিক ---
 const getUserData = (reel) => {
-  // ১. ইউজার অবজেক্ট বের করা (reel.user অথবা reel.author থেকে)
   const u = reel.user || reel.author || {};
-  
-  // ২. আসল নাম খুঁজে বের করা
   const name = u.name || reel.authorName || u.nickname || "Drifter";
-  
-  // ৩. প্রোফাইল পিকচার খুঁজে বের করা
   const avatar = u.avatar || u.picture || reel.authorAvatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=0d1117&color=00f2ff&bold=true`;
-  
-  // ৪. আইডি বের করা
   const id = u.auth0Id || u.userId || reel.authorAuth0Id || reel.author || "";
-
   return { name, avatar, id };
 };
 
@@ -188,15 +180,19 @@ const ReelItem = ({ reel, API_URL }) => {
   const [isShareOpen, setIsShareOpen] = useState(false);
   const [showHeart, setShowHeart] = useState(false);
 
-  // ইউজারের ডাটা বের করা (Fixed Logic)
+  // --- নতুন র‍্যাঙ্ক স্টেট ---
+  const [rankClicks, setRankClicks] = useState(reel.rankClicks?.length || 0);
+  const [hasRankedUp, setHasRankedUp] = useState(false);
+
   const drifter = getUserData(reel);
 
   useEffect(() => {
     if (currentUser && reel.likes) {
       const myId = currentUser.sub || currentUser.id;
       setIsLiked(reel.likes.includes(myId));
+      setHasRankedUp(reel.rankClicks?.includes(myId));
     }
-  }, [currentUser, reel.likes]);
+  }, [currentUser, reel.likes, reel.rankClicks]);
 
   useEffect(() => {
     const observer = new IntersectionObserver((entries) => {
@@ -224,6 +220,27 @@ const ReelItem = ({ reel, API_URL }) => {
     } catch (err) { 
         setIsLiked(isLiked);
         setLikesCount(reel.likes?.length || 0);
+    }
+  };
+
+  const handleRankClick = async () => {
+    if (hasRankedUp) return;
+    try {
+      const token = await getAccessTokenSilently();
+      const res = await axios.post(`${API_URL}/api/posts/${reel._id}/rank-up`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.data.success) {
+        setRankClicks(res.data.clicks);
+        setHasRankedUp(true);
+        if (res.data.rankUp) {
+          toast.success("Milestone! Creator Rank Boosted! ⚡", {
+            style: { background: '#00f2ff', color: '#000', fontWeight: 'bold' }
+          });
+        }
+      }
+    } catch (err) {
+      toast.error("Signal weak. Try again.");
     }
   };
 
@@ -296,6 +313,29 @@ const ReelItem = ({ reel, API_URL }) => {
 
           {/* Side Actions */}
           <div className="flex flex-col gap-6 items-center">
+            
+            {/* --- র‍্যাঙ্ক বাটন ১০-ক্লিক প্রগ্রেস বার সহ --- */}
+            <div className="flex flex-col items-center gap-1 cursor-pointer" onClick={handleRankClick}>
+              <motion.div 
+                whileTap={{ scale: 0.8 }}
+                className={`p-2.5 rounded-full border-2 transition-all duration-500 ${
+                  hasRankedUp 
+                  ? "border-purple-500 bg-purple-500/20 text-purple-400 shadow-[0_0_15px_purple]" 
+                  : "border-cyan-500/50 bg-black/40 text-cyan-400"
+                }`}
+              >
+                <Award size={28} className={!hasRankedUp ? "animate-pulse" : ""} />
+              </motion.div>
+              <div className="w-10 h-1 bg-white/10 rounded-full overflow-hidden mt-1">
+                <motion.div 
+                  className="h-full bg-cyan-400" 
+                  initial={{ width: 0 }}
+                  animate={{ width: `${(rankClicks % 10) * 10}%` }}
+                />
+              </div>
+              <span className="text-[8px] font-black uppercase text-cyan-400/80">Rank Up</span>
+            </div>
+
             <div className="flex flex-col items-center gap-1.5 cursor-pointer group" onClick={handleLike}>
               <div className="p-2 rounded-full bg-black/20 backdrop-blur-md group-active:scale-125 transition-transform">
                 <Heart fill={isLiked ? "#ff0050" : "none"} className={isLiked ? "text-[#ff0050]" : "text-white"} size={30} />

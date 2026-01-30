@@ -22,16 +22,20 @@ const postSchema = new mongoose.Schema(
     
     mediaType: { 
       type: String, 
-      // 🔥 'story' যোগ করা হয়েছে যাতে স্টোরি আপলোড করার সময় ৫০০ এরর না আসে
+      // 🔥 'story' এবং 'reel' নিশ্চিত করা হয়েছে
       enum: ['image', 'video', 'reel', 'story', 'text', 'none'], 
       default: 'none' 
     },
     
     likes: [{ type: String }], 
+
+    // ⚡ RANK UP SYSTEM FIELD
+    // এখানে ১০ জন ইউজারের ID জমা হলে ক্রিয়েটরের র‍্যাঙ্ক বাড়বে
+    rankClicks: [{ type: String }], 
     
     comments: [
       {
-        userId: { type: String }, // কন্ট্রোলারের সাথে মিল রাখার জন্য userId করা হয়েছে
+        userId: { type: String }, 
         userName: { type: String },
         userAvatar: { type: String },
         text: { type: String, required: true },

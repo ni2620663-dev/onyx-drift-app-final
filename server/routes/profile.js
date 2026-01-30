@@ -8,6 +8,7 @@ const router = express.Router();
 
 /* ==========================================================
     1️⃣ GET PROFILE BY ID
+    (নিউরাল আইডি দিয়ে প্রোফাইল খুঁজে বের করা)
 ========================================================== */
 router.get(['/profile/:id', '/:id'], auth, async (req, res) => {
   try {
@@ -52,7 +53,7 @@ router.get(['/profile/:id', '/:id'], auth, async (req, res) => {
 });
 
 /* ==========================================================
-    2️⃣ UPDATE PROFILE (Unified & Optimized)
+    2️⃣ UPDATE PROFILE (Unified)
 ========================================================== */
 router.put("/update-profile", auth, upload.fields([
   { name: 'avatar', maxCount: 1 },
@@ -89,15 +90,14 @@ router.put("/update-profile", auth, upload.fields([
 });
 
 /* ==========================================================
-    🚀 2.5 NEURAL RANK UPDATE (New Feature)
-    প্রতি ১০০ মেসেজে ১ পয়েন্ট যোগ করার জন্য
+    🚀 3️⃣ NEURAL RANK UPDATE
+    (প্রতি ১০০ মেসেজে ১ পয়েন্ট বাড়াতে এই এপিআই কাজ করবে)
 ========================================================== */
 router.patch("/update-rank", auth, async (req, res) => {
   try {
     const myId = req.user.sub || req.user.id;
     const { points } = req.body;
 
-    // $inc ব্যবহার করে পয়েন্ট বাড়ানো হচ্ছে এবং Pre-save হুক drifterLevel আপডেট করবে
     const updatedUser = await User.findOneAndUpdate(
       { auth0Id: myId },
       { $inc: { neuralRank: points || 1 } },
@@ -118,7 +118,47 @@ router.patch("/update-rank", auth, async (req, res) => {
 });
 
 /* ==========================================================
-    3️⃣ SEARCH USERS
+    🔗 4️⃣ ESTABLISH LINK SYSTEM (Unique Follow/Unfollow)
+========================================================== */
+router.post("/establish-link/:targetId", auth, async (req, res) => {
+  try {
+    const myId = req.user.sub || req.user.id; 
+    const targetId = decodeURIComponent(req.params.targetId);
+
+    if (myId === targetId) {
+      return res.status(400).json({ msg: "Neural Loop: Cannot link with self." });
+    }
+
+    const targetUser = await User.findOne({ auth0Id: targetId });
+    if (!targetUser) {
+      return res.status(404).json({ msg: "Target node not found" });
+    }
+
+    const isLinked = targetUser.followers && targetUser.followers.includes(myId);
+
+    if (isLinked) {
+      // Sever Link (Unfollow)
+      await Promise.all([
+        User.findOneAndUpdate({ auth0Id: myId }, { $pull: { following: targetId } }),
+        User.findOneAndUpdate({ auth0Id: targetId }, { $pull: { followers: myId } })
+      ]);
+      return res.json({ linked: false, msg: "Neural Link Severed! 🛑" });
+    } else {
+      // Establish Link (Follow)
+      await Promise.all([
+        User.findOneAndUpdate({ auth0Id: myId }, { $addToSet: { following: targetId } }),
+        User.findOneAndUpdate({ auth0Id: targetId }, { $addToSet: { followers: myId } })
+      ]);
+      return res.json({ linked: true, msg: "Neural Link Established! ⚡" });
+    }
+  } catch (err) {
+    console.error("📡 Linking Error:", err);
+    res.status(500).json({ msg: "Link protocol failed" });
+  }
+});
+
+/* ==========================================================
+    🔎 5️⃣ SEARCH DRIFTERS
 ========================================================== */
 router.get("/search", auth, async (req, res) => {
   try {
@@ -149,45 +189,7 @@ router.get("/search", auth, async (req, res) => {
 });
 
 /* ==========================================================
-    4️⃣ FOLLOW / UNFOLLOW SYSTEM
-========================================================== */
-router.post("/follow/:targetId", auth, async (req, res) => {
-  try {
-    const myId = req.user.sub || req.user.id; 
-    const targetId = decodeURIComponent(req.params.targetId);
-
-    if (myId === targetId) {
-      return res.status(400).json({ msg: "Neural Loop: You cannot link with yourself." });
-    }
-
-    const targetUser = await User.findOne({ auth0Id: targetId });
-    if (!targetUser) {
-      return res.status(404).json({ msg: "Target drifter not found" });
-    }
-
-    const isFollowing = targetUser.followers && targetUser.followers.includes(myId);
-
-    if (isFollowing) {
-      await Promise.all([
-        User.findOneAndUpdate({ auth0Id: myId }, { $pull: { following: targetId } }),
-        User.findOneAndUpdate({ auth0Id: targetId }, { $pull: { followers: myId } })
-      ]);
-      return res.json({ followed: false, msg: "Disconnected from node" });
-    } else {
-      await Promise.all([
-        User.findOneAndUpdate({ auth0Id: myId }, { $addToSet: { following: targetId } }),
-        User.findOneAndUpdate({ auth0Id: targetId }, { $addToSet: { followers: myId } })
-      ]);
-      return res.json({ followed: true, msg: "Neural Link Established" });
-    }
-  } catch (err) {
-    console.error("📡 Follow Error:", err);
-    res.status(500).json({ msg: "Connection failed" });
-  }
-});
-
-/* ==========================================================
-    5️⃣ DISCOVERY (All Users)
+    🌍 6️⃣ DISCOVERY (Active Nodes)
 ========================================================== */
 router.get("/all", auth, async (req, res) => {
   try {
@@ -205,7 +207,7 @@ router.get("/all", auth, async (req, res) => {
 });
 
 /* ==========================================================
-    6️⃣ GET POSTS BY USER ID
+    🛰️ 7️⃣ GET USER SIGNALS (Posts)
 ========================================================== */
 router.get("/posts/user/:userId", auth, async (req, res) => {
   try {

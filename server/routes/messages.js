@@ -167,6 +167,38 @@ router.post("/message", checkJwt, async (req, res) => {
     res.status(500).json({ error: "Signal delivery failed" });
   }
 });
+/* ==========================================================
+   🚀 SEND TIME-CAPSULE OR EMOTIONAL MESSAGE
+========================================================== */
+router.post("/message", checkJwt, async (req, res) => {
+  try {
+    const { 
+      conversationId, text, mood, isTimeCapsule, deliverAt 
+    } = req.body;
+    
+    const senderId = req.auth?.payload.sub;
+
+    const newMessage = new Message({
+      conversationId,
+      senderId,
+      text,
+      mood: mood || "Neural-Flow",
+      isTimeCapsule: isTimeCapsule || false,
+      deliverAt: deliverAt || Date.now() // এখানে ভবিষ্যৎ তারিখ সেট করা যাবে
+    });
+
+    const savedMessage = await newMessage.save();
+    
+    // যদি এটি টাইম ক্যাপসুল হয়, তবে সকেট দিয়ে এখনই পাঠাবো না
+    if (!isTimeCapsule) {
+       // Socket.io logic here for instant delivery
+    }
+
+    res.status(200).json(savedMessage);
+  } catch (err) {
+    res.status(500).json({ error: "Neural transmission failed" });
+  }
+});
 
 /* ==========================================================
     4️⃣ GET MESSAGES

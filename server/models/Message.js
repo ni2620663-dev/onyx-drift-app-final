@@ -2,9 +2,9 @@ import mongoose from "mongoose";
 
 const MessageSchema = new mongoose.Schema(
   {
-    // ১. কন্টিনজেন্সি: এটি ওয়ান-টু-ওয়ান চ্যাট নাকি গ্রুপ/কমিউনিটি চ্যাট?
+    // ১. কন্টিনজেন্সি: চ্যাট টাইপ আইডেন্টিফিকেশন
     conversationId: {
-      type: String, // ওয়ান-টু-ওয়ান বা গ্রুপ চ্যাটের মূল আইডি
+      type: String, 
       index: true,
       required: true
     },
@@ -19,9 +19,9 @@ const MessageSchema = new mongoose.Schema(
       index: true
     },
 
-    // ২. সেন্ডার ডিটেইলস (Fast UI Rendering)
+    // ২. সেন্ডার ডিটেইলস (Neural Identity)
     senderId: {
-      type: String, // Auth0 ID
+      type: String, 
       required: true,
       index: true
     },
@@ -40,7 +40,7 @@ const MessageSchema = new mongoose.Schema(
       sparse: true  
     },
 
-    // ৪. কন্টেন্ট টাইপস
+    // ৪. কন্টেন্ট এবং মিডিয়াম
     text: {
       type: String,
       trim: true,
@@ -52,8 +52,37 @@ const MessageSchema = new mongoose.Schema(
     },
     mediaType: {
       type: String,
-      enum: ["text", "image", "video", "voice", "file"],
+      enum: ["text", "image", "video", "voice", "file", "neural-thought"],
       default: "text"
+    },
+
+    // 🚀 ফিচার ১: EMOTIONAL SIGNATURE (ইমোশন ট্র্যাকিং যা ১০০ বছর পর কাজে লাগবে)
+    // এটি ইউজারের মুড এনকোড করবে
+    neuralMood: {
+      type: String,
+      enum: ["Neutral", "Happy", "Sad", "Enraged", "Ecstatic", "Anxious", "Neural-Flow"],
+      default: "Neural-Flow"
+    },
+
+    // 🚀 ফিচার ২: THE TIME CAPSULE (আগামী ১০০ বছরের জন্য মেসেজ লক)
+    isTimeCapsule: {
+      type: Boolean,
+      default: false
+    },
+    deliverAt: {
+      type: Date,
+      default: Date.now,
+      index: true // ফিউচার মেসেজগুলো খুঁজে বের করার জন্য
+    },
+
+    // 🚀 ফিচার ৩: DIGITAL LEGACY (মৃত্যুর পরও অস্তিত্ব বজায় রাখা)
+    isLegacyMessage: {
+      type: Boolean,
+      default: false
+    },
+    autonomousReplyEnabled: {
+      type: Boolean,
+      default: false // ভবিষ্যতে AI যেন আপনার হয়ে উত্তর দিতে পারে তার পারমিশন
     },
 
     // ৫. স্ট্যাটাস এবং মেটাডাটা
@@ -68,12 +97,12 @@ const MessageSchema = new mongoose.Schema(
       default: false
     },
 
-    // 🚀 PHASE-10: SELF-DESTRUCT & PRIVACY
+    // ৬. PRIVACY & SELF-DESTRUCT
     isSelfDestruct: {
       type: Boolean,
       default: false
     },
-    // এই ফিল্ডটি সেট করা থাকলে MongoDB স্বয়ংক্রিয়ভাবে মেসেজ ডিলিট করবে
+    // TTL ইনডেক্সিং এর জন্য ব্যবহৃত হবে
     expireAt: {
       type: Date,
       default: null,
@@ -88,16 +117,23 @@ const MessageSchema = new mongoose.Schema(
 );
 
 /* ==========================================================
-    🚀 PERFORMANCE & PRIVACY OPTIMIZATION (Indexing)
+    📡 PERFORMANCE & QUANTUM OPTIMIZATION
 ========================================================== */
 
-// ১. TTL ইনডেক্স: expireAt-এ দেওয়া সময় পার হওয়ামাত্রই ডিলিট হবে
-// (expireAfterSeconds: 0 মানে একদম ওই নির্দিষ্ট সময়েই ডিলিট হবে)
+// ১. TTL ইনডেক্স: নির্দিষ্ট সময়ে অটোমেটিক ডিলিট করার জন্য
 MessageSchema.index({ expireAt: 1 }, { expireAfterSeconds: 0 });
 
-// ২. চ্যাট হিস্ট্রি দ্রুত লোড করার জন্য কম্পাউন্ড ইনডেক্সিং
+// ২. টাইম ক্যাপসুল ইনডেক্সিং: যাতে ফিউচার মেসেজগুলো দ্রুত প্রসেস হয়
+MessageSchema.index({ deliverAt: 1 });
+
+// ৩. চ্যাট হিস্ট্রি দ্রুত লোড করার জন্য কম্পাউন্ড ইনডেক্সিং
 MessageSchema.index({ conversationId: 1, createdAt: -1 });
 MessageSchema.index({ communityId: 1, createdAt: -1 });
+
+// ৪. ভার্চুয়াল ফিল্ড: মেসেজটি কি বর্তমানে 'লকড' অবস্থায় আছে?
+MessageSchema.virtual('isLocked').get(function() {
+  return this.isTimeCapsule && new Date() < this.deliverAt;
+});
 
 // মডেল এক্সপোর্ট
 const Message = mongoose.models.Message || mongoose.model("Message", MessageSchema);

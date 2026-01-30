@@ -57,6 +57,13 @@ const userSchema = new mongoose.Schema(
       type: Boolean, 
       default: false 
     }, 
+// User Schema তে যোগ করুন
+neuralRank: { type: Number, default: 0 },
+drifterLevel: { 
+  type: String, 
+  enum: ["Novice Drifter", "Signal Voyager", "Time Architect", "Neural Overlord"],
+  default: "Novice Drifter"
+}
     neuralRank: { 
       type: String, 
       enum: ["Neophyte", "Voyager", "Zenith", "Overlord"], 
