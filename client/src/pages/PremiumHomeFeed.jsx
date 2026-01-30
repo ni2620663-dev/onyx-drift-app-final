@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   FaTimes, FaImage, FaHeart, FaComment, 
-  FaShareAlt, FaDownload, FaEllipsisH, FaCheckCircle,
+  FaShareAlt, FaEllipsisH, FaCheckCircle,
   FaVolumeMute, FaVolumeUp, FaTrashAlt, FaEnvelope, FaPaperPlane, FaBolt
 } from 'react-icons/fa'; 
 import { useAuth0 } from "@auth0/auth0-react";
@@ -165,18 +165,21 @@ const PremiumHomeFeed = ({ searchQuery = "", isPostModalOpen, setIsPostModalOpen
   return (
     <div className="w-full min-h-screen bg-[#02040a] text-white pb-32 font-sans overflow-x-hidden">
       
-      {/* --- Cyber Header --- */}
+      {/* --- Cyber Header (শুধুমাত্র মেইন অ্যাপ হেডার) --- */}
       <div className="sticky top-0 z-50 bg-[#02040a]/80 backdrop-blur-xl border-b border-white/5">
         <div className="max-w-[550px] mx-auto px-6 h-16 flex justify-between items-center">
           <div className="flex items-center gap-2.5">
             <div className="w-2 h-2 bg-cyan-500 rounded-full shadow-[0_0_10px_#06b6d4]" />
-            <h2 className="text-[10px] font-black uppercase tracking-[0.4em] text-gray-300">Onyx_Drift</h2>
+            <h2 className="text-[11px] font-black uppercase tracking-[0.4em] text-gray-200 italic">OnyxDrift</h2>
           </div>
-          <img src={user?.picture} className="w-8 h-8 rounded-full border border-white/10" alt="me" />
+          <div className="flex items-center gap-3">
+             <span className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest hidden sm:block">Neural Feed</span>
+             <img src={user?.picture} className="w-8 h-8 rounded-xl border border-white/10 hover:border-cyan-500/50 transition-all cursor-pointer" alt="me" />
+          </div>
         </div>
       </div>
 
-      <section className="max-w-[550px] mx-auto px-4 mt-6">
+      <section className="max-w-[550px] mx-auto px-4 mt-4">
         {error && <div className="p-3 mb-6 bg-rose-500/10 border border-rose-500/20 rounded-xl text-rose-400 text-[10px] uppercase text-center font-bold tracking-widest">{error}</div>}
 
         {loading && posts.length === 0 ? (
@@ -191,10 +194,10 @@ const PremiumHomeFeed = ({ searchQuery = "", isPostModalOpen, setIsPostModalOpen
               
               return (
                 <motion.div 
-                  initial={{ opacity: 0, y: 20 }} 
+                  initial={{ opacity: 0, y: 15 }} 
                   animate={{ opacity: 1, y: 0 }} 
                   key={post._id} 
-                  className="bg-[#0d1117]/40 border border-white/5 rounded-[24px] p-4 sm:p-5 relative group transition-all hover:bg-[#0d1117]/60"
+                  className="bg-[#0d1117]/40 border border-white/5 rounded-[28px] p-4 sm:p-5 relative group transition-all hover:bg-[#0d1117]/60"
                 >
                   <div className="flex gap-4">
                     <img 
@@ -207,7 +210,7 @@ const PremiumHomeFeed = ({ searchQuery = "", isPostModalOpen, setIsPostModalOpen
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between">
                         <div className="flex flex-col">
-                          <div className="flex items-center gap-1">
+                          <div className="flex items-center gap-1.5">
                             <span onClick={() => navigate(`/profile/${authorId}`)} className="text-[15px] font-bold text-gray-100 cursor-pointer hover:text-cyan-400 transition-colors">
                               {post.authorName || 'Drifter'}
                             </span>
@@ -218,7 +221,7 @@ const PremiumHomeFeed = ({ searchQuery = "", isPostModalOpen, setIsPostModalOpen
                               </button>
                             )}
                           </div>
-                          <span className="text-[10px] text-gray-600 font-mono">SIGNAL_ID: {authorId?.slice(-8).toUpperCase()}</span>
+                          <span className="text-[9px] text-gray-600 font-mono mt-0.5 tracking-wider">ID_{authorId?.slice(-8).toUpperCase()}</span>
                         </div>
 
                         <div className="relative">
@@ -229,7 +232,7 @@ const PremiumHomeFeed = ({ searchQuery = "", isPostModalOpen, setIsPostModalOpen
                             {activePostMenuId === post._id && (
                               <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} className="absolute right-0 mt-2 w-40 bg-[#161b22] border border-white/10 rounded-xl shadow-2xl z-50 p-1.5 backdrop-blur-xl">
                                 <button onClick={() => handleDeletePost(post._id)} className="w-full text-left px-4 py-2 text-xs text-rose-500 hover:bg-rose-500/10 rounded-lg flex items-center gap-3 transition-colors font-bold uppercase tracking-wider">
-                                  <FaTrashAlt size={10} /> Delete Signal
+                                  <FaTrashAlt size={10} /> Delete
                                 </button>
                               </motion.div>
                             )}
@@ -240,12 +243,12 @@ const PremiumHomeFeed = ({ searchQuery = "", isPostModalOpen, setIsPostModalOpen
                       <p className="text-[14px] text-gray-300 leading-relaxed mt-3 mb-4 whitespace-pre-wrap font-light tracking-wide">{post.text}</p>
 
                       {mediaSrc && (
-                        <div className="rounded-[20px] overflow-hidden border border-white/5 bg-black/20 shadow-inner">
+                        <div className="rounded-[22px] overflow-hidden border border-white/5 bg-black/20">
                           {isVideo ? <AutoPlayVideo src={mediaSrc} /> : <img src={mediaSrc} className="w-full h-auto object-cover max-h-[500px]" alt="media" loading="lazy" />}
                         </div>
                       )}
 
-                      <div className="flex justify-between items-center mt-5 pt-2">
+                      <div className="flex justify-between items-center mt-5 pt-1">
                         <div className="flex gap-6 items-center">
                           <button onClick={(e) => { e.stopPropagation(); setActiveCommentPost(post); }} className="flex items-center gap-2.5 text-gray-500 hover:text-cyan-400 transition-all group">
                             <div className="p-2 bg-white/5 rounded-xl group-hover:bg-cyan-500/10 transition-colors"><FaComment size={14}/></div>

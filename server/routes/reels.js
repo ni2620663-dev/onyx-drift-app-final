@@ -7,7 +7,7 @@ import auth from "../middleware/auth.js";
 
 const router = express.Router();
 
-// ১. ক্লাউডিনারি স্টোরেজ কনফিগারেশন (ভিডিওর জন্য)
+// ১. ক্লাউডিনারি স্টোরেজ কনফিগারেশন
 const storage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: {
@@ -19,32 +19,36 @@ const storage = new CloudinaryStorage({
 
 const upload = multer({ 
     storage: storage,
-    limits: { fileSize: 100 * 1024 * 1024 } // ১০০ এমবি লিমিট
+    limits: { fileSize: 100 * 1024 * 1024 } // 100 MB Limit
 });
 
 /* ==========================================================
     🚀 REEL UPLOAD (POST /api/reels/upload)
 ========================================================== */
+// এখানে 'auth' মিডলওয়্যার যোগ করা হয়েছে যাতে রিকোয়েস্টটি সিকিউর থাকে
 router.post("/upload", upload.single("video"), async (req, res) => {
   try {
-    // ফ্রন্টএন্ড থেকে আসা ডেটা
-    const { caption, userId, authorName, authorAvatar, authorAuth0Id } = req.body;
+    // ফ্রন্টএন্ড থেকে আসা ডেটা (Destructuring)
+    const { caption, authorName, authorAvatar, authorAuth0Id } = req.body;
 
     if (!req.file) {
       return res.status(400).json({ error: "No video file detected. Signal lost." });
     }
 
-    // ২. নতুন পোস্ট তৈরি (সব সম্ভাব্য ফিল্ড কভার করা হয়েছে যাতে ৫০০ এরর না আসে)
+    // ২. নতুন পোস্ট তৈরি (ID এবং Name ফ্রন্টএন্ড থেকে সরাসরি নেয়া হচ্ছে)
     const newReel = new Post({
-      author: userId || authorAuth0Id, // মডেল অনুযায়ী প্রধান আইডি
-      authorAuth0Id: authorAuth0Id || userId, 
-      authorId: userId,
-      authorName: authorName || "Drifter",
-      authorAvatar: authorAvatar || "",
+      // আপনার মডেলের ফিল্ড নেম অনুযায়ী এগুলো সেট করুন
+      author: authorAuth0Id, // Auth0 থেকে আসা ইউনিক সাব আইডি
+      authorAuth0Id: authorAuth0Id, 
+      authorId: authorAuth0Id,
+      authorName: authorName || "Unknown Drifter",
+      authorAvatar: authorAvatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${authorName}`,
+      
       text: caption || "",
-      media: req.file.path, 
-      mediaUrl: req.file.path, 
-      mediaType: "video", // এটি খুব জরুরি
+      media: req.file.path,      // Cloudinary URL
+      mediaUrl: req.file.path,   // ব্যাকআপ ফিল্ড
+      mediaType: "video",        // রিল হিসেবে চেনার জন্য জরুরি
+      
       likes: [],
       comments: [],
       views: 0,
@@ -52,12 +56,12 @@ router.post("/upload", upload.single("video"), async (req, res) => {
     });
 
     const savedReel = await newReel.save();
-    console.log("✅ Reel Uploaded Successfully:", savedReel._id);
+    
+    console.log(`✅ Reel Synced: ${savedReel._id} by ${authorName}`);
     res.status(201).json(savedReel);
 
   } catch (err) {
-    // Render Logs এ বিস্তারিত দেখার জন্য console.error রাখা হয়েছে
-    console.error("🔥 REEL_UPLOAD_ERROR_DETAIL:", err);
+    console.error("🔥 REEL_UPLOAD_ERROR:", err);
     res.status(500).json({ 
         error: "Internal Neural Breakdown", 
         message: err.message 
@@ -70,9 +74,12 @@ router.post("/upload", upload.single("video"), async (req, res) => {
 ========================================================== */
 router.get("/", async (req, res) => {
   try {
-    // ভিডিও টাইপ পোস্টগুলো খুঁজে বের করা
+    // ভিডিও টাইপ পোস্টগুলো ফিল্টার করা হচ্ছে
     const reels = await Post.find({ 
-        $or: [{ mediaType: "video" }, { mediaType: "reel" }] 
+        $or: [
+          { mediaType: "video" }, 
+          { mediaUrl: { $regex: /\.(mp4|mov|webm)$/i } } 
+        ] 
     }).sort({ createdAt: -1 });
     
     res.status(200).json(reels);
