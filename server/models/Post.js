@@ -22,16 +22,22 @@ const postSchema = new mongoose.Schema(
     
     mediaType: { 
       type: String, 
-      // 🔥 'story' এবং 'reel' নিশ্চিত করা হয়েছে
       enum: ['image', 'video', 'reel', 'story', 'text', 'none'], 
       default: 'none' 
     },
     
-    likes: [{ type: String }], 
+    // ❤️ Like system with default empty array
+    likes: { 
+      type: [String], 
+      default: [] 
+    }, 
 
-    // ⚡ RANK UP SYSTEM FIELD
-    // এখানে ১০ জন ইউজারের ID জমা হলে ক্রিয়েটরের র‍্যাঙ্ক বাড়বে
-    rankClicks: [{ type: String }], 
+    // ⚡ RANK UP SYSTEM FIELD (Fixed with Default)
+    // এখানে ১০ জন ইউজারের ID জমা হলে ক্রিয়েটরের র‍্যাঙ্ক বাড়বে
+    rankClicks: { 
+      type: [String], 
+      default: [] 
+    }, 
     
     comments: [
       {
@@ -50,8 +56,13 @@ const postSchema = new mongoose.Schema(
   }
 );
 
+/* ==========================================================
+    🚀 OPTIMIZED INDEXING
+========================================================== */
 postSchema.index({ authorAuth0Id: 1, createdAt: -1 });
 postSchema.index({ createdAt: -1 });
+// র‍্যাঙ্ক ক্লিক কাউন্ট দিয়ে কোয়েরি ফাস্ট করার জন্য ইনডেক্স
+postSchema.index({ rankClicks: 1 }); 
 
 const Post = mongoose.model('Post', postSchema);
 export default Post;

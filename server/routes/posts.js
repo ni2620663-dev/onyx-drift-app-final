@@ -49,7 +49,7 @@ router.get("/", async (req, res) => {
       authorAvatar: post.authorAvatar || "https://ui-avatars.com/api/?name=Drifter",
       likes: post.likes || [],
       comments: post.comments || [],
-      rankClicks: post.rankClicks || [] // র‍্যাঙ্ক ক্লিক লিস্ট নিশ্চিত করা
+      rankClicks: post.rankClicks || []
     }));
 
     res.json(safePosts);
@@ -69,12 +69,11 @@ router.get("/reels/all", async (req, res) => {
     .sort({ createdAt: -1 })
     .lean();
 
-    if (!reels || reels.length === 0) return res.json([]);
-
-    const safeReels = reels.map(reel => ({
+    const safeReels = (reels || []).map(reel => ({
       ...reel,
       authorName: reel.authorName || "Unknown Drifter",
       authorAvatar: reel.authorAvatar || "https://ui-avatars.com/api/?name=Drifter",
+      likes: reel.likes || [],
       rankClicks: reel.rankClicks || []
     }));
 
@@ -117,7 +116,7 @@ router.post("/", auth, upload.single("media"), async (req, res) => {
       mediaType: detectedType,
       likes: [],
       comments: [],
-      rankClicks: [], // নতুন পোস্টের জন্য খালি র‍্যাঙ্ক লিস্ট
+      rankClicks: [], 
     };
 
     const post = await Post.create(postData);
@@ -129,38 +128,7 @@ router.post("/", auth, upload.single("media"), async (req, res) => {
 });
 
 /* ==========================================================
-    💬 3. ADD COMMENT
-========================================================== */
-router.post("/:id/comment", auth, async (req, res) => {
-  try {
-    const { text } = req.body;
-    if (!text) return res.status(400).json({ msg: "Text required" });
-
-    const currentUserId = req.user?.sub || req.user?.id;
-    const userProfile = await User.findOne({ auth0Id: currentUserId }).lean();
-
-    const comment = {
-      text,
-      userId: currentUserId,
-      userName: userProfile?.name || req.user?.name || "Drifter",
-      userAvatar: userProfile?.avatar || req.user?.picture || "",
-      createdAt: new Date()
-    };
-
-    const post = await Post.findByIdAndUpdate(
-      req.params.id,
-      { $push: { comments: comment } },
-      { new: true }
-    );
-
-    res.json(post);
-  } catch (err) {
-    res.status(500).json({ msg: "Comment Failure" });
-  }
-});
-
-/* ==========================================================
-    ❤️ 4. LIKE / UNLIKE
+    ❤️ 4. LIKE / UNLIKE (Fixed Null Check)
 ========================================================== */
 router.post("/:id/like", auth, async (req, res) => {
   try {
@@ -168,8 +136,13 @@ router.post("/:id/like", auth, async (req, res) => {
     const post = await Post.findById(req.params.id);
     if (!post) return res.status(404).json({ msg: "Post not found" });
 
-    const isLiked = post.likes && post.likes.includes(userId);
-    const update = isLiked ? { $pull: { likes: userId } } : { $addToSet: { likes: userId } };
+    // পুরোনো ডাটার জন্য likes অ্যারে চেক করা
+    const likesArray = post.likes || [];
+    const isLiked = likesArray.includes(userId);
+    
+    const update = isLiked 
+      ? { $pull: { likes: userId } } 
+      : { $addToSet: { likes: userId } };
 
     const updatedPost = await Post.findByIdAndUpdate(req.params.id, update, { new: true });
     res.json(updatedPost);
@@ -187,25 +160,27 @@ router.post("/:id/rank-up", auth, async (req, res) => {
     const post = await Post.findById(req.params.id);
     if (!post) return res.status(404).json({ msg: "Post not found" });
 
-    // ১. চেক করা যে ইউজার অলরেডি র‍্যাঙ্ক ক্লিক করেছে কি না
-    if (post.rankClicks && post.rankClicks.includes(userId)) {
-      return res.status(400).json({ msg: "Neural Pulse already sent to this signal!" });
+    // ১. নিশ্চিত করা যে rankClicks একটি অ্যারে
+    const clicks = post.rankClicks || [];
+
+    if (clicks.includes(userId)) {
+      return res.status(400).json({ msg: "Neural Pulse already sent!" });
     }
 
-    // ২. র‍্যাঙ্ক ক্লিক লিস্ট আপডেট করা
+    // ২. আপডেট করা
     const updatedPost = await Post.findByIdAndUpdate(
       req.params.id,
       { $addToSet: { rankClicks: userId } },
       { new: true }
     );
 
-    // ৩. যদি ১০টি ক্লিক পূর্ণ হয়, ক্রিয়েটরের গ্লোবাল র‍্যাঙ্ক ১ বাড়ানো
     const clickCount = updatedPost.rankClicks.length;
     let rankIncreased = false;
 
+    // ৩. প্রতি ১০ ক্লিকে ক্রিয়েটরের র‍্যাঙ্ক বাড়ানো
     if (clickCount > 0 && clickCount % 10 === 0) {
       await User.findOneAndUpdate(
-        { auth0Id: updatedPost.authorAuth0Id },
+        { auth0Id: updatedPost.authorAuth0Id || updatedPost.author },
         { $inc: { neuralRank: 1 } }
       );
       rankIncreased = true;
@@ -218,9 +193,41 @@ router.post("/:id/rank-up", auth, async (req, res) => {
       msg: rankIncreased ? "Milestone Reached! Creator Rank Increased! ⚡" : "Neural Pulse Synced"
     });
   } catch (err) {
+    console.error("Rank Up Error:", err);
     res.status(500).json({ error: err.message });
   }
 });
+
+/* ==========================================================
+    💬 3. ADD COMMENT (Fixed)
+========================================================== */
+router.post("/:id/comment", auth, async (req, res) => {
+    try {
+      const { text } = req.body;
+      if (!text) return res.status(400).json({ msg: "Text required" });
+  
+      const currentUserId = req.user?.sub || req.user?.id;
+      const userProfile = await User.findOne({ auth0Id: currentUserId }).lean();
+  
+      const comment = {
+        text,
+        userId: currentUserId,
+        userName: userProfile?.name || req.user?.name || "Drifter",
+        userAvatar: userProfile?.avatar || req.user?.picture || "",
+        createdAt: new Date()
+      };
+  
+      const post = await Post.findByIdAndUpdate(
+        req.params.id,
+        { $push: { comments: comment } },
+        { new: true }
+      );
+  
+      res.json(post);
+    } catch (err) {
+      res.status(500).json({ msg: "Comment Failure", error: err.message });
+    }
+  });
 
 /* ==========================================================
     🗑️ 6. DELETE POST
