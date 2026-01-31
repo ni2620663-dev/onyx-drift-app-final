@@ -1,6 +1,6 @@
 import express from 'express';
 import User from '../models/User.js'; 
-import Post from '../models/Post.js'; // Post মডেল ইমপোর্ট করা জরুরি
+import Post from '../models/Post.js'; 
 import auth from '../middleware/auth.js'; 
 import upload from '../middleware/multer.js';
 
@@ -16,7 +16,6 @@ router.get(['/profile/:id', '/:id'], auth, async (req, res) => {
     
     let user = await User.findOne({ auth0Id: targetId }).select("-__v").lean();
     
-    // যদি নিজের প্রোফাইল হয় এবং ডাটাবেসে না থাকে, তবে অটো-সিঙ্ক করবে
     if (!user && targetId === myId) {
       const newUser = new User({
         auth0Id: myId,
@@ -58,7 +57,6 @@ router.put("/update-profile", auth, upload.fields([
       if (req.files.cover) updateFields.coverImg = req.files.cover[0].path;
     }
 
-    // ফাকা ডাটা ফিল্টার করা
     Object.keys(updateFields).forEach(key => 
       (updateFields[key] === undefined || updateFields[key] === "") && delete updateFields[key]
     );
@@ -77,14 +75,18 @@ router.put("/update-profile", auth, upload.fields([
 });
 
 /* ==========================================================
-    3️⃣ SEARCH DRIFTERS (Optimized Regex)
+    3️⃣ SEARCH DRIFTERS (Fail-safe Version)
 ========================================================== */
 router.get("/search", auth, async (req, res) => {
   try {
     const queryTerm = req.query.q || ""; 
     const currentUserId = req.user.sub || req.user.id;
 
-    let dbQuery = { auth0Id: { $ne: currentUserId } };
+    // ১. যাদের নাম নেই তাদের বাদ দিয়ে ফিল্টার তৈরি
+    let dbQuery = { 
+      auth0Id: { $ne: currentUserId },
+      name: { $exists: true, $ne: null } 
+    };
 
     if (queryTerm.trim() !== "") {
       const searchRegex = new RegExp(queryTerm.trim(), "i");
@@ -94,26 +96,27 @@ router.get("/search", auth, async (req, res) => {
       ];
     }
 
+    // ২. .hint({ _id: 1 }) ব্যবহার করা হয়েছে যাতে ডুপ্লিকেট ইনডেক্স এরর না দেয়
     const users = await User.find(dbQuery)
+      .hint({ _id: 1 })
       .select("name nickname avatar auth0Id bio isVerified neuralRank drifterLevel")
       .limit(20)
       .lean();
 
     res.json(users);
   } catch (err) {
-    console.error("🔍 SEARCH ERROR:", err);
+    console.error("🔍 SEARCH ERROR:", err.message);
     res.status(500).json({ msg: "Search signal lost", error: err.message });
   }
 });
 
 /* ==========================================================
-    4️⃣ GET POSTS BY USER ID (Required for Follower Page)
+    4️⃣ GET POSTS BY USER ID
 ========================================================== */
 router.get("/posts/user/:userId", auth, async (req, res) => {
   try {
     const targetUserId = decodeURIComponent(req.params.userId);
     
-    // authorAuth0Id অথবা userId যেকোনো একটি মিললে পোস্ট ফেচ করবে
     const posts = await Post.find({
       $or: [
         { authorAuth0Id: targetUserId },
