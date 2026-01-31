@@ -13,15 +13,14 @@ router.get(['/:id', '/profile/:id'], auth, async (req, res) => {
     const targetId = decodeURIComponent(req.params.id);
     const myId = req.user.sub || req.user.id;
     
-    // ডাটাবেসে ইউজার খোঁজা
     let user = await User.findOne({ auth0Id: targetId }).select("-__v").lean();
     
-    // যদি ইউজার ডাটাবেসে না থাকে এবং এটি নিজের প্রোফাইল হয়, তবে সিঙ্ক করবে
+    // যদি নিজের প্রোফাইল হয় এবং ডাটাবেসে না থাকে, তবে অটো-সিঙ্ক করবে
     if (!user && targetId === myId) {
       const newUser = new User({
         auth0Id: myId,
         name: req.user.name || "Drifter",
-        nickname: req.user.nickname || "drifter",
+        nickname: req.user.nickname || `drifter_${Math.floor(Math.random() * 1000)}`,
         avatar: req.user.picture || "",
         isVerified: false,
         followers: [],
@@ -31,9 +30,7 @@ router.get(['/:id', '/profile/:id'], auth, async (req, res) => {
       user = savedUser.toObject();
     }
     
-    if (!user) {
-      return res.status(404).json({ msg: "Drifter not found in neural network" });
-    }
+    if (!user) return res.status(404).json({ msg: "Drifter not found" });
     
     res.json(user);
   } catch (err) {
@@ -79,31 +76,32 @@ router.put("/update-profile", auth, upload.fields([
 });
 
 /* ==========================================================
-    3️⃣ SEARCH DRIFTERS (The 500 Error Fix)
+    3️⃣ SEARCH DRIFTERS (Final 500 Error Fix)
 ========================================================== */
 router.get("/search", auth, async (req, res) => {
   try {
-    const queryTerm = req.query.q || ""; 
+    const queryTerm = req.query.q || ""; // 'q' প্যারামিটার রিসিভ করা
     const currentUserId = req.user.sub || req.user.id;
 
-    let query = { auth0Id: { $ne: currentUserId } };
+    // নিজের আইডি বাদে বাকিদের জন্য বেস কুয়েরি
+    let dbQuery = { auth0Id: { $ne: currentUserId } };
 
     if (queryTerm.trim() !== "") {
       const searchRegex = new RegExp(queryTerm.trim(), "i");
-      query.$or = [
+      dbQuery.$or = [
         { name: { $regex: searchRegex } },
         { nickname: { $regex: searchRegex } }
       ];
     }
 
-    const users = await User.find(query)
+    const users = await User.find(dbQuery)
       .select("name nickname avatar auth0Id bio isVerified")
       .limit(20)
       .lean();
 
     res.json(users);
   } catch (err) {
-    console.error("🔍 SEARCH ERROR:", err.message);
+    console.error("🔍 SEARCH ERROR:", err);
     res.status(500).json({ msg: "Search signal lost", error: err.message });
   }
 });
@@ -121,6 +119,7 @@ router.post("/follow/:targetId", auth, async (req, res) => {
     const targetUser = await User.findOne({ auth0Id: targetId });
     if (!targetUser) return res.status(404).json({ msg: 'Target not found' });
 
+    // চেক করা ইউজার ফলোয়ার লিস্টে আছে কিনা
     const isFollowing = targetUser.followers?.includes(myId);
 
     if (isFollowing) {
@@ -128,15 +127,16 @@ router.post("/follow/:targetId", auth, async (req, res) => {
         User.findOneAndUpdate({ auth0Id: myId }, { $pull: { following: targetId } }),
         User.findOneAndUpdate({ auth0Id: targetId }, { $pull: { followers: myId } })
       ]);
-      res.json({ followed: false });
+      return res.json({ followed: false });
     } else {
       await Promise.all([
         User.findOneAndUpdate({ auth0Id: myId }, { $addToSet: { following: targetId } }),
         User.findOneAndUpdate({ auth0Id: targetId }, { $addToSet: { followers: myId } })
       ]);
-      res.json({ followed: true });
+      return res.json({ followed: true });
     }
   } catch (err) {
+    console.error("📡 Follow Error:", err);
     res.status(500).json({ msg: "Connection failed" });
   }
 });
@@ -160,18 +160,25 @@ router.get("/all", auth, async (req, res) => {
 router.post('/sync', auth, async (req, res) => {
   try {
     const { auth0Id, name, email, picture, username } = req.body;
+    
+    // Nickname তৈরি করার সময় স্পেস রিমুভ করা
+    const cleanNickname = username ? username.replace(/\s+/g, '').toLowerCase() : `drifter_${Date.now()}`;
+
     const user = await User.findOneAndUpdate(
       { auth0Id }, 
       { 
         $set: { 
-          name, email, avatar: picture, 
-          nickname: username?.replace(/\s+/g, '').toLowerCase() 
+          name, 
+          email, 
+          avatar: picture, 
+          nickname: cleanNickname 
         } 
       },
-      { upsert: true, new: true } 
+      { upsert: true, new: true, setDefaultsOnInsert: true } 
     );
     res.status(200).json(user);
   } catch (err) {
+    console.error("📡 Sync Error:", err);
     res.status(500).json({ message: "Sync failed" });
   }
 });
