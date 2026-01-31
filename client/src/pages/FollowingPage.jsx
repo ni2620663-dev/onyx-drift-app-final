@@ -7,7 +7,7 @@ import {
 } from 'react-icons/fa';
 import { useNavigate, useLocation } from 'react-router-dom';
 
-// 🧠 DISPLAY NAME HELPER (WORLD-CLASS UX)
+// 🧠 DISPLAY NAME HELPER
 const getDisplayName = (u) => {
   if (!u) return "Drifter";
   const name = u.name?.trim() || u.nickname?.trim() || u.displayName?.trim();
@@ -28,7 +28,6 @@ const FollowingPage = () => {
   const queryParams = new URLSearchParams(location.search);
   const targetUserId = queryParams.get('userId');
 
-  // Base API URL
   const API_URL = "https://onyx-drift-app-final-u29m.onrender.com";
 
   /**
@@ -40,11 +39,12 @@ const FollowingPage = () => {
       const token = await getAccessTokenSilently();
       const encodedId = encodeURIComponent(id);
 
+      // প্রোফাইল এবং ইউজারের পোস্ট একসাথে ফেচ করা
       const [profileRes, postsRes] = await Promise.all([
         axios.get(`${API_URL}/api/user/profile/${encodedId}`, {
           headers: { Authorization: `Bearer ${token}` }
         }),
-        axios.get(`${API_URL}/api/user/posts/user/${encodedId}`, {
+        axios.get(`${API_URL}/api/posts/user/${encodedId}`, { // এপিআই পাথ চেক করুন
           headers: { Authorization: `Bearer ${token}` }
         })
       ]);
@@ -60,16 +60,16 @@ const FollowingPage = () => {
   }, [getAccessTokenSilently]);
 
   /**
-   * ২. ইউজার সার্চ (Endpoint fixed: /api/user/search)
+   * ২. ইউজার সার্চ (Backend Fixed: /api/user/search)
    */
   const loadDiscoveryList = useCallback(async (query = "") => {
     try {
       setLoading(true);
       const token = await getAccessTokenSilently();
       
-      // ✅ FIXED: Changed /api/users/search to /api/user/search
+      // ✅ ব্যাকএন্ডের নতুন লজিক অনুযায়ী 'q' প্যারামিটার পাঠানো হচ্ছে
       const res = await axios.get(`${API_URL}/api/user/search`, {
-        params: { q: query, limit: 20 },
+        params: { q: query.trim() }, 
         headers: { Authorization: `Bearer ${token}` }
       });
       
@@ -86,6 +86,7 @@ const FollowingPage = () => {
     if (targetUserId) {
       loadProfileData(targetUserId);
     } else {
+      // ডেবোন্স (Debounce) লজিক যাতে টাইপ করার সাথে সাথে বারবার রিকোয়েস্ট না যায়
       const delayDebounceFn = setTimeout(() => {
         loadDiscoveryList(searchTerm);
       }, 500); 
@@ -99,7 +100,7 @@ const FollowingPage = () => {
       const res = await axios.post(`${API_URL}/api/user/follow/${encodeURIComponent(targetId)}`, {}, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      alert(res.data.msg || "Identity Linked!");
+      alert(res.data.followed ? "Identity Linked!" : "Link Severed!");
     } catch (err) { 
       alert("Synchronization Error");
     }
@@ -108,7 +109,7 @@ const FollowingPage = () => {
   return (
     <div className="p-4 md:p-6 bg-transparent min-h-screen font-sans max-w-7xl mx-auto selection:bg-cyan-500/30">
       
-      {/* Header */}
+      {/* Header Section */}
       <div className="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-6">
         <div>
           <button 
@@ -128,7 +129,7 @@ const FollowingPage = () => {
           <div className="relative w-full md:w-96">
             <input 
               type="text" 
-              placeholder="Search Name or ID..." 
+              placeholder="Scan Identity (Name or ID)..." 
               className="w-full bg-white/5 border border-white/10 rounded-2xl py-3.5 pl-12 pr-4 text-white text-xs outline-none focus:border-cyan-500/50 transition-all backdrop-blur-xl"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -138,17 +139,17 @@ const FollowingPage = () => {
         )}
       </div>
 
-      {/* Grid */}
+      {/* Discovery Grid */}
       <div className={`grid grid-cols-1 ${targetUserId ? 'max-w-md mx-auto' : 'sm:grid-cols-2 lg:grid-cols-3'} gap-6`}>
         {users.length > 0 ? users.map((u) => (
           <div 
-            key={u.auth0Id || u.userId || u._id} 
+            key={u.auth0Id || u._id} 
             className={`backdrop-blur-2xl border rounded-[2.5rem] p-6 shadow-2xl transition-all duration-500 ${targetUserId ? 'bg-cyan-500/10 border-cyan-500/40' : 'bg-[#0f172a]/40 border-white/5 hover:-translate-y-2'}`}
           >
             <div className="flex flex-col items-center text-center">
               <div 
                 className="relative cursor-pointer" 
-                onClick={() => navigate(`/following?userId=${encodeURIComponent(u.auth0Id || u.userId)}`)}
+                onClick={() => navigate(`/following?userId=${encodeURIComponent(u.auth0Id || u._id)}`)}
               >
                 <img 
                   src={u.avatar || u.picture || `https://ui-avatars.com/api/?background=0d1117&color=00f2ff&bold=true&name=${encodeURIComponent(getDisplayName(u))}`} 
@@ -166,20 +167,20 @@ const FollowingPage = () => {
                 {getDisplayName(u)}
               </h3>
               <p className="text-cyan-400/40 text-[9px] font-black tracking-widest uppercase mt-2">
-                @{u.userId || u.nickname || "drifter"}
+                @{u.nickname || "drifter"}
               </p>
             </div>
             
             <div className="mt-8 grid grid-cols-3 gap-3">
-                <button onClick={() => handleFollow(u.auth0Id || u.userId)} className="flex flex-col items-center p-3 bg-white/5 rounded-2xl text-cyan-500 hover:bg-cyan-500 hover:text-black transition-all group">
+                <button onClick={() => handleFollow(u.auth0Id || u._id)} className="flex flex-col items-center p-3 bg-white/5 rounded-2xl text-cyan-500 hover:bg-cyan-500 hover:text-black transition-all group">
                   <FaUserPlus size={16} />
                   <span className="text-[7px] font-black mt-1 uppercase">Follow</span>
                 </button>
-                <button onClick={() => navigate(`/messenger?userId=${u.auth0Id || u.userId}`)} className="flex flex-col items-center p-3 bg-white/5 rounded-2xl text-purple-500 hover:bg-purple-600 hover:text-white transition-all">
+                <button onClick={() => navigate(`/messenger?userId=${u.auth0Id || u._id}`)} className="flex flex-col items-center p-3 bg-white/5 rounded-2xl text-purple-500 hover:bg-purple-600 hover:text-white transition-all">
                   <FaEnvelope size={16} />
                   <span className="text-[7px] font-black mt-1 uppercase">Chat</span>
                 </button>
-                <button onClick={() => navigate(`/call/${u.auth0Id || u.userId}`)} className="flex flex-col items-center p-3 bg-white/5 rounded-2xl text-emerald-500 hover:bg-emerald-600 hover:text-white transition-all">
+                <button onClick={() => navigate(`/call/${u.auth0Id || u._id}`)} className="flex flex-col items-center p-3 bg-white/5 rounded-2xl text-emerald-500 hover:bg-emerald-600 hover:text-white transition-all">
                   <FaPhoneAlt size={16} />
                   <span className="text-[7px] font-black mt-1 uppercase">Call</span>
                 </button>
@@ -192,7 +193,7 @@ const FollowingPage = () => {
         )}
       </div>
 
-      {/* Target User Posts */}
+      {/* User Posts (Only in Profile View) */}
       {targetUserId && !loading && (
         <div className="mt-12 animate-in fade-in slide-in-from-bottom-4 duration-700">
           <h2 className="text-white font-black italic mb-6 flex items-center gap-2">
@@ -203,20 +204,21 @@ const FollowingPage = () => {
               <div key={post._id} className="bg-white/5 border border-white/10 p-5 rounded-[2rem] hover:border-cyan-500/30 transition-all group">
                 {post.media && (
                   <div className="rounded-2xl overflow-hidden mb-4 aspect-video bg-black/40 border border-white/5">
-                    {post.mediaType === 'video' ? (
+                    {post.media.match(/\.(mp4|webm|mov)$/i) ? (
                       <video src={post.media} className="w-full h-full object-contain" controls />
                     ) : (
                       <img src={post.media} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" alt="Post" />
                     )}
                   </div>
                 )}
-                <p className="text-gray-300 text-sm leading-relaxed">{post.text || post.content}</p>
+                <p className="text-gray-300 text-sm leading-relaxed">{post.text}</p>
               </div>
             )) : <p className="text-gray-600 text-xs italic tracking-widest">NO SIGNALS TRANSMITTED IN THIS SECTOR...</p>}
           </div>
         </div>
       )}
 
+      {/* Loader */}
       {loading && (
         <div className="fixed inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm z-[100]">
           <div className="w-10 h-10 border-4 border-t-cyan-500 border-cyan-500/20 rounded-full animate-spin shadow-[0_0_20px_rgba(6,182,212,0.3)]"></div>
