@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   FaSearch, FaRegBell, FaSignOutAlt, FaUserCircle, FaUserCheck, 
-  FaPlus, FaFileAlt, FaCamera, FaVideo, FaBroadcastTower 
+  FaPlus, FaFileAlt, FaCamera, FaVideo, FaBroadcastTower,
+  FaVolumeUp, FaVolumeMute, FaShareAlt, FaEye // নতুন আইকন যোগ করা হয়েছে
 } from 'react-icons/fa'; 
 import { HiOutlineMenuAlt4 } from "react-icons/hi"; 
 import { useNavigate } from 'react-router-dom';
@@ -21,6 +22,9 @@ const Navbar = ({ setIsPostModalOpen, toggleSidebar, socket }) => {
   const [searchResults, setSearchResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const [hasNewNotification, setHasNewNotification] = useState(false);
+  
+  // ভিডিও সাউন্ডের জন্য নতুন স্টেট
+  const [isGlobalMuted, setIsGlobalMuted] = useState(true);
 
   const API_URL = "https://onyx-drift-app-final-u29m.onrender.com";
 
@@ -147,6 +151,15 @@ const Navbar = ({ setIsPostModalOpen, toggleSidebar, socket }) => {
       {/* Right Section */}
       <div className="flex items-center gap-3 lg:gap-6">
         
+        {/* Global Volume Toggle (নতুন যোগ করা হয়েছে) */}
+        <button 
+          onClick={() => setIsGlobalMuted(!isGlobalMuted)}
+          className="hidden md:flex p-2 bg-white/5 rounded-full border border-white/10 text-gray-400 hover:text-cyan-400 transition-all"
+          title={isGlobalMuted ? "Unmute All" : "Mute All"}
+        >
+          {isGlobalMuted ? <FaVolumeMute size={16} /> : <FaVolumeUp size={16} />}
+        </button>
+
         {/* Plus (+) Menu */}
         <div className="relative">
           <button 
@@ -222,7 +235,19 @@ const Navbar = ({ setIsPostModalOpen, toggleSidebar, socket }) => {
                   >
                     <FaUserCircle size={14} /> Profile
                   </button>
-                  <div className="h-[1px] bg-white/5 my-1"></div>
+                  
+                  {/* Quick View Stats (নতুন ডিজাইন উপাদান) */}
+                  <div className="flex items-center justify-around py-2 border-y border-white/5 bg-white/[0.02]">
+                    <div className="flex flex-col items-center">
+                      <FaEye size={10} className="text-gray-500" />
+                      <span className="text-[8px] text-gray-400 font-bold">1.2k</span>
+                    </div>
+                    <div className="flex flex-col items-center">
+                      <FaShareAlt size={10} className="text-gray-500" />
+                      <span className="text-[8px] text-gray-400 font-bold">45</span>
+                    </div>
+                  </div>
+
                   <button 
                     onClick={() => logout({ logoutParams: { returnTo: window.location.origin } })}
                     className="w-full flex items-center gap-3 px-4 py-3 text-[9px] font-black text-rose-500 hover:bg-rose-500/10 rounded-xl uppercase transition-all text-left"
