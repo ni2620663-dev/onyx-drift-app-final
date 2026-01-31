@@ -17,14 +17,13 @@ const userSchema = new mongoose.Schema(
       type: String, 
       trim: true, 
       unique: true, 
-      sparse: true 
+      sparse: true // নিশ্চিত করে যে null ডুপ্লিকেট হবে না
     },
     email: { 
       type: String, 
       unique: true, 
       lowercase: true, 
-      sparse: true, 
-      index: true 
+      sparse: true 
     },
     avatar: { type: String, default: "" },
     coverImg: { type: String, default: "" }, 
@@ -58,7 +57,7 @@ const userSchema = new mongoose.Schema(
       default: false 
     }, 
 
-    // ⚡ RANK UP SYSTEM (Fixed Syntax)
+    // ⚡ RANK UP SYSTEM
     neuralRank: { 
       type: Number, 
       default: 0 
@@ -99,18 +98,14 @@ const userSchema = new mongoose.Schema(
 );
 
 /* ==========================================================
-    🚀 OPTIMIZED INDEXING (Search & Ranking)
+    🚀 OPTIMIZED INDEXING (Fixed for Regex Search)
 ========================================================== */
 
-// ১. গ্লোবাল সার্চ ফাস্ট করার জন্য টেক্সট ইনডেক্স
-userSchema.index(
-  { name: 'text', nickname: 'text', bio: 'text' },
-  { weights: { name: 10, nickname: 5, bio: 1 }, name: "UserSearchIndex" }
-);
+// ১. টেক্সট ইনডেক্স সরিয়ে সাধারণ কম্পাউন্ড ইনডেক্স করা (রেজেক্সের জন্য নিরাপদ)
+userSchema.index({ name: 1, nickname: 1 });
 
 // ২. ভাইরাল রিচ এবং ইনভাইট সিস্টেম ফাস্ট করার জন্য ইনডেক্স
 userSchema.index({ createdAt: -1, isVerified: -1 });
-userSchema.index({ inviteCode: 1 });
 userSchema.index({ inviteCount: -1 }); 
 
 const User = mongoose.model("User", userSchema);
