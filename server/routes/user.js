@@ -112,19 +112,24 @@ router.post("/update-photo", auth, upload.single('image'), async (req, res) => {
 });
 
 /* ==========================================================
-    4️⃣ SEARCH DRIFTERS
+    4️⃣ SEARCH DRIFTERS (Fixed for 500 Error)
 ========================================================== */
 router.get("/search", auth, async (req, res) => {
   try {
-    const { query } = req.query;
+    // ফ্রন্টএন্ড থেকে 'q' অথবা 'query' যেকোনোটি আসলে রিসিভ করবে
+    const searchQuery = req.query.q || req.query.query; 
     const currentUserId = req.user.sub || req.user.id;
 
-    if (!query) {
-       const all = await User.find({ auth0Id: { $ne: currentUserId } }).limit(10).lean();
-       return res.json(all);
+    // যদি সার্চ বক্সে কিছু না থাকে, তবে কিছু সাজেস্টেড ইউজার দেখাবে
+    if (!searchQuery || searchQuery.trim() === "") {
+      const suggested = await User.find({ auth0Id: { $ne: currentUserId } })
+        .select("name nickname avatar auth0Id bio isVerified")
+        .limit(10)
+        .lean();
+      return res.json(suggested);
     }
 
-    const searchRegex = new RegExp(`${query.trim()}`, "i");
+    const searchRegex = new RegExp(searchQuery.trim(), "i");
 
     const users = await User.find({
       auth0Id: { $ne: currentUserId },
@@ -134,15 +139,15 @@ router.get("/search", auth, async (req, res) => {
       ]
     })
     .select("name nickname avatar auth0Id bio isVerified")
-    .limit(10)
+    .limit(20)
     .lean();
 
     res.json(users);
   } catch (err) {
-    res.status(500).json({ msg: "Search signal lost" });
+    console.error("🔍 Search Error:", err);
+    res.status(500).json({ msg: "Neural link interrupted", error: err.message });
   }
 });
-
 /* ==========================================================
     5️⃣ FOLLOW / UNFOLLOW SYSTEM
 ========================================================== */
