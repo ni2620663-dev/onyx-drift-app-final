@@ -48,7 +48,7 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isPostModalOpen, setIsPostModalOpen] = useState(false);
-  const [isSideMenuOpen, setIsSideMenuOpen] = useState(false); // প্রোফাইল ক্লিকের জন্য
+  const [isSideMenuOpen, setIsSideMenuOpen] = useState(false); 
   const [activeCommentPost, setActiveCommentPost] = useState(null);
   const [commentText, setCommentText] = useState("");
   const [postText, setPostText] = useState("");
@@ -69,6 +69,18 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
     fetchPosts();
   }, []);
 
+  // --- LIKE FUNCTION ---
+  const handleLike = async (postId) => {
+    try {
+      const token = await getAccessTokenSilently();
+      const res = await axios.post(`${API_URL}/api/posts/${postId}/like`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      // আপডেট করা পোস্ট লিস্টে সেট করা
+      setPosts(posts.map(p => p._id === postId ? res.data : p));
+    } catch (err) { console.error("Like error", err); }
+  };
+
   const handleShare = (post) => {
     if (navigator.share) {
       navigator.share({ title: 'OnyxDrift', text: post.text, url: window.location.href });
@@ -85,7 +97,7 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
             src={user?.picture} 
             className="w-8 h-8 rounded-full border border-cyan-500/50 cursor-pointer hover:opacity-80 transition-all" 
             alt="profile" 
-            onClick={() => setIsSideMenuOpen(true)} // ছবিতে ক্লিক করলে মেনু খুলবে
+            onClick={() => setIsSideMenuOpen(true)} 
           />
           <h2 className="text-lg font-bold italic text-cyan-500 tracking-tighter">OnyxDrift</h2>
         </div>
@@ -165,11 +177,12 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
                       <img src={post.media} className="mt-3 rounded-2xl border border-white/5 w-full max-h-[500px] object-cover" alt="" />
                     )}
 
-                    {/* --- View, Like, Comment, Share Bar --- */}
+                    {/* --- Interaction Bar --- */}
                     <div className="flex items-center justify-between mt-5 px-1 text-zinc-500">
                       <div className="flex gap-6">
-                        <button className="flex items-center gap-2 hover:text-rose-500 transition-colors">
-                           <FaRegHeart size={16} /> <span className="text-[11px] font-bold">{post.likes?.length || 0}</span>
+                        <button onClick={() => handleLike(post._id)} className="flex items-center gap-2 hover:text-rose-500 transition-colors">
+                           {post.likes?.includes(user?.sub) ? <FaHeart className="text-rose-500" /> : <FaRegHeart />} 
+                           <span className="text-[11px] font-bold">{post.likes?.length || 0}</span>
                         </button>
                         <button onClick={() => setActiveCommentPost(post)} className="flex items-center gap-2 hover:text-cyan-400 transition-colors">
                            <FaRegComment size={16} /> <span className="text-[11px] font-bold">{post.comments?.length || 0}</span>
@@ -190,7 +203,7 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
         )}
       </section>
 
-      {/* --- উন্নত কমেন্ট সেকশন (প্রোফাইল ইমেজসহ) --- */}
+      {/* --- উন্নত কমেন্ট সেকশন --- */}
       <AnimatePresence>
         {activeCommentPost && (
           <div className="fixed inset-0 z-[3000] flex items-end justify-center">
@@ -211,7 +224,7 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
                     />
                     <div className="bg-white/5 p-3 rounded-2xl flex-1 border border-white/[0.03]">
                       <div className="flex items-center gap-2 mb-1">
-                        <p className="text-cyan-500 font-bold text-[11px]">{c.userName}</p>
+                        <p className="text-cyan-500 font-bold text-[11px]">{c.userName || "Drifter"}</p>
                         <span className="text-[8px] text-zinc-600">ID_{Math.floor(Math.random() * 9999)}</span>
                       </div>
                       <p className="text-xs text-gray-300 leading-relaxed">{c.text}</p>
@@ -250,11 +263,22 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
         )}
       </AnimatePresence>
 
-      {/* Floating Bolt Button */}
+      {/* --- FIXED BOTTOM BLUE BAR (এখন কাজ করবে) --- */}
+      <div className="fixed bottom-0 left-0 w-full bg-black/90 backdrop-blur-lg border-t border-white/5 h-16 flex justify-around items-center px-6 z-[200]">
+        <FaHome className="text-cyan-500 text-xl cursor-pointer" onClick={() => navigate('/feed')} />
+        <FaSearch className="text-zinc-500 text-xl cursor-pointer" onClick={() => navigate('/search')} />
+        <div className="bg-white text-black p-3 rounded-xl -mt-8 shadow-[0_0_20px_rgba(255,255,255,0.2)] cursor-pointer" onClick={() => setIsPostModalOpen(true)}>
+          <FaBolt />
+        </div>
+        <FaRegBell className="text-zinc-500 text-xl cursor-pointer" onClick={() => navigate('/notifications')} />
+        <FaUserCircle className="text-zinc-500 text-xl cursor-pointer" onClick={() => navigate(`/profile/${user?.sub}`)} />
+      </div>
+
+      {/* Floating Button (Secondary Post Opener) */}
       <motion.button 
         whileHover={{ scale: 1.1, rotate: 5 }} whileTap={{ scale: 0.9 }} 
         onClick={() => setIsPostModalOpen(true)} 
-        className="fixed bottom-24 right-6 w-14 h-14 bg-cyan-500 text-black rounded-2xl flex items-center justify-center shadow-[0_0_20px_rgba(6,182,212,0.4)] z-[100]"
+        className="fixed bottom-24 right-6 w-14 h-14 bg-cyan-500 text-black rounded-2xl flex items-center justify-center shadow-[0_0_20px_rgba(6,182,212,0.4)] z-[100] md:hidden"
       >
         <FaBolt size={20} />
       </motion.button>
