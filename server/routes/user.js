@@ -178,6 +178,31 @@ router.post("/follow/:targetId", auth, async (req, res) => {
     res.status(500).json({ msg: "Connection failed" });
   }
 });
+/* ==========================================================
+    🔄 EXPLICIT SYNC ROUTE (ফ্রন্টএন্ডের axios.post এর জন্য)
+========================================================== */
+router.post('/sync', auth, async (req, res) => {
+  try {
+    const { auth0Id, name, email, picture, username } = req.body;
+    
+    const user = await User.findOneAndUpdate(
+      { auth0Id: auth0Id }, 
+      { 
+        $set: { 
+          name: name,
+          email: email,
+          avatar: picture,
+          nickname: username?.replace(/\s+/g, '').toLowerCase()
+        }
+      },
+      { upsert: true, new: true, setDefaultsOnInsert: true } 
+    );
+
+    res.status(200).json(user);
+  } catch (err) {
+    res.status(500).json({ message: "Sync failed" });
+  }
+});
 
 /* ==========================================================
     6️⃣ DISCOVERY

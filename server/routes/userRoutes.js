@@ -21,7 +21,36 @@ const upload = multer({
 ========================================================== */
 
 /**
- * ১. ড্রিপ্টার সার্চ (Search Fix)
+ * ১. ইউজার ডাটা সিঙ্ক (এটিই ডাটাবেসে ইউজার সেভ করবে)
+ */
+router.post('/sync', auth, async (req, res) => {
+  try {
+    const { auth0Id, name, email, picture, username } = req.body;
+    
+    // ডাটাবেসে ইউজার না থাকলে তৈরি করবে, থাকলে আপডেট করবে (upsert)
+    const user = await User.findOneAndUpdate(
+      { auth0Id: auth0Id }, 
+      { 
+        $set: { 
+          name: name,
+          email: email,
+          avatar: picture,
+          nickname: username?.replace(/\s+/g, '').toLowerCase() || `drifter_${Math.floor(Math.random() * 1000)}`
+        }
+      },
+      { upsert: true, new: true, setDefaultsOnInsert: true } 
+    );
+
+    console.log(`✅ Neural Sync: ${user.name} is now in Database.`);
+    res.status(200).json(user);
+  } catch (err) {
+    console.error("Sync Error:", err);
+    res.status(500).json({ message: "Identity sync failed" });
+  }
+});
+
+/**
+ * ২. ড্রিপ্টার সার্চ
  */
 router.get('/search', auth, async (req, res) => {
   try {
@@ -32,11 +61,10 @@ router.get('/search', auth, async (req, res) => {
     const searchRegex = new RegExp(`${query.trim()}`, "i");
 
     const users = await User.find({
-      auth0Id: { $ne: currentUserId },
+      auth0Id: { $ne: currentUserId }, // নিজের আইডি বাদে বাকিদের খুঁজবে
       $or: [
         { name: { $regex: searchRegex } },
-        { nickname: { $regex: searchRegex } },
-        { auth0Id: query }
+        { nickname: { $regex: searchRegex } }
       ]
     })
     .select("name nickname avatar auth0Id bio isVerified followers following")
@@ -51,7 +79,7 @@ router.get('/search', auth, async (req, res) => {
 });
 
 /**
- * ২. প্রোফাইল আপডেট (Update Fix)
+ * ৩. প্রোফাইল আপডেট
  */
 router.put("/update-profile", auth, upload.fields([
   { name: 'avatar', maxCount: 1 },
@@ -63,7 +91,7 @@ router.put("/update-profile", auth, upload.fields([
     let updateFields = {};
     
     if (name) updateFields.name = name;
-    if (nickname) updateFields.nickname = nickname;
+    if (nickname) updateFields.nickname = nickname.replace(/\s+/g, '').toLowerCase();
     if (bio) updateFields.bio = bio;
     if (location) updateFields.location = location;
     if (workplace) updateFields.workplace = workplace;
@@ -85,29 +113,23 @@ router.put("/update-profile", auth, upload.fields([
 });
 
 /**
- * ৩. প্রোফাইল এবং পোস্ট একসাথে পাওয়া (Fixes 404 & %7C Error)
+ * ৪. প্রোফাইল এবং পোস্ট একসাথে পাওয়া
  */
 router.get(['/profile/:userId', '/:userId'], auth, async (req, res, next) => {
   try {
     const rawUserId = req.params.userId;
-    // Reserved keywords এড়ানো
-    if (!rawUserId || rawUserId === 'search' || rawUserId === 'all' || rawUserId === 'undefined') {
+    if (!rawUserId || ['search', 'all', 'undefined'].includes(rawUserId)) {
         return next();
     }
 
     const targetId = decodeURIComponent(rawUserId);
-    console.log(`📡 Neural Sync Request for ID: ${targetId}`);
 
-    // ইউজার খোঁজা
     const user = await User.findOne({ auth0Id: targetId }).lean();
     
-    // পোস্ট খোঁজা (সবগুলো সম্ভাব্য ফিল্ড চেক করা হচ্ছে)
     const posts = await Post.find({ 
       $or: [
         { authorAuth0Id: targetId },
         { authorId: targetId },
-        { user: targetId },
-        { author: targetId },
         { userId: targetId }
       ]
     }).sort({ createdAt: -1 }).lean();
@@ -117,57 +139,48 @@ router.get(['/profile/:userId', '/:userId'], auth, async (req, res, next) => {
       posts: posts || []
     });
   } catch (err) {
-    console.error("Fetch Profile Error:", err);
     res.status(500).json({ message: "Neural Link Error" });
   }
 });
 
 /**
- * ৪. নতুন পোস্ট তৈরি
+ * ৫. নতুন পোস্ট তৈরি
  */
 router.post('/create', auth, upload.single('file'), createPost);
 
 /**
- * ৫. ফলো সিস্টেম (Error Free Version)
+ * ৬. ফলো সিস্টেম
  */
 router.post("/follow/:targetId", auth, async (req, res) => {
   try {
     const myId = req.user.sub || req.user.id;
     const targetId = decodeURIComponent(req.params.targetId);
 
-    if (myId === targetId) {
-        return res.status(400).json({ msg: "Self-link forbidden" });
-    }
+    if (myId === targetId) return res.status(400).json({ msg: "Self-link forbidden" });
 
-    // ১. চেক করা যে টার্গেট ইউজার এবং বর্তমান ইউজার ডাটাবেসে আছে কি না
     const [targetUser, currentUser] = await Promise.all([
         User.findOne({ auth0Id: targetId }),
         User.findOne({ auth0Id: myId })
     ]);
 
-    if (!targetUser) return res.status(404).json({ msg: "Target user not found" });
-    if (!currentUser) return res.status(404).json({ msg: "Your profile not found" });
+    if (!targetUser || !currentUser) return res.status(404).json({ msg: "User connection failed" });
 
-    // ২. চেক করা অলরেডি ফলো করা আছে কি না
     const isFollowing = currentUser.following && currentUser.following.includes(targetId);
 
     if (isFollowing) {
-      // আনফলো লজিক ($pull ব্যবহার করা হয়েছে)
       await Promise.all([
         User.updateOne({ auth0Id: myId }, { $pull: { following: targetId } }),
         User.updateOne({ auth0Id: targetId }, { $pull: { followers: myId } })
       ]);
-      res.json({ followed: false, message: "Unfollowed successfully" });
+      res.json({ followed: false });
     } else {
-      // ফলো লজিক ($addToSet ডুপ্লিকেট এন্ট্রি রোধ করে)
       await Promise.all([
         User.updateOne({ auth0Id: myId }, { $addToSet: { following: targetId } }),
         User.updateOne({ auth0Id: targetId }, { $addToSet: { followers: myId } })
       ]);
-      res.json({ followed: true, message: "Followed successfully" });
+      res.json({ followed: true });
     }
   } catch (err) {
-    console.error("Follow Error:", err);
     res.status(500).json({ msg: "Connection failed" });
   }
 });
