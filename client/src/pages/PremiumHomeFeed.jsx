@@ -9,9 +9,7 @@ import { useAuth0 } from "@auth0/auth0-react";
 import axios from "axios";
 import { useNavigate } from 'react-router-dom';
 
-/**
- * ১. ভিডিও কম্পোনেন্ট (সাউন্ড এবং অটো-প্লে লজিকসহ)
- */
+// --- উন্নত ভিডিও কম্পোনেন্ট (সাউন্ড কন্ট্রোলসহ) ---
 const CompactVideo = ({ src, onVideoClick }) => {
   const videoRef = useRef(null);
   const [isMuted, setIsMuted] = useState(true);
@@ -35,7 +33,7 @@ const CompactVideo = ({ src, onVideoClick }) => {
   return (
     <div onClick={onVideoClick} className="relative mt-3 rounded-2xl overflow-hidden border border-white/10 bg-black max-w-[400px] cursor-pointer group">
       <video ref={videoRef} src={src} muted={isMuted} loop playsInline className="w-full h-72 object-cover" />
-      {/* সাউন্ড কন্ট্রোল বাটন */}
+      {/* Sound Button */}
       <button onClick={toggleMute} className="absolute bottom-3 right-3 p-2 bg-black/60 backdrop-blur-md rounded-full text-white border border-white/20 z-10 hover:scale-110 transition-all">
         {isMuted ? <FaVolumeMute size={14} /> : <FaVolumeUp size={14} className="text-cyan-400" />}
       </button>
@@ -47,11 +45,10 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
   const { user, getAccessTokenSilently, isAuthenticated } = useAuth0();
   const navigate = useNavigate();
   
-  // States
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isPostModalOpen, setIsPostModalOpen] = useState(false);
-  const [isSideMenuOpen, setIsSideMenuOpen] = useState(false); 
+  const [isSideMenuOpen, setIsSideMenuOpen] = useState(false); // প্রোফাইল ক্লিকের জন্য
   const [activeCommentPost, setActiveCommentPost] = useState(null);
   const [commentText, setCommentText] = useState("");
   const [postText, setPostText] = useState("");
@@ -61,7 +58,6 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
   const API_URL = "https://onyx-drift-app-final-u29m.onrender.com";
   const postMediaRef = useRef(null);
 
-  // পোস্ট ফেচ করা
   useEffect(() => {
     const fetchPosts = async () => {
       try {
@@ -85,12 +81,11 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
       {/* --- HEADER --- */}
       <div className="sticky top-0 z-[100] bg-black/80 backdrop-blur-md border-b border-white/5 px-4 h-14 flex justify-between items-center">
         <div className="flex items-center gap-3">
-          {/* রেড মার্ক করা প্রোফাইল আইকন (ক্লিক করলে মেনু আসবে) */}
           <img 
             src={user?.picture} 
             className="w-8 h-8 rounded-full border border-cyan-500/50 cursor-pointer hover:opacity-80 transition-all" 
             alt="profile" 
-            onClick={() => setIsSideMenuOpen(true)} 
+            onClick={() => setIsSideMenuOpen(true)} // ছবিতে ক্লিক করলে মেনু খুলবে
           />
           <h2 className="text-lg font-bold italic text-cyan-500 tracking-tighter">OnyxDrift</h2>
         </div>
@@ -100,7 +95,7 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
         </div>
       </div>
 
-      {/* --- X STYLE SIDE MENU (Drawer) --- */}
+      {/* --- X STYLE SIDE MENU --- */}
       <AnimatePresence>
         {isSideMenuOpen && (
           <>
@@ -195,7 +190,7 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
         )}
       </section>
 
-      {/* --- উন্নত কমেন্ট সেকশন (ইউজার প্রোফাইল ইমেজ ও নামসহ) --- */}
+      {/* --- উন্নত কমেন্ট সেকশন (প্রোফাইল ইমেজসহ) --- */}
       <AnimatePresence>
         {activeCommentPost && (
           <div className="fixed inset-0 z-[3000] flex items-end justify-center">
@@ -217,6 +212,7 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
                     <div className="bg-white/5 p-3 rounded-2xl flex-1 border border-white/[0.03]">
                       <div className="flex items-center gap-2 mb-1">
                         <p className="text-cyan-500 font-bold text-[11px]">{c.userName}</p>
+                        <span className="text-[8px] text-zinc-600">ID_{Math.floor(Math.random() * 9999)}</span>
                       </div>
                       <p className="text-xs text-gray-300 leading-relaxed">{c.text}</p>
                     </div>
