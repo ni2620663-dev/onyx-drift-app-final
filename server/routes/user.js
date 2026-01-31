@@ -110,18 +110,17 @@ router.post("/update-photo", auth, upload.single('image'), async (req, res) => {
     res.status(500).json({ msg: "Neural Sync Failed" });
   }
 });
-
 /* ==========================================================
-    4️⃣ SEARCH DRIFTERS (Fixed for 500 Error)
+    4️⃣ SEARCH DRIFTERS (Fixed & Optimized)
 ========================================================== */
 router.get("/search", auth, async (req, res) => {
   try {
-    // ফ্রন্টএন্ড থেকে 'q' অথবা 'query' যেকোনোটি আসলে রিসিভ করবে
-    const searchQuery = req.query.q || req.query.query; 
+    // আপনার কনসোল অনুযায়ী প্যারামিটার আসছে 'q'
+    const queryTerm = req.query.q || ""; 
     const currentUserId = req.user.sub || req.user.id;
 
-    // যদি সার্চ বক্সে কিছু না থাকে, তবে কিছু সাজেস্টেড ইউজার দেখাবে
-    if (!searchQuery || searchQuery.trim() === "") {
+    // যদি সার্চ বক্সে কিছু না থাকে, তবে ডিফল্ট ১০ জন ইউজার দেখাবে
+    if (!queryTerm.trim()) {
       const suggested = await User.find({ auth0Id: { $ne: currentUserId } })
         .select("name nickname avatar auth0Id bio isVerified")
         .limit(10)
@@ -129,10 +128,11 @@ router.get("/search", auth, async (req, res) => {
       return res.json(suggested);
     }
 
-    const searchRegex = new RegExp(searchQuery.trim(), "i");
+    // রেগুলার এক্সপ্রেশন তৈরি (কেস ইনসেনসিটিভ সার্চ)
+    const searchRegex = new RegExp(queryTerm.trim(), "i");
 
     const users = await User.find({
-      auth0Id: { $ne: currentUserId },
+      auth0Id: { $ne: currentUserId }, // নিজের আইডি বাদে
       $or: [
         { name: { $regex: searchRegex } },
         { nickname: { $regex: searchRegex } }
@@ -144,8 +144,12 @@ router.get("/search", auth, async (req, res) => {
 
     res.json(users);
   } catch (err) {
-    console.error("🔍 Search Error:", err);
-    res.status(500).json({ msg: "Neural link interrupted", error: err.message });
+    // টার্মিনালে চেক করুন ঠিক কোন লাইনে এরর হচ্ছে
+    console.error("🔍 SEARCH SYSTEM ERROR:", err.message); 
+    res.status(500).json({ 
+      msg: "Neural link interrupted", 
+      error: err.message 
+    });
   }
 });
 /* ==========================================================
