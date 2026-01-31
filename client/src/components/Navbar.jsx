@@ -9,12 +9,11 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth0 } from "@auth0/auth0-react";
 import axios from 'axios';
 
-// দ্রষ্টব্য: এখানে webSocketService ইমপোর্টটি সরিয়ে দেওয়া হয়েছে কারণ এটি কনফ্লিক্ট করছে।
-// সকেটটি সাধারণত props হিসেবে আসে অথবা গ্লোবাল স্টোর থেকে।
-
 const Navbar = ({ setIsPostModalOpen, toggleSidebar, socket }) => { 
   const navigate = useNavigate();
   const { user, logout, getAccessTokenSilently, isAuthenticated } = useAuth0();
+  
+  // States
   const [showDropdown, setShowDropdown] = useState(false);
   const [showPlusMenu, setShowPlusMenu] = useState(false);
   const [localSearch, setLocalSearch] = useState("");
@@ -45,7 +44,7 @@ const Navbar = ({ setIsPostModalOpen, toggleSidebar, socket }) => {
         setSearchResults(res.data);
         setShowResults(true);
       } catch (err) {
-        console.error("Search sync failed:", err);
+        console.error("Search failed:", err);
       } finally {
         setLoading(false);
       }
@@ -56,43 +55,35 @@ const Navbar = ({ setIsPostModalOpen, toggleSidebar, socket }) => {
   }, [localSearch, getAccessTokenSilently]);
 
   /**
-   * ২. নোটিফিকেশন লজিক (Socket.io - Fixed)
+   * ২. নোটিফিকেশন লজিক (Socket.io)
    */
   useEffect(() => {
-    // এখানে আপনার মেসেঞ্জারের মতো একই সকেট ইনস্ট্যান্স ব্যবহার করা হচ্ছে
     const s = socket?.current || socket; 
-
     if (s && isAuthenticated && user?.sub) {
-      // ব্যাকএন্ড থেকে আসা নোটিফিকেশন শোনা
       s.on("getNotification", (data) => {
-        console.log("📡 New Signal Received:", data);
         setHasNewNotification(true);
       });
-
-      // কানেকশন এরর হ্যান্ডলিং (কনসোল ক্লিন রাখার জন্য)
-      s.on("connect_error", () => {
-        console.log("Waiting for Neural Link connection...");
-      });
     }
-
     return () => {
       if (s) s.off("getNotification");
     };
   }, [socket, isAuthenticated, user]);
 
   return (
-    <nav className="w-full h-[60px] bg-[#030303]/90 backdrop-blur-xl border-b border-white/[0.05] z-[1000] flex items-center justify-between px-4 lg:px-8 relative">
+    <nav className="w-full h-[60px] bg-[#030303]/90 backdrop-blur-xl border-b border-white/[0.05] z-[1000] flex items-center justify-between px-4 lg:px-8 sticky top-0">
       
       {/* Left Section: Menu & Logo */}
       <div className="flex items-center gap-3">
-        <HiOutlineMenuAlt4 
-          size={22} 
+        <button 
           onClick={(e) => {
             e.stopPropagation();
-            if(typeof toggleSidebar === 'function') toggleSidebar();
-          }} 
-          className="text-gray-400 cursor-pointer hover:text-cyan-400 transition-colors" 
-        />
+            if(toggleSidebar) toggleSidebar();
+          }}
+          className="p-2 hover:bg-white/5 rounded-full transition-colors lg:hidden"
+        >
+          <HiOutlineMenuAlt4 size={22} className="text-gray-400 hover:text-cyan-400" />
+        </button>
+        
         <div className="flex items-center gap-2 cursor-pointer" onClick={() => navigate('/feed')}>
           <div className="w-8 h-8 bg-gradient-to-tr from-cyan-400 to-purple-600 rounded-lg flex items-center justify-center shadow-lg shadow-cyan-500/20">
             <span className="text-black font-black text-xs italic tracking-tighter">OX</span>
@@ -114,8 +105,8 @@ const Navbar = ({ setIsPostModalOpen, toggleSidebar, socket }) => {
             value={localSearch}
             onChange={(e) => setLocalSearch(e.target.value)}
             onFocus={() => localSearch.length > 0 && setShowResults(true)}
-            placeholder="Scan Identity or ID..."
-            className="w-full bg-white/5 border border-white/10 rounded-full py-2 pl-10 pr-4 text-[10px] text-white font-black uppercase tracking-widest outline-none focus:border-cyan-500/50 focus:bg-white/10 transition-all placeholder:text-gray-600 shadow-inner"
+            placeholder="Scan Identity..."
+            className="w-full bg-white/5 border border-white/10 rounded-full py-2 pl-10 pr-4 text-[10px] text-white font-black uppercase tracking-widest outline-none focus:border-cyan-500/50 focus:bg-white/10 transition-all placeholder:text-gray-600"
           />
         </div>
 
@@ -130,15 +121,15 @@ const Navbar = ({ setIsPostModalOpen, toggleSidebar, socket }) => {
               >
                 {searchResults.map((result) => (
                   <div 
-                    key={result.auth0Id}
+                    key={result.auth0Id || result._id}
                     onClick={() => {
-                      navigate(`/following?userId=${encodeURIComponent(result.auth0Id)}`);
+                      navigate(`/profile/${result.auth0Id}`);
                       setShowResults(false);
                       setLocalSearch("");
                     }}
                     className="flex items-center gap-3 px-4 py-3 hover:bg-white/5 cursor-pointer transition-all border-b border-white/[0.03] last:border-0"
                   >
-                    <img src={result.avatar} className="w-8 h-8 rounded-full border border-white/10 object-cover" alt="U" />
+                    <img src={result.avatar || result.picture} className="w-8 h-8 rounded-full border border-white/10 object-cover" alt="" />
                     <div className="flex flex-col">
                       <span className="text-white text-[10px] font-black uppercase tracking-tighter flex items-center gap-1">
                         {result.name} {result.isVerified && <FaUserCheck className="text-cyan-500" size={8} />}
@@ -153,14 +144,14 @@ const Navbar = ({ setIsPostModalOpen, toggleSidebar, socket }) => {
         </AnimatePresence>
       </div>
 
-      {/* Right Section: Plus Menu, Notifications & Profile */}
+      {/* Right Section */}
       <div className="flex items-center gap-3 lg:gap-6">
         
-        {/* Plus (+) Broadcast Menu */}
+        {/* Plus (+) Menu */}
         <div className="relative">
           <button 
             onClick={() => setShowPlusMenu(!showPlusMenu)}
-            className="w-8 h-8 lg:w-9 lg:h-9 rounded-full bg-cyan-500 flex items-center justify-center text-black hover:scale-110 transition-all shadow-lg shadow-cyan-500/20 active:scale-95"
+            className="w-8 h-8 lg:w-9 lg:h-9 rounded-full bg-cyan-500 flex items-center justify-center text-black hover:scale-110 transition-all shadow-lg shadow-cyan-500/20"
           >
             <FaPlus size={14} className={`${showPlusMenu ? 'rotate-45' : 'rotate-0'} transition-transform duration-300`} />
           </button>
@@ -171,9 +162,9 @@ const Navbar = ({ setIsPostModalOpen, toggleSidebar, socket }) => {
                 <div className="fixed inset-0 z-[1001]" onClick={() => setShowPlusMenu(false)}></div>
                 <motion.div 
                   initial={{ opacity: 0, scale: 0.9, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9, y: 10 }}
-                  className="absolute right-0 mt-4 w-52 bg-[#0A0A0A] border border-white/10 rounded-2xl p-2 shadow-2xl z-[1002] overflow-hidden"
+                  className="absolute right-0 mt-4 w-52 bg-[#0A0A0A] border border-white/10 rounded-2xl p-2 shadow-2xl z-[1002]"
                 >
-                  <div className="text-[8px] font-black text-gray-500 px-3 py-2 uppercase tracking-[0.2em]">Signal Type</div>
+                  <div className="text-[8px] font-black text-gray-500 px-3 py-2 uppercase tracking-[0.2em]">Broadcast Signal</div>
                   {[
                     { icon: <FaFileAlt />, label: 'Text Post', color: 'text-cyan-400' },
                     { icon: <FaCamera />, label: 'Neural Photo', color: 'text-purple-400' },
@@ -194,34 +185,28 @@ const Navbar = ({ setIsPostModalOpen, toggleSidebar, socket }) => {
           </AnimatePresence>
         </div>
 
-        {/* Notifications */}
+        {/* Notification Bell */}
         <div 
-          className="relative cursor-pointer group"
-          onClick={() => {
-            setHasNewNotification(false);
-            navigate('/notifications');
-          }}
+          className="relative cursor-pointer group p-1"
+          onClick={() => { setHasNewNotification(false); navigate('/notifications'); }}
         >
           <FaRegBell size={18} className="text-gray-400 group-hover:text-cyan-400 transition-colors" />
           {hasNewNotification && (
-            <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-cyan-500 rounded-full border border-[#030303] animate-pulse"></span>
+            <span className="absolute top-1 right-1 w-2 h-2 bg-cyan-500 rounded-full border border-[#030303] animate-pulse"></span>
           )}
         </div>
 
         {/* Profile Dropdown */}
         <div className="relative">
-          <div 
-            onClick={(e) => {
-              e.stopPropagation();
-              setShowDropdown(!showDropdown);
-            }}
-            className="flex items-center gap-2 bg-white/5 p-1 lg:pr-3 rounded-full border border-white/10 cursor-pointer hover:bg-white/10 transition-all"
+          <button 
+            onClick={() => setShowDropdown(!showDropdown)}
+            className="flex items-center gap-2 bg-white/5 p-1 lg:pr-3 rounded-full border border-white/10 hover:bg-white/10 transition-all"
           >
-            <img src={user?.picture} className="w-7 h-7 lg:w-8 lg:h-8 rounded-full border border-cyan-500/30 object-cover" alt="Avatar" />
+            <img src={user?.picture} className="w-7 h-7 lg:w-8 lg:h-8 rounded-full border border-cyan-500/30 object-cover" alt="" />
             <span className="hidden lg:block text-[9px] font-black text-white uppercase tracking-widest">
               {user?.nickname?.substring(0, 8)}
             </span>
-          </div>
+          </button>
 
           <AnimatePresence>
             {showDropdown && (
@@ -229,7 +214,7 @@ const Navbar = ({ setIsPostModalOpen, toggleSidebar, socket }) => {
                 <div className="fixed inset-0 z-[1001]" onClick={() => setShowDropdown(false)}></div>
                 <motion.div 
                   initial={{ opacity: 0, scale: 0.95, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                  className="absolute right-0 mt-3 w-44 bg-[#0A0A0A] border border-white/10 rounded-2xl p-2 shadow-2xl overflow-hidden z-[1002]"
+                  className="absolute right-0 mt-3 w-44 bg-[#0A0A0A] border border-white/10 rounded-2xl p-2 shadow-2xl z-[1002]"
                 >
                   <button 
                     onClick={() => { navigate(`/profile/${user?.sub}`); setShowDropdown(false); }}

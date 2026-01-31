@@ -81,15 +81,16 @@ export default function App() {
     </div>
   );
 
-  /* =================📏 LAYOUT LOGIC (Fixed) ================= */
+  /* =================📏 LAYOUT LOGIC (Updated) ================= */
   
-  // এই পেজগুলোতে কোনো সাইডবার থাকবে না
+  // এই পেজগুলোতে কোনো সাইডবার থাকবে না (এখানে /feed যোগ করা হয়েছে)
   const isFullWidthPage = [
-    "/messenger", "/messages", "/settings", "/", "/join", "/reels"
+    "/messenger", "/messages", "/settings", "/", "/join", "/reels", "/feed"
   ].some(path => location.pathname === path || location.pathname.startsWith(path + "/"));
 
-  // রিলস পেজে আমরা Navbar এবং MobileNav হাইড রাখব যাতে ফুল স্ক্রিন ভিডিও দেখা যায়
+  // বিশেষ পেজ লজিক
   const isReelsPage = location.pathname.startsWith("/reels");
+  const isFeedPage = location.pathname.startsWith("/feed"); // ফিড পেজ চেক
   const isAuthPage = ["/", "/join"].includes(location.pathname);
 
   return (
@@ -100,8 +101,8 @@ export default function App() {
 
       <div className="flex flex-col w-full">
         
-        {/* --- 1. NAVBAR (Hidden on Reels and Auth Pages) --- */}
-        {isAuthenticated && !isAuthPage && !isReelsPage && (
+        {/* --- 1. NAVBAR (ফিড পেজে ডাবল হেডার ঠেকাতে এখানে !isFeedPage যোগ করা হয়েছে) --- */}
+        {isAuthenticated && !isAuthPage && !isReelsPage && !isFeedPage && (
           <Navbar 
             user={user} 
             socket={socket.current} 
@@ -115,7 +116,7 @@ export default function App() {
         <div className="flex justify-center w-full transition-all duration-500">
           <div className={`flex w-full ${isFullWidthPage ? "max-w-full" : "max-w-[1440px] px-0 lg:px-6"} gap-6`}>
             
-            {/* LEFT SIDEBAR (Hidden on Full Width Pages) */}
+            {/* LEFT SIDEBAR (Hidden on Full Width Pages including Feed) */}
             {isAuthenticated && !isFullWidthPage && (
               <aside className="hidden lg:block w-[280px] sticky top-6 h-[calc(100vh-40px)] mt-6">
                 <Sidebar />
