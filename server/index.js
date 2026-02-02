@@ -25,13 +25,14 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET 
 });
 
-// ২. রাউট ইম্পোর্ট (নিশ্চিত করুন পাথগুলো আপনার ফোল্ডার স্ট্রাকচার অনুযায়ী ঠিক আছে)
-import userRoutes from './routes/user.js'; // এটি আপনার ইউজার সিঙ্ক ও সার্চ হ্যান্ডেল করে
+// ২. রাউট ইম্পোর্ট
+import userRoutes from './routes/user.js'; 
 import postRoutes from "./routes/posts.js";
 import messageRoutes from "./routes/messages.js";
 import storyRoute from "./routes/stories.js";
 import reelRoutes from "./routes/reels.js"; 
-import profileRoutes from "./src/routes/profile.js"; // যদি এই ফাইলটি আলাদা থাকে
+import profileRoutes from "./src/routes/profile.js";
+import groupRoutes from "./routes/group.js"; // <--- নতুন গ্রুপ রাউট ইম্পোর্ট
 
 const app = express();
 const server = http.createServer(app);
@@ -78,22 +79,22 @@ const redis = process.env.REDIS_URL ? new Redis(process.env.REDIS_URL, {
     enableReadyCheck: false
 }) : null;
 
-// ৬. এপিআই রাউটস ডিক্লেয়ারেশন (ลำดับ খুবই গুরুত্বপূর্ণ)
-app.use("/api/user", userRoutes);   // এটি আপনার /api/user/sync এবং /api/user/search হ্যান্ডেল করবে
+// ৬. এপিআই রাউটস ডিক্লেয়ারেশন
+app.use("/api/user", userRoutes);   
 app.use("/api/posts", postRoutes); 
 app.use("/api/profile", profileRoutes); 
 app.use("/api/stories", storyRoute);
 app.use("/api/reels", reelRoutes); 
 
-// সুরক্ষিত মেসেজ রাউট
+// সুরক্ষিত মেসেজ ও গ্রুপ রাউট
 app.use("/api/messages", checkJwt, messageRoutes); 
+app.use("/api/groups", checkJwt, groupRoutes); // <--- ৪০৪ এরর ফিক্স করতে এটি যোগ করা হয়েছে
 
 app.get("/", (req, res) => res.send("🚀 OnyxDrift Neural Core is Online!"));
 
 /* ==========================================================
     📡 REAL-TIME ENGINE (Socket.io)
 ========================================================== */
-
 
 io.on("connection", (socket) => {
     
@@ -107,26 +108,30 @@ io.on("connection", (socket) => {
         }
     });
 
+    // গ্রুপ চ্যাট রুম জয়েন করার জন্য
+    socket.on("joinGroup", (groupId) => {
+        socket.join(groupId);
+        console.log(`User joined hive: ${groupId}`);
+    });
+
     socket.on("sendMessage", async (data) => {
-        const { receiverId, isGroup, members } = data;
-        if (isGroup && members) {
-            members.forEach(memberId => {
-                if (memberId !== data.senderId) {
-                    io.to(memberId).emit("getMessage", data);
-                }
-            });
+        const { receiverId, isGroup, conversationId } = data;
+        
+        if (isGroup) {
+            // যদি গ্রুপ মেসেজ হয়, তবে পুরো রুমকে (conversationId) পাঠাও
+            io.to(conversationId).emit("getMessage", data);
         } else if (receiverId) {
+            // ব্যক্তিগত মেসেজ
             io.to(receiverId).emit("getMessage", data);
         }
     });
 
     socket.on("typing", (data) => {
-        if (data.isGroup && data.members) {
-            data.members.forEach(mId => {
-                if (mId !== data.senderId) io.to(mId).emit("displayTyping", data);
-            });
-        } else if (data.receiverId) {
-            io.to(data.receiverId).emit("displayTyping", data);
+        const { receiverId, isGroup, conversationId } = data;
+        if (isGroup) {
+            socket.to(conversationId).emit("displayTyping", data);
+        } else if (receiverId) {
+            io.to(receiverId).emit("displayTyping", data);
         }
     });
 
