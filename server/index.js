@@ -5,18 +5,17 @@ import cors from "cors";
 import dotenv from "dotenv";
 import Redis from "ioredis"; 
 import { v2 as cloudinary } from 'cloudinary';
-import { auth } from 'express-oauth2-jwt-bearer'; // <--- নতুন ইম্পোর্ট
+import { auth } from 'express-oauth2-jwt-bearer';
 
 // ১. কনফিগারেশন ও ডাটাবেস কানেকশন
 dotenv.config();
 import connectDB from "./config/db.js"; 
 connectDB();
 
-// 🛡️ Auth0 JWT ভেরিফিকেশন মিডলওয়্যার
-// এটি নিশ্চিত করবে যে আপনার ফ্রন্টএন্ড থেকে পাঠানো টোকেনটি ভ্যালিড কি না
+// 🛡️ Auth0 JWT ভেরিফিকেশন মিডলওয়্যার
 const checkJwt = auth({
-  audience: 'https://onyx-drift-api.com', // আপনার Auth0 API Identifier
-  issuerBaseURL: `https://dev-6d0nxccsaycctfl1.us.auth0.com/`, // আপনার Auth0 Domain
+  audience: process.env.AUTH0_AUDIENCE || 'https://onyx-drift-api.com', 
+  issuerBaseURL: `https://dev-6d0nxccsaycctfl1.us.auth0.com/`, 
   tokenSigningAlg: 'RS256'
 });
 
@@ -26,13 +25,13 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET 
 });
 
-// ২. রাউট ইম্পোর্ট
-import profileRoutes from "./src/routes/profile.js"; 
+// ২. রাউট ইম্পোর্ট (নিশ্চিত করুন পাথগুলো আপনার ফোল্ডার স্ট্রাকচার অনুযায়ী ঠিক আছে)
+import userRoutes from './routes/user.js'; // এটি আপনার ইউজার সিঙ্ক ও সার্চ হ্যান্ডেল করে
 import postRoutes from "./routes/posts.js";
-import userRoutes from './routes/users.js'; 
 import messageRoutes from "./routes/messages.js";
 import storyRoute from "./routes/stories.js";
 import reelRoutes from "./routes/reels.js"; 
+import profileRoutes from "./src/routes/profile.js"; // যদি এই ফাইলটি আলাদা থাকে
 
 const app = express();
 const server = http.createServer(app);
@@ -79,22 +78,23 @@ const redis = process.env.REDIS_URL ? new Redis(process.env.REDIS_URL, {
     enableReadyCheck: false
 }) : null;
 
-// এপিআই রাউটস
-app.use("/api/user", userRoutes); 
-app.use("/api/profile", profileRoutes); 
+// ৬. এপিআই রাউটস ডিক্লেয়ারেশন (ลำดับ খুবই গুরুত্বপূর্ণ)
+app.use("/api/user", userRoutes);   // এটি আপনার /api/user/sync এবং /api/user/search হ্যান্ডেল করবে
 app.use("/api/posts", postRoutes); 
-
-// 🚨 এখানে checkJwt যোগ করা হয়েছে যাতে মেসেজিং সুরক্ষিত থাকে
-app.use("/api/messages", checkJwt, messageRoutes); 
-
+app.use("/api/profile", profileRoutes); 
 app.use("/api/stories", storyRoute);
 app.use("/api/reels", reelRoutes); 
+
+// সুরক্ষিত মেসেজ রাউট
+app.use("/api/messages", checkJwt, messageRoutes); 
 
 app.get("/", (req, res) => res.send("🚀 OnyxDrift Neural Core is Online!"));
 
 /* ==========================================================
     📡 REAL-TIME ENGINE (Socket.io)
 ========================================================== */
+
+
 io.on("connection", (socket) => {
     
     socket.on("addNewUser", async (userId) => {

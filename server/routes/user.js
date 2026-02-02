@@ -7,7 +7,77 @@ import upload from '../middleware/multer.js';
 const router = express.Router();
 
 /* ==========================================================
-    1️⃣ GET PROFILE BY ID & IDENTITY SYNC
+    1️⃣ USER SYNC (লগইনের পর ডাটাবেসে সেভ করার জন্য)
+    Path: /api/user/sync
+========================================================== */
+router.post('/sync', auth, async (req, res) => {
+  try {
+    const { auth0Id, name, email, picture, username } = req.body;
+    
+    // ইউজারনেম থেকে স্পেস সরিয়ে ছোট হাতের অক্ষরে রূপান্তর
+    const cleanNickname = username 
+      ? username.replace(/\s+/g, '').toLowerCase() 
+      : `drifter_${Date.now()}`;
+
+    const user = await User.findOneAndUpdate(
+      { auth0Id }, 
+      { 
+        $set: { 
+          name, 
+          email, 
+          avatar: picture, 
+          nickname: cleanNickname 
+        } 
+      },
+      { upsert: true, new: true, setDefaultsOnInsert: true } 
+    );
+    
+    console.log("✅ User Synced:", user.auth0Id);
+    res.status(200).json(user);
+  } catch (err) {
+    console.error("❌ Sync Error:", err.message);
+    res.status(500).json({ message: "Sync failed", error: err.message });
+  }
+});
+
+/* ==========================================================
+    2️⃣ SEARCH DRIFTERS
+    Path: /api/user/search
+========================================================== */
+router.get("/search", auth, async (req, res) => {
+  try {
+    const queryTerm = req.query.q || ""; 
+    const currentUserId = req.user.sub || req.user.id;
+
+    let dbQuery = { 
+      auth0Id: { $ne: currentUserId },
+      name: { $exists: true, $ne: null } 
+    };
+
+    if (queryTerm.trim() !== "") {
+      const searchRegex = new RegExp(queryTerm.trim(), "i");
+      dbQuery.$or = [
+        { name: { $regex: searchRegex } },
+        { nickname: { $regex: searchRegex } }
+      ];
+    }
+
+    const users = await User.find(dbQuery)
+      .hint({ _id: 1 }) // ডুপ্লিকেট ইনডেক্স এরর এড়াতে
+      .select("name nickname avatar auth0Id bio isVerified neuralRank drifterLevel")
+      .limit(20)
+      .lean();
+
+    res.json(users);
+  } catch (err) {
+    console.error("🔍 SEARCH ERROR:", err.message);
+    res.status(500).json({ msg: "Search signal lost", error: err.message });
+  }
+});
+
+/* ==========================================================
+    3️⃣ GET PROFILE BY ID
+    Path: /api/user/profile/:id
 ========================================================== */
 router.get(['/profile/:id', '/:id'], auth, async (req, res) => {
   try {
@@ -40,7 +110,8 @@ router.get(['/profile/:id', '/:id'], auth, async (req, res) => {
 });
 
 /* ==========================================================
-    2️⃣ UPDATE PROFILE & PHOTOS
+    4️⃣ UPDATE PROFILE
+    Path: /api/user/update-profile
 ========================================================== */
 router.put("/update-profile", auth, upload.fields([
   { name: 'avatar', maxCount: 1 },
@@ -75,43 +146,8 @@ router.put("/update-profile", auth, upload.fields([
 });
 
 /* ==========================================================
-    3️⃣ SEARCH DRIFTERS (Fail-safe Version)
-========================================================== */
-router.get("/search", auth, async (req, res) => {
-  try {
-    const queryTerm = req.query.q || ""; 
-    const currentUserId = req.user.sub || req.user.id;
-
-    // ১. যাদের নাম নেই তাদের বাদ দিয়ে ফিল্টার তৈরি
-    let dbQuery = { 
-      auth0Id: { $ne: currentUserId },
-      name: { $exists: true, $ne: null } 
-    };
-
-    if (queryTerm.trim() !== "") {
-      const searchRegex = new RegExp(queryTerm.trim(), "i");
-      dbQuery.$or = [
-        { name: { $regex: searchRegex } },
-        { nickname: { $regex: searchRegex } }
-      ];
-    }
-
-    // ২. .hint({ _id: 1 }) ব্যবহার করা হয়েছে যাতে ডুপ্লিকেট ইনডেক্স এরর না দেয়
-    const users = await User.find(dbQuery)
-      .hint({ _id: 1 })
-      .select("name nickname avatar auth0Id bio isVerified neuralRank drifterLevel")
-      .limit(20)
-      .lean();
-
-    res.json(users);
-  } catch (err) {
-    console.error("🔍 SEARCH ERROR:", err.message);
-    res.status(500).json({ msg: "Search signal lost", error: err.message });
-  }
-});
-
-/* ==========================================================
-    4️⃣ GET POSTS BY USER ID
+    5️⃣ GET POSTS BY USER ID
+    Path: /api/user/posts/user/:userId
 ========================================================== */
 router.get("/posts/user/:userId", auth, async (req, res) => {
   try {
@@ -132,7 +168,8 @@ router.get("/posts/user/:userId", auth, async (req, res) => {
 });
 
 /* ==========================================================
-    5️⃣ FOLLOW / UNFOLLOW SYSTEM
+    6️⃣ FOLLOW / UNFOLLOW
+    Path: /api/user/follow/:targetId
 ========================================================== */
 router.post("/follow/:targetId", auth, async (req, res) => {
   try {
@@ -165,7 +202,8 @@ router.post("/follow/:targetId", auth, async (req, res) => {
 });
 
 /* ==========================================================
-    6️⃣ DISCOVERY & SYNC
+    7️⃣ DISCOVERY (All Users)
+    Path: /api/user/all
 ========================================================== */
 router.get("/all", auth, async (req, res) => {
   try {
@@ -177,27 +215,6 @@ router.get("/all", auth, async (req, res) => {
     res.json(users);
   } catch (err) {
     res.status(500).json({ msg: "Discovery signal lost" });
-  }
-});
-
-router.post('/sync', auth, async (req, res) => {
-  try {
-    const { auth0Id, name, email, picture, username } = req.body;
-    const cleanNickname = username ? username.replace(/\s+/g, '').toLowerCase() : `drifter_${Date.now()}`;
-
-    const user = await User.findOneAndUpdate(
-      { auth0Id }, 
-      { 
-        $set: { 
-          name, email, avatar: picture, 
-          nickname: cleanNickname 
-        } 
-      },
-      { upsert: true, new: true, setDefaultsOnInsert: true } 
-    );
-    res.status(200).json(user);
-  } catch (err) {
-    res.status(500).json({ message: "Sync failed" });
   }
 });
 
