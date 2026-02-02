@@ -4,7 +4,7 @@ import { useAuth0, withAuthenticationRequired } from "@auth0/auth0-react";
 import { io } from "socket.io-client"; 
 import { motion, AnimatePresence } from "framer-motion";
 import toast, { Toaster } from 'react-hot-toast';
-import axios from 'axios'; // ডাটা সিঙ্ক করার জন্য axios ইমপোর্ট করা হয়েছে
+import axios from 'axios'; 
 
 // Components & Pages
 import Navbar from "./components/Navbar";
@@ -56,7 +56,6 @@ export default function App() {
             username: user.nickname || user.name?.split(' ')[0].toLowerCase(),
           };
 
-          // ব্যাকএন্ডে ডাটা সিঙ্ক কল
           await axios.post('https://onyx-drift-app-final-u29m.onrender.com/api/user/sync', userData, {
             headers: { Authorization: `Bearer ${token}` }
           });
@@ -66,7 +65,6 @@ export default function App() {
         }
       }
     };
-
     syncUserWithDB();
   }, [isAuthenticated, user, getAccessTokenSilently]);
 
@@ -87,7 +85,15 @@ export default function App() {
         });
 
         socket.current.on("incomingCall", (data) => {
-          toast(`Incoming ${data.type} call...`, { icon: '📞' });
+          toast(`Incoming ${data.type} call...`, { 
+            icon: '📞',
+            style: {
+              borderRadius: '10px',
+              background: '#0f172a',
+              color: '#fff',
+              border: '1px solid #06b6d4'
+            }
+          });
         });
       }
 
@@ -127,7 +133,7 @@ export default function App() {
 
       <div className="flex flex-col w-full">
         
-        {/* --- 1. NAVBAR --- */}
+        {/* --- 1. NAVBAR (HIDDEN ON AUTH, REELS, & FEED) --- */}
         {isAuthenticated && !isAuthPage && !isReelsPage && !isFeedPage && (
           <Navbar 
             user={user} 
@@ -142,21 +148,23 @@ export default function App() {
         <div className="flex justify-center w-full transition-all duration-500">
           <div className={`flex w-full ${isFullWidthPage ? "max-w-full" : "max-w-[1440px] px-0 lg:px-6"} gap-6`}>
             
-            {/* LEFT SIDEBAR */}
+            {/* LEFT SIDEBAR (SHOWN ONLY ON PROFILE/FOLLOWING TYPE PAGES) */}
             {isAuthenticated && !isFullWidthPage && (
               <aside className="hidden lg:block w-[280px] sticky top-6 h-[calc(100vh-40px)] mt-6">
                 <Sidebar />
               </aside>
             )}
             
-            {/* MAIN FEED AREA */}
+            {/* MAIN CONTENT AREA */}
             <main className={`flex-1 flex justify-center ${isFullWidthPage ? "mt-0 pb-0" : "mt-6 pb-24 lg:pb-10"}`}>
               <div className={`${isFullWidthPage ? "w-full" : "w-full lg:max-w-[650px] max-w-full"}`}>
                 <AnimatePresence mode="wait">
                   <Routes location={location} key={location.pathname}>
+                    {/* Public Routes */}
                     <Route path="/" element={isAuthenticated ? <Navigate to="/feed" /> : <Landing />} />
                     <Route path="/join" element={<JoinPage />} /> 
 
+                    {/* Private Routes */}
                     <Route path="/feed" element={
                       <ProtectedRoute component={() => 
                         <PremiumHomeFeed 
@@ -172,24 +180,30 @@ export default function App() {
                     <Route path="/profile/:userId" element={<ProtectedRoute component={Profile} />} />
                     <Route path="/following" element={<ProtectedRoute component={FollowingPage} />} />
 
+                    {/* Messaging */}
                     <Route path="/messages/:userId?" element={<ProtectedRoute component={() => <Messenger socket={socket.current} />} />} />
                     <Route path="/messenger/:userId?" element={<ProtectedRoute component={() => <Messenger socket={socket.current} />} />} />
                     
+                    {/* Others */}
                     <Route path="/settings" element={<ProtectedRoute component={Settings} />} />
                     <Route path="/call/:roomId" element={<ProtectedRoute component={CallPage} />} />
                     
+                    {/* Redirects */}
                     <Route path="*" element={<Navigate to="/" />} />
                   </Routes>
                 </AnimatePresence>
               </div>
             </main>
 
-            {/* RIGHT SIDEBAR */}
+            {/* RIGHT SIDEBAR (NEURAL SUGGESTIONS) */}
             {isAuthenticated && !isFullWidthPage && (
               <aside className="hidden xl:block w-[320px] sticky top-6 h-[calc(100vh-40px)] mt-6">
                 <div className="bg-white/5 border border-white/10 rounded-3xl p-6 h-full backdrop-blur-md">
                    <h3 className="text-xs font-black uppercase tracking-widest text-cyan-500 mb-4">Neural Suggestions</h3>
-                   <p className="text-gray-500 text-xs italic">Syncing with drift...</p>
+                   <div className="space-y-4">
+                      <p className="text-gray-500 text-xs italic">Syncing with drift...</p>
+                      <div className="h-20 w-full bg-white/5 rounded-xl animate-pulse" />
+                   </div>
                 </div>
               </aside>
             )}
@@ -197,6 +211,7 @@ export default function App() {
         </div>
       </div>
 
+      {/* MOBILE NAVIGATION */}
       {isAuthenticated && !isReelsPage && <MobileNav userAuth0Id={user?.sub} />}
     </div>
   );

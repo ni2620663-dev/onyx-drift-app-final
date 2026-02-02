@@ -8,13 +8,11 @@ const router = express.Router();
 
 /* ==========================================================
     1️⃣ USER SYNC (লগইনের পর ডাটাবেসে সেভ করার জন্য)
-    Path: /api/user/sync
 ========================================================== */
 router.post('/sync', auth, async (req, res) => {
   try {
     const { auth0Id, name, email, picture, username } = req.body;
     
-    // ইউজারনেম থেকে স্পেস সরিয়ে ছোট হাতের অক্ষরে রূপান্তর
     const cleanNickname = username 
       ? username.replace(/\s+/g, '').toLowerCase() 
       : `drifter_${Date.now()}`;
@@ -41,18 +39,23 @@ router.post('/sync', auth, async (req, res) => {
 });
 
 /* ==========================================================
-    2️⃣ SEARCH DRIFTERS
-    Path: /api/user/search
+    2️⃣ SEARCH DRIFTERS (Fail-safe Version)
 ========================================================== */
 router.get("/search", auth, async (req, res) => {
   try {
     const queryTerm = req.query.q || ""; 
-    const currentUserId = req.user.sub || req.user.id;
+    
+    // 🛡️ সাবধানে আইডি চেক করা হচ্ছে যাতে ক্রাশ না করে
+    const currentUserId = req.user ? (req.user.sub || req.user.id) : null;
 
     let dbQuery = { 
-      auth0Id: { $ne: currentUserId },
       name: { $exists: true, $ne: null } 
     };
+
+    // নিজেকে সার্চ রেজাল্ট থেকে বাদ দেওয়া (যদি আইডি থাকে)
+    if (currentUserId) {
+      dbQuery.auth0Id = { $ne: currentUserId };
+    }
 
     if (queryTerm.trim() !== "") {
       const searchRegex = new RegExp(queryTerm.trim(), "i");
@@ -63,7 +66,6 @@ router.get("/search", auth, async (req, res) => {
     }
 
     const users = await User.find(dbQuery)
-      .hint({ _id: 1 }) // ডুপ্লিকেট ইনডেক্স এরর এড়াতে
       .select("name nickname avatar auth0Id bio isVerified neuralRank drifterLevel")
       .limit(20)
       .lean();
@@ -77,12 +79,11 @@ router.get("/search", auth, async (req, res) => {
 
 /* ==========================================================
     3️⃣ GET PROFILE BY ID
-    Path: /api/user/profile/:id
 ========================================================== */
 router.get(['/profile/:id', '/:id'], auth, async (req, res) => {
   try {
     const targetId = decodeURIComponent(req.params.id);
-    const myId = req.user.sub || req.user.id;
+    const myId = req.user ? (req.user.sub || req.user.id) : null;
     
     let user = await User.findOne({ auth0Id: targetId }).select("-__v").lean();
     
@@ -111,7 +112,6 @@ router.get(['/profile/:id', '/:id'], auth, async (req, res) => {
 
 /* ==========================================================
     4️⃣ UPDATE PROFILE
-    Path: /api/user/update-profile
 ========================================================== */
 router.put("/update-profile", auth, upload.fields([
   { name: 'avatar', maxCount: 1 },
@@ -119,7 +119,9 @@ router.put("/update-profile", auth, upload.fields([
 ]), async (req, res) => {
   try {
     const { nickname, name, bio, location, workplace } = req.body;
-    const targetAuth0Id = req.user.sub || req.user.id;
+    const targetAuth0Id = req.user ? (req.user.sub || req.user.id) : null;
+
+    if (!targetAuth0Id) return res.status(401).json({ msg: "Unauthorized" });
 
     let updateFields = { name, nickname, bio, location, workplace };
 
@@ -147,7 +149,6 @@ router.put("/update-profile", auth, upload.fields([
 
 /* ==========================================================
     5️⃣ GET POSTS BY USER ID
-    Path: /api/user/posts/user/:userId
 ========================================================== */
 router.get("/posts/user/:userId", auth, async (req, res) => {
   try {
@@ -169,13 +170,13 @@ router.get("/posts/user/:userId", auth, async (req, res) => {
 
 /* ==========================================================
     6️⃣ FOLLOW / UNFOLLOW
-    Path: /api/user/follow/:targetId
 ========================================================== */
 router.post("/follow/:targetId", auth, async (req, res) => {
   try {
-    const myId = req.user.sub || req.user.id;
+    const myId = req.user ? (req.user.sub || req.user.id) : null;
     const targetId = decodeURIComponent(req.params.targetId);
 
+    if (!myId) return res.status(401).json({ msg: "Unauthorized" });
     if (myId === targetId) return res.status(400).json({ msg: "Self-link forbidden" });
 
     const targetUser = await User.findOne({ auth0Id: targetId });
@@ -203,11 +204,10 @@ router.post("/follow/:targetId", auth, async (req, res) => {
 
 /* ==========================================================
     7️⃣ DISCOVERY (All Users)
-    Path: /api/user/all
 ========================================================== */
 router.get("/all", auth, async (req, res) => {
   try {
-    const currentUserId = req.user.sub || req.user.id;
+    const currentUserId = req.user ? (req.user.sub || req.user.id) : null;
     const users = await User.find({ auth0Id: { $ne: currentUserId } })
       .select("name nickname avatar auth0Id bio isVerified neuralRank drifterLevel")
       .sort({ createdAt: -1 })
