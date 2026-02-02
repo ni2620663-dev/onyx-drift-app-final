@@ -4,6 +4,7 @@ import { useAuth0, withAuthenticationRequired } from "@auth0/auth0-react";
 import { io } from "socket.io-client"; 
 import { motion, AnimatePresence } from "framer-motion";
 import toast, { Toaster } from 'react-hot-toast';
+import axios from 'axios'; // ডাটা সিঙ্ক করার জন্য axios ইমপোর্ট করা হয়েছে
 
 // Components & Pages
 import Navbar from "./components/Navbar";
@@ -34,12 +35,40 @@ const ProtectedRoute = ({ component: Component, ...props }) => {
 };
 
 export default function App() {
-  const { isAuthenticated, isLoading, user } = useAuth0();
+  const { isAuthenticated, isLoading, user, getAccessTokenSilently } = useAuth0();
   const location = useLocation();
   const navigate = useNavigate();
   const socket = useRef(null); 
   const [searchQuery, setSearchQuery] = useState("");
   const [isPostModalOpen, setIsPostModalOpen] = useState(false);
+
+  /* =================📡 USER DATA SYNC LOGIC ================= */
+  useEffect(() => {
+    const syncUserWithDB = async () => {
+      if (isAuthenticated && user) {
+        try {
+          const token = await getAccessTokenSilently();
+          const userData = {
+            auth0Id: user.sub,
+            name: user.name,
+            email: user.email,
+            picture: user.picture,
+            username: user.nickname || user.name?.split(' ')[0].toLowerCase(),
+          };
+
+          // ব্যাকএন্ডে ডাটা সিঙ্ক কল
+          await axios.post('https://onyx-drift-app-final-u29m.onrender.com/api/user/sync', userData, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          console.log("📡 Identity Synced with Neural Grid");
+        } catch (err) {
+          console.error("❌ Sync Error:", err);
+        }
+      }
+    };
+
+    syncUserWithDB();
+  }, [isAuthenticated, user, getAccessTokenSilently]);
 
   /* =================📡 SOCKET CONFIGURATION ================= */
   useEffect(() => {
@@ -81,16 +110,13 @@ export default function App() {
     </div>
   );
 
-  /* =================📏 LAYOUT LOGIC (Updated) ================= */
-  
-  // এই পেজগুলোতে কোনো সাইডবার থাকবে না (এখানে /feed যোগ করা হয়েছে)
+  /* =================📏 LAYOUT LOGIC ================= */
   const isFullWidthPage = [
     "/messenger", "/messages", "/settings", "/", "/join", "/reels", "/feed"
   ].some(path => location.pathname === path || location.pathname.startsWith(path + "/"));
 
-  // বিশেষ পেজ লজিক
   const isReelsPage = location.pathname.startsWith("/reels");
-  const isFeedPage = location.pathname.startsWith("/feed"); // ফিড পেজ চেক
+  const isFeedPage = location.pathname.startsWith("/feed"); 
   const isAuthPage = ["/", "/join"].includes(location.pathname);
 
   return (
@@ -101,7 +127,7 @@ export default function App() {
 
       <div className="flex flex-col w-full">
         
-        {/* --- 1. NAVBAR (ফিড পেজে ডাবল হেডার ঠেকাতে এখানে !isFeedPage যোগ করা হয়েছে) --- */}
+        {/* --- 1. NAVBAR --- */}
         {isAuthenticated && !isAuthPage && !isReelsPage && !isFeedPage && (
           <Navbar 
             user={user} 
@@ -116,7 +142,7 @@ export default function App() {
         <div className="flex justify-center w-full transition-all duration-500">
           <div className={`flex w-full ${isFullWidthPage ? "max-w-full" : "max-w-[1440px] px-0 lg:px-6"} gap-6`}>
             
-            {/* LEFT SIDEBAR (Hidden on Full Width Pages including Feed) */}
+            {/* LEFT SIDEBAR */}
             {isAuthenticated && !isFullWidthPage && (
               <aside className="hidden lg:block w-[280px] sticky top-6 h-[calc(100vh-40px)] mt-6">
                 <Sidebar />
@@ -128,12 +154,9 @@ export default function App() {
               <div className={`${isFullWidthPage ? "w-full" : "w-full lg:max-w-[650px] max-w-full"}`}>
                 <AnimatePresence mode="wait">
                   <Routes location={location} key={location.pathname}>
-                    
-                    {/* Public Routes */}
                     <Route path="/" element={isAuthenticated ? <Navigate to="/feed" /> : <Landing />} />
                     <Route path="/join" element={<JoinPage />} /> 
 
-                    {/* Private Routes */}
                     <Route path="/feed" element={
                       <ProtectedRoute component={() => 
                         <PremiumHomeFeed 
@@ -144,27 +167,24 @@ export default function App() {
                       />} 
                     />
                     
-                    {/* REELS ROUTE */}
                     <Route path="/reels" element={<ProtectedRoute component={ReelsFeed} />} />
                     <Route path="/reels-editor" element={<ProtectedRoute component={ReelsEditor} />} />
                     <Route path="/profile/:userId" element={<ProtectedRoute component={Profile} />} />
                     <Route path="/following" element={<ProtectedRoute component={FollowingPage} />} />
 
-                    {/* MESSENGER ROUTES */}
                     <Route path="/messages/:userId?" element={<ProtectedRoute component={() => <Messenger socket={socket.current} />} />} />
                     <Route path="/messenger/:userId?" element={<ProtectedRoute component={() => <Messenger socket={socket.current} />} />} />
                     
                     <Route path="/settings" element={<ProtectedRoute component={Settings} />} />
                     <Route path="/call/:roomId" element={<ProtectedRoute component={CallPage} />} />
                     
-                    {/* Fallback */}
                     <Route path="*" element={<Navigate to="/" />} />
                   </Routes>
                 </AnimatePresence>
               </div>
             </main>
 
-            {/* RIGHT SIDEBAR (Hidden on Full Width Pages) */}
+            {/* RIGHT SIDEBAR */}
             {isAuthenticated && !isFullWidthPage && (
               <aside className="hidden xl:block w-[320px] sticky top-6 h-[calc(100vh-40px)] mt-6">
                 <div className="bg-white/5 border border-white/10 rounded-3xl p-6 h-full backdrop-blur-md">
@@ -177,7 +197,6 @@ export default function App() {
         </div>
       </div>
 
-      {/* MOBILE NAVIGATION (Hidden on Reels) */}
       {isAuthenticated && !isReelsPage && <MobileNav userAuth0Id={user?.sub} />}
     </div>
   );

@@ -17,13 +17,14 @@ const userSchema = new mongoose.Schema(
       type: String, 
       trim: true, 
       unique: true, 
-      sparse: true // নিশ্চিত করে যে null ডুপ্লিকেট হবে না
+      sparse: true 
     },
     email: { 
       type: String, 
       unique: true, 
       lowercase: true, 
-      sparse: true 
+      sparse: true, 
+      index: true 
     },
     avatar: { type: String, default: "" },
     coverImg: { type: String, default: "" }, 
@@ -31,13 +32,11 @@ const userSchema = new mongoose.Schema(
     location: { type: String, default: "" },
     workplace: { type: String, default: "" },
     
-    // 🏆 CREATOR & VERIFICATION
     isVerified: { type: Boolean, default: false },
     isCreator: { type: Boolean, default: false }, 
     isPremium: { type: Boolean, default: false }, 
     creatorLevel: { type: Number, default: 1 }, 
 
-    // 🚀 VIRAL GROWTH & RANKING
     inviteCode: { 
       type: String, 
       unique: true, 
@@ -57,7 +56,6 @@ const userSchema = new mongoose.Schema(
       default: false 
     }, 
 
-    // ⚡ RANK UP SYSTEM
     neuralRank: { 
       type: Number, 
       default: 0 
@@ -68,12 +66,10 @@ const userSchema = new mongoose.Schema(
       default: "Novice Drifter"
     },
 
-    // 💰 REVENUE & ANALYTICS
     revenueWallet: { type: Number, default: 0 }, 
     totalImpressions: { type: Number, default: 0 },
     engagementRate: { type: Number, default: 0 },
 
-    // 🛡 NEURAL & PRIVACY
     ghostMode: { type: Boolean, default: false },
     antiScreenshot: { type: Boolean, default: false },
     neuralShieldActive: { type: Boolean, default: true },
@@ -87,7 +83,6 @@ const userSchema = new mongoose.Schema(
       }
     ],
 
-    // 📡 CONNECTIONS
     followers: [{ type: String, index: true }], 
     following: [{ type: String, index: true }],
     friends: [{ type: String }],
@@ -98,13 +93,13 @@ const userSchema = new mongoose.Schema(
 );
 
 /* ==========================================================
-    🚀 OPTIMIZED INDEXING (Fixed for Regex Search)
+    🚀 OPTIMIZED INDEXING (The 500 Error Fix)
 ========================================================== */
 
-// ১. টেক্সট ইনডেক্স সরিয়ে সাধারণ কম্পাউন্ড ইনডেক্স করা (রেজেক্সের জন্য নিরাপদ)
+// ১. টেক্সট ইনডেক্স এর বদলে সাধারণ কম্পাউন্ড ইনডেক্স (Regex সার্চের জন্য নিরাপদ)
 userSchema.index({ name: 1, nickname: 1 });
 
-// ২. ভাইরাল রিচ এবং ইনভাইট সিস্টেম ফাস্ট করার জন্য ইনডেক্স
+// ২. র‍্যাঙ্কিং এবং ভাইরাল গ্রোথ ইনডেক্স
 userSchema.index({ createdAt: -1, isVerified: -1 });
 userSchema.index({ inviteCount: -1 }); 
 
