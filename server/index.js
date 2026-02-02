@@ -32,7 +32,7 @@ import messageRoutes from "./routes/messages.js";
 import storyRoute from "./routes/stories.js";
 import reelRoutes from "./routes/reels.js"; 
 import profileRoutes from "./src/routes/profile.js";
-import groupRoutes from "./routes/group.js"; // <--- নতুন গ্রুপ রাউট ইম্পোর্ট
+import groupRoutes from "./routes/group.js"; 
 
 const app = express();
 const server = http.createServer(app);
@@ -86,9 +86,9 @@ app.use("/api/profile", profileRoutes);
 app.use("/api/stories", storyRoute);
 app.use("/api/reels", reelRoutes); 
 
-// সুরক্ষিত মেসেজ ও গ্রুপ রাউট
+// সুরক্ষিত মেসেজ ও গ্রুপ রাউট (Auth0 protection active)
 app.use("/api/messages", checkJwt, messageRoutes); 
-app.use("/api/groups", checkJwt, groupRoutes); // <--- ৪০৪ এরর ফিক্স করতে এটি যোগ করা হয়েছে
+app.use("/api/groups", checkJwt, groupRoutes); 
 
 app.get("/", (req, res) => res.send("🚀 OnyxDrift Neural Core is Online!"));
 
@@ -98,6 +98,7 @@ app.get("/", (req, res) => res.send("🚀 OnyxDrift Neural Core is Online!"));
 
 io.on("connection", (socket) => {
     
+    // অনলাইন ইউজার ট্র্যাকিং
     socket.on("addNewUser", async (userId) => {
         if (!userId) return;
         socket.join(userId); 
@@ -108,33 +109,38 @@ io.on("connection", (socket) => {
         }
     });
 
-    // গ্রুপ চ্যাট রুম জয়েন করার জন্য
+    // --- গ্রুপ চ্যাট লজিক ---
     socket.on("joinGroup", (groupId) => {
         socket.join(groupId);
-        console.log(`User joined hive: ${groupId}`);
+        console.log(`📡 Drifter joined Hive: ${groupId}`);
     });
 
     socket.on("sendMessage", async (data) => {
         const { receiverId, isGroup, conversationId } = data;
-        
         if (isGroup) {
-            // যদি গ্রুপ মেসেজ হয়, তবে পুরো রুমকে (conversationId) পাঠাও
             io.to(conversationId).emit("getMessage", data);
         } else if (receiverId) {
-            // ব্যক্তিগত মেসেজ
             io.to(receiverId).emit("getMessage", data);
         }
     });
 
-    socket.on("typing", (data) => {
-        const { receiverId, isGroup, conversationId } = data;
-        if (isGroup) {
-            socket.to(conversationId).emit("displayTyping", data);
-        } else if (receiverId) {
-            io.to(receiverId).emit("displayTyping", data);
-        }
+    // --- গ্রুপ ভয়েস/ভিডিও কল ইঞ্জিন ---
+    socket.on("joinGroupCall", (data) => {
+        const { groupId, userId } = data;
+        socket.join(`call_${groupId}`);
+        // গ্রুপের অন্যদের জানানো যে নতুন কেউ সিগন্যাল দিচ্ছে
+        socket.to(`call_${groupId}`).emit("userJoinedCall", { userId, socketId: socket.id });
     });
 
+    socket.on("groupSignal", (data) => {
+        // নির্দিষ্ট ইউজারকে WebRTC সিগন্যাল পাঠানো
+        io.to(data.userToSignal).emit("receivingGroupSignal", {
+            signal: data.signal,
+            callerId: data.callerId,
+        });
+    });
+
+    // --- পার্সোনাল কল (P2P) ---
     socket.on("callUser", (data) => {
         io.to(data.userToCall).emit("incomingCall", {
             signal: data.signalData,
@@ -149,6 +155,7 @@ io.on("connection", (socket) => {
         io.to(data.to).emit("callAccepted", data.signal);
     });
 
+    // --- ডিসকানেকশন ---
     socket.on("disconnect", async () => {
         if (redis) {
             const all = await redis.hgetall("online_users");
