@@ -49,7 +49,7 @@ router.get("/search-users/:query", checkJwt, async (req, res) => {
 });
 
 /* ==========================================================
-    1️⃣ GET ALL CONVERSATIONS
+    1️⃣ GET ALL CONVERSATIONS (FIXED WITH USER DETAILS)
 ========================================================== */
 router.get("/conversations", checkJwt, async (req, res) => {
   try {
@@ -59,18 +59,40 @@ router.get("/conversations", checkJwt, async (req, res) => {
       return res.status(401).json({ error: "Neural identity missing" });
     }
 
-    // কনভারসেশনের সাথে মেম্বারদের ডিটেইলস পপুলেট করা হচ্ছে
+    // ১. প্রথমে ইউজারের সব কনভারসেশন খুঁজে বের করা
     const conversations = await Conversation.find({
       members: { $in: [currentUserId] },
     }).sort({ updatedAt: -1 });
 
-    res.status(200).json(conversations);
+    // ২. ম্যানুয়ালি মেম্বারদের ডিটেইলস পপুলেট করা (যেহেতু auth0Id স্ট্রিং ব্যবহার করছেন)
+    const detailedConversations = await Promise.all(
+      conversations.map(async (conv) => {
+        const convObj = conv.toObject();
+
+        if (!convObj.isGroup) {
+          // অন্য মেম্বারের ID বের করা
+          const otherMemberId = convObj.members.find((id) => id !== currentUserId);
+
+          // ইউজার টেবিল থেকে তার ডাটা নিয়ে আসা
+          const userDetails = await User.findOne({ auth0Id: otherMemberId }).select(
+            "name nickname email avatar auth0Id"
+          );
+
+          convObj.userDetails = userDetails || { 
+            name: "Unknown Drifter", 
+            auth0Id: otherMemberId 
+          };
+        }
+        return convObj;
+      })
+    );
+
+    res.status(200).json(detailedConversations);
   } catch (err) {
     console.error("Conversation Fetch Error:", err);
     res.status(500).json({ error: "Could not sync conversations" });
   }
 });
-
 /* ==========================================================
     2️⃣ CREATE OR GET CONVERSATION
 ========================================================== */
