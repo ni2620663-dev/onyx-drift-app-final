@@ -1,13 +1,13 @@
 import express from "express";
 const router = express.Router();
-import { auth } from 'express-oauth2-jwt-bearer'; // সরাসরি ভেরিফিকেশন ব্যবহার করা ভালো
+import { auth } from 'express-oauth2-jwt-bearer';
 
 // মডেল ইম্পোর্ট
 import Conversation from "../models/Conversation.js"; 
 import Message from "../models/Message.js";      
 import User from "../models/User.js"; 
 
-// 🛡️ JWT Middleware (যদি server.js এ ইতিমধ্যে app.use(checkJwt) করে থাকেন, তবে এখান থেকে বাদ দিতে পারেন)
+// 🛡️ JWT Middleware
 const checkJwt = auth({
   audience: 'https://onyx-drift-api.com',
   issuerBaseURL: `https://dev-6d0nxccsaycctfl1.us.auth0.com/`,
@@ -20,7 +20,6 @@ const checkJwt = auth({
 router.get("/search-users/:query", checkJwt, async (req, res) => {
   try {
     const { query } = req.params;
-    // express-oauth2-jwt-bearer এ ডাটা req.auth.payload এ থাকে
     const currentUserId = req.auth?.payload.sub; 
 
     if (!query || query.length < 2) {
@@ -60,6 +59,7 @@ router.get("/conversations", checkJwt, async (req, res) => {
       return res.status(401).json({ error: "Neural identity missing" });
     }
 
+    // কনভারসেশনের সাথে মেম্বারদের ডিটেইলস পপুলেট করা হচ্ছে
     const conversations = await Conversation.find({
       members: { $in: [currentUserId] },
     }).sort({ updatedAt: -1 });
@@ -115,15 +115,17 @@ router.post("/conversation", checkJwt, async (req, res) => {
 });
 
 /* ==========================================================
-    3️⃣ SAVE NEW MESSAGE
+    3️⃣ SAVE NEW MESSAGE (Enhanced with Mood & Media)
 ========================================================== */
 router.post("/message", checkJwt, async (req, res) => {
   try {
-    const { conversationId, text, media, mediaType, isGroup, tempId, isSelfDestruct } = req.body;
-    const senderId = req.auth?.payload.sub;
+    const { 
+      conversationId, text, media, mediaType, 
+      isGroup, tempId, isSelfDestruct, neuralMood, 
+      isTimeCapsule, deliverAt 
+    } = req.body;
     
-    // নোট: ইউজারনেম ডাটাবেস থেকে আনা ভালো, অথবা ফ্রন্টএন্ড থেকে পাঠানো যেতে পারে
-    const senderName = "Drifter"; 
+    const senderId = req.auth?.payload.sub;
 
     if (!conversationId) {
       return res.status(400).json({ error: "Conversation ID required" });
@@ -131,29 +133,33 @@ router.post("/message", checkJwt, async (req, res) => {
 
     let expireAt = null;
     if (isSelfDestruct) {
-      expireAt = new Date(Date.now() + 15 * 1000); 
+      expireAt = new Date(Date.now() + 15 * 1000); // ১৫ সেকেন্ড পর ডিলিট হবে
     }
 
     const newMessage = new Message({
       conversationId,
       senderId,
-      senderName,
       text: text || "",
       media: media || null,
       mediaType: mediaType || "text",
       tempId,
+      neuralMood: neuralMood || "Neural-Flow",
       isGroup: isGroup || false,
       isSelfDestruct: isSelfDestruct || false,
+      isTimeCapsule: isTimeCapsule || false,
+      deliverAt: deliverAt || Date.now(),
       expireAt 
     });
 
     const savedMessage = await newMessage.save();
 
+    // লাস্ট মেসেজ টেক্সট সেট করা
     let lastMsgText = text;
     if (isSelfDestruct) lastMsgText = "👻 Self-destructing message";
     else if (mediaType === "image") lastMsgText = "📷 Photo transmitted";
     else if (mediaType === "voice") lastMsgText = "🎙️ Voice note";
 
+    // কনভারসেশন আপডেট
     await Conversation.findByIdAndUpdate(conversationId, {
       $set: { 
         updatedAt: Date.now(),
@@ -167,52 +173,23 @@ router.post("/message", checkJwt, async (req, res) => {
     res.status(500).json({ error: "Signal delivery failed" });
   }
 });
-/* ==========================================================
-   🚀 SEND TIME-CAPSULE OR EMOTIONAL MESSAGE
-========================================================== */
-router.post("/message", checkJwt, async (req, res) => {
-  try {
-    const { 
-      conversationId, text, mood, isTimeCapsule, deliverAt 
-    } = req.body;
-    
-    const senderId = req.auth?.payload.sub;
-
-    const newMessage = new Message({
-      conversationId,
-      senderId,
-      text,
-      mood: mood || "Neural-Flow",
-      isTimeCapsule: isTimeCapsule || false,
-      deliverAt: deliverAt || Date.now() // এখানে ভবিষ্যৎ তারিখ সেট করা যাবে
-    });
-
-    const savedMessage = await newMessage.save();
-    
-    // যদি এটি টাইম ক্যাপসুল হয়, তবে সকেট দিয়ে এখনই পাঠাবো না
-    if (!isTimeCapsule) {
-       // Socket.io logic here for instant delivery
-    }
-
-    res.status(200).json(savedMessage);
-  } catch (err) {
-    res.status(500).json({ error: "Neural transmission failed" });
-  }
-});
 
 /* ==========================================================
-    4️⃣ GET MESSAGES
+    4️⃣ GET MESSAGES (Fixed Path)
 ========================================================== */
 router.get("/:conversationId", checkJwt, async (req, res) => {
   try {
     const { conversationId } = req.params;
     
+    // শুধুমাত্র ডেলিভারি টাইম পার হওয়া মেসেজগুলো আসবে (টাইম ক্যাপসুলের জন্য)
     const messages = await Message.find({
       conversationId: conversationId,
+      deliverAt: { $lte: new Date() }
     }).sort({ createdAt: 1 });
     
     res.status(200).json(messages || []);
   } catch (err) {
+    console.error("Fetch Messages Error:", err);
     res.status(500).json({ error: "Neural history inaccessible" });
   }
 });

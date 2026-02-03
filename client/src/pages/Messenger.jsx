@@ -29,10 +29,9 @@ const Messenger = ({ socket }) => {
   const [activeCall, setActiveCall] = useState(null); 
 
   const scrollRef = useRef();
-  // API URL থেকে ট্রেইলিং স্ল্যাশ রিমুভ করা হয়েছে
   const API_URL = (import.meta.env.VITE_API_BASE_URL || "https://onyx-drift-app-final-u29m.onrender.com").replace(/\/$/, "");
 
-  // নাম এবং অবতার হ্যান্ডলিং ফিক্সড
+  // নাম এবং অবতার হ্যান্ডলিং
   const getDisplayName = (u) => u?.name || u?.nickname || "Unknown Drifter";
   const getAvatar = (u) => u?.avatar || u?.picture || `https://ui-avatars.com/api/?name=${getDisplayName(u)}&background=0D8ABC&color=fff`;
 
@@ -45,61 +44,29 @@ const Messenger = ({ socket }) => {
     }
   }, [getAccessTokenSilently]);
 
-  /* =================📡 SOCKET LISTENERS ================= */
-  useEffect(() => {
-    const s = socket?.current || socket;
-    if (!s) return;
-
-    const handleIncomingCall = (data) => {
-      const accept = window.confirm(`${data.callerName} is calling... Accept?`);
-      if (accept) {
-        setActiveCall({ 
-          roomId: data.roomId, 
-          name: data.callerName || "Unknown Drifter" 
-        });
-      }
-    };
-
-    const handleNewMessage = (data) => {
-      // চ্যাট উইন্ডো খোলা থাকলে মেসেজ আপডেট হবে
-      if(currentChat?._id === data.conversationId) {
-        setMessages(prev => [...prev, data]);
-      }
-      // কনভারসেশন লিস্ট আপডেট করার জন্য পুনরায় ফেচ করা
-      fetchConversations();
-    };
-
-    s.on("incomingCall", handleIncomingCall);
-    s.on("getMessage", handleNewMessage);
-
-    return () => {
-      s.off("incomingCall", handleIncomingCall);
-      s.off("getMessage", handleNewMessage);
-    };
-  }, [socket, currentChat]);
-
-  /* =================📞 CALL HANDLERS ================= */
-  const startCall = (chat) => {
-    const roomId = chat._id;
-    const receiverId = chat.isGroup ? chat._id : chat.userDetails?.userId;
-
-    setActiveCall({
-      roomId: roomId,
-      name: chat.isGroup ? chat.name : getDisplayName(chat.userDetails)
-    });
-
-    const s = socket?.current || socket;
-    if (s) {
-      s.emit("initiateCall", { 
-        roomId, 
-        receiverId, 
-        callerName: user.name,
-        type: "video" 
+  /* =================📩 DATA FETCHING ================= */
+  
+  const fetchConversations = useCallback(async () => {
+    try {
+      const token = await getAuthToken();
+      const res = await axios.get(`${API_URL}/api/messages/conversations`, {
+        headers: { Authorization: `Bearer ${token}` }
       });
-    }
+      setConversations(Array.isArray(res.data) ? res.data : []);
+    } catch (err) { console.error("Conversation Fetch Error:", err); }
+  }, [getAuthToken, API_URL]);
+
+  const fetchMessages = async (convId) => {
+    try {
+      const token = await getAuthToken();
+      // ব্যাকএন্ড রাউট: /api/messages/:conversationId
+      const res = await axios.get(`${API_URL}/api/messages/${convId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setMessages(res.data);
+    } catch (err) { console.error("Message Fetch Error:", err); }
   };
 
-  /* =================📩 DATA FETCHING ================= */
   const fetchGroupMessages = async (groupId) => {
     try {
       const token = await getAuthToken();
@@ -112,26 +79,61 @@ const Messenger = ({ socket }) => {
     } catch (err) { console.error("Group Fetch Error:", err); }
   };
 
-  // ডাবল /messages পাথ এখানে ফিক্স করা হয়েছে
-  const fetchMessages = async (convId) => {
-    try {
-      const token = await getAuthToken();
-      const res = await axios.get(`${API_URL}/api/messages/${convId}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      setMessages(res.data);
-    } catch (err) { console.error("Message Fetch Error:", err); }
-  };
+  /* =================📡 SOCKET LISTENERS ================= */
+  useEffect(() => {
+    const s = socket?.current || socket;
+    if (!s || !user) return;
 
-  const fetchConversations = useCallback(async () => {
-    try {
-      const token = await getAuthToken();
-      const res = await axios.get(`${API_URL}/api/messages/conversations`, {
-        headers: { Authorization: `Bearer ${token}` }
+    // ইউজার অনলাইনে থাকলে সকেট কানেক্ট করা
+    s.emit("addNewUser", user.sub);
+
+    const handleIncomingCall = (data) => {
+      const accept = window.confirm(`${data.callerName} is calling... Accept?`);
+      if (accept) {
+        setActiveCall({ 
+          roomId: data.roomId, 
+          name: data.callerName || "Unknown Drifter" 
+        });
+      }
+    };
+
+    const handleNewMessage = (data) => {
+      // যদি রিসিভড মেসেজটি বর্তমান ওপেন চ্যাটের হয়
+      if(currentChat?._id === data.conversationId) {
+        setMessages(prev => [...prev, data]);
+      }
+      fetchConversations(); // লিস্ট আপডেট
+    };
+
+    s.on("incomingCall", handleIncomingCall);
+    s.on("getMessage", handleNewMessage);
+
+    return () => {
+      s.off("incomingCall", handleIncomingCall);
+      s.off("getMessage", handleNewMessage);
+    };
+  }, [socket, currentChat, user, fetchConversations]);
+
+  /* =================📞 CALL HANDLERS ================= */
+  const startCall = (chat) => {
+    const roomId = chat._id;
+    const receiverId = chat.isGroup ? null : chat.members?.find(m => m !== user.sub);
+
+    setActiveCall({
+      roomId: roomId,
+      name: chat.isGroup ? chat.groupName : getDisplayName(chat.userDetails)
+    });
+
+    const s = socket?.current || socket;
+    if (s && receiverId) {
+      s.emit("initiateCall", { 
+        roomId, 
+        receiverId, 
+        callerName: user.name,
+        type: "video" 
       });
-      setConversations(Array.isArray(res.data) ? res.data : []);
-    } catch (err) { console.error("Conversation Fetch Error:", err); }
-  }, [getAuthToken, API_URL]);
+    }
+  };
 
   const handleSend = async () => {
     if (!newMessage.trim() || !currentChat) return;
@@ -145,21 +147,25 @@ const Messenger = ({ socket }) => {
       createdAt: new Date()
     };
 
-    // অপ্টিমিস্টিক আপডেট
+    // অপ্টিমিস্টিক আপডেট (তাৎক্ষণিক ফিডব্যাক)
     setMessages((prev) => [...prev, { ...msgData, _id: Date.now().toString() }]);
     setNewMessage("");
 
+    // সকেটের মাধ্যমে রিয়েলটাইম পাঠানো
     const s = socket?.current || socket;
     if (s) {
+      const receiverId = currentChat.isGroup ? null : currentChat.members?.find(m => m !== user.sub);
       s.emit("sendMessage", { 
         ...msgData, 
-        receiverId: currentChat.isGroup ? null : currentChat.userDetails?.userId 
+        receiverId,
+        conversationId: currentChat._id
       });
     }
 
     try {
       const token = await getAuthToken();
-      await axios.post(`${API_URL}/api/messages`, msgData, {
+      // ব্যাকএন্ড রাউট: /api/messages/message
+      await axios.post(`${API_URL}/api/messages/message`, msgData, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setMessageCount(prev => (prev + 1) % 101);
@@ -185,21 +191,21 @@ const Messenger = ({ socket }) => {
   return (
     <div className={`fixed inset-0 text-white h-[100dvh] overflow-hidden ${isIncognito ? 'bg-[#0a0010]' : 'bg-[#02040a]'}`}>
       
-      {/* --- কল স্ক্রিন ওভারলে --- */}
+      {/* কল স্ক্রিন ওভারলে */}
       <AnimatePresence>
         {activeCall && (
           <GroupCallScreen 
             roomId={activeCall.roomId} 
             onHangup={() => {
                 const s = socket?.current || socket;
-                if(s) s.emit("endCall", { to: currentChat?.userDetails?.userId || currentChat?._id });
+                const target = currentChat.isGroup ? currentChat._id : currentChat.members?.find(m => m !== user.sub);
+                if(s) s.emit("endCall", { to: target });
                 setActiveCall(null);
             }} 
           />
         )}
       </AnimatePresence>
 
-      {/* মেইন লিস্ট ভিউ */}
       <div className={`flex flex-col h-full w-full ${currentChat ? 'hidden' : 'flex'}`}>
         <header className="p-5 pt-12 flex flex-col gap-3 bg-black/40 border-b border-white/5 backdrop-blur-3xl shrink-0">
           <div className="flex justify-between items-center">
@@ -228,7 +234,7 @@ const Messenger = ({ socket }) => {
                 <img src={getAvatar(c.userDetails)} className="w-12 h-12 rounded-xl object-cover border border-white/10" alt="" />
                 <div className="flex-1 min-w-0">
                   <div className="flex justify-between items-center mb-0.5">
-                    <span className="font-bold text-sm truncate text-zinc-200">{getDisplayName(c.userDetails)}</span>
+                    <span className="font-bold text-sm truncate text-zinc-200">{getDisplayName(c.userDetails || c)}</span>
                     <span className="text-[8px] text-cyan-600 font-black">SYNC_01</span>
                   </div>
                   <p className="text-xs text-zinc-500 truncate">{c.lastMessage?.text || "Waiting for signal..."}</p>
@@ -238,7 +244,7 @@ const Messenger = ({ socket }) => {
           ) : (
             <GroupMessenger 
               socket={socket} API_URL={API_URL} getAuthToken={getAuthToken} 
-              onSelectGroup={(g) => setCurrentChat({...g, isGroup: true, userDetails: {name: g.name}})}
+              onSelectGroup={(g) => setCurrentChat({...g, isGroup: true})}
             />
           )}
         </div>
@@ -259,7 +265,6 @@ const Messenger = ({ socket }) => {
         </nav>
       </div>
 
-      {/* --- চ্যাট উইন্ডো --- */}
       <AnimatePresence>
         {currentChat && (
           <motion.div initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }} transition={{ type: "spring", damping: 30, stiffness: 200 }} className="fixed inset-0 z-[200] flex flex-col h-[100dvh] bg-[#02040a]">
@@ -281,13 +286,13 @@ const Messenger = ({ socket }) => {
                </div>
             </header>
             
-            <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar bg-grainy">
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
               {messages.map((m, i) => (
                 <div key={m._id || i} className={`flex flex-col ${m.senderId === user?.sub ? 'items-end' : 'items-start'}`}>
                   <div className={`px-4 py-2.5 rounded-2xl max-w-[85%] border transition-all ${m.senderId === user?.sub ? (moodStyles[m.neuralMood] || "bg-cyan-500/10 border-cyan-500/20") : "bg-white/5 border-white/10"}`}>
                     <p className="text-[13px] leading-relaxed">{m.text}</p>
                   </div>
-                  <span className="text-[7px] text-zinc-600 mt-1 uppercase font-mono tracking-tighter">
+                  <span className="text-[7px] text-zinc-600 mt-1 uppercase font-mono">
                     {new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </span>
                 </div>
@@ -297,9 +302,9 @@ const Messenger = ({ socket }) => {
 
             <div className="p-4 pb-10 bg-black/60 backdrop-blur-xl border-t border-white/5">
               <MoodSelector currentMood={selectedMood} onSelectMood={setSelectedMood} />
-              <div className="flex items-center gap-2 mt-4 bg-white/5 p-1.5 rounded-full border border-white/10 shadow-inner">
-                <input value={newMessage} onChange={(e) => setNewMessage(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSend()} placeholder="Transmit signal..." className="bg-transparent flex-1 px-4 outline-none text-white text-[13px] placeholder:text-zinc-600" />
-                <button onClick={handleSend} disabled={!newMessage.trim()} className="p-3 rounded-full bg-cyan-500 text-black active:scale-95 disabled:opacity-50 disabled:grayscale transition-all shadow-[0_0_15px_rgba(6,182,212,0.4)]">
+              <div className="flex items-center gap-2 mt-4 bg-white/5 p-1.5 rounded-full border border-white/10">
+                <input value={newMessage} onChange={(e) => setNewMessage(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSend()} placeholder="Transmit signal..." className="bg-transparent flex-1 px-4 outline-none text-white text-[13px]" />
+                <button onClick={handleSend} disabled={!newMessage.trim()} className="p-3 rounded-full bg-cyan-500 text-black active:scale-95 disabled:opacity-50 transition-all">
                   <HiOutlinePaperAirplane size={18} className="-rotate-45" />
                 </button>
               </div>
