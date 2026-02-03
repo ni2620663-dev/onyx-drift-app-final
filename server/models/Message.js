@@ -6,7 +6,7 @@ const MessageSchema = new mongoose.Schema(
     conversationId: {
       type: String, 
       index: true,
-      required: true
+      required: [true, "Conversation ID is required"]
     },
     isGroup: {
       type: Boolean,
@@ -22,21 +22,22 @@ const MessageSchema = new mongoose.Schema(
     // ২. সেন্ডার ডিটেইলস (Neural Identity)
     senderId: {
       type: String, 
-      required: true,
+      required: [true, "Sender ID is required"],
       index: true
     },
     senderName: { 
       type: String,
-      required: true 
+      required: [true, "Sender Name is required"],
+      default: "Unknown Drifter" 
     },
     senderAvatar: { 
-      type: String 
+      type: String,
+      default: ""
     },
 
-    // ৩. ইউনিক আইডেন্টিফায়ার
+    // ৩. ইউনিক আইডেন্টিফায়ার (অপ্রয়োজনীয় এরর এড়াতে sparse রাখা হয়েছে)
     tempId: { 
       type: String, 
-      unique: true, 
       sparse: true  
     },
 
@@ -56,15 +57,15 @@ const MessageSchema = new mongoose.Schema(
       default: "text"
     },
 
-    // 🚀 ফিচার ১: EMOTIONAL SIGNATURE (ইমোশন ট্র্যাকিং যা ১০০ বছর পর কাজে লাগবে)
-    // এটি ইউজারের মুড এনকোড করবে
+    // 🚀 ফিচার ১: EMOTIONAL SIGNATURE
+    // ফ্রন্টএন্ডের 'Neural-Flow' এবং অন্যান্য মুড এখানে এলাউ করা হয়েছে
     neuralMood: {
       type: String,
       enum: ["Neutral", "Happy", "Sad", "Enraged", "Ecstatic", "Anxious", "Neural-Flow"],
       default: "Neural-Flow"
     },
 
-    // 🚀 ফিচার ২: THE TIME CAPSULE (আগামী ১০০ বছরের জন্য মেসেজ লক)
+    // 🚀 ফিচার ২: THE TIME CAPSULE
     isTimeCapsule: {
       type: Boolean,
       default: false
@@ -72,17 +73,17 @@ const MessageSchema = new mongoose.Schema(
     deliverAt: {
       type: Date,
       default: Date.now,
-      index: true // ফিউচার মেসেজগুলো খুঁজে বের করার জন্য
+      index: true 
     },
 
-    // 🚀 ফিচার ৩: DIGITAL LEGACY (মৃত্যুর পরও অস্তিত্ব বজায় রাখা)
+    // 🚀 ফিচার ৩: DIGITAL LEGACY
     isLegacyMessage: {
       type: Boolean,
       default: false
     },
     autonomousReplyEnabled: {
       type: Boolean,
-      default: false // ভবিষ্যতে AI যেন আপনার হয়ে উত্তর দিতে পারে তার পারমিশন
+      default: false 
     },
 
     // ৫. স্ট্যাটাস এবং মেটাডাটা
@@ -102,7 +103,6 @@ const MessageSchema = new mongoose.Schema(
       type: Boolean,
       default: false
     },
-    // TTL ইনডেক্সিং এর জন্য ব্যবহৃত হবে
     expireAt: {
       type: Date,
       default: null,
@@ -120,17 +120,13 @@ const MessageSchema = new mongoose.Schema(
     📡 PERFORMANCE & QUANTUM OPTIMIZATION
 ========================================================== */
 
-// ১. TTL ইনডেক্স: নির্দিষ্ট সময়ে অটোমেটিক ডিলিট করার জন্য
+// ১. TTL ইনডেক্স: expireAt ফিল্ডে ভ্যালু থাকলে অটো ডিলিট হবে
 MessageSchema.index({ expireAt: 1 }, { expireAfterSeconds: 0 });
 
-// ২. টাইম ক্যাপসুল ইনডেক্সিং: যাতে ফিউচার মেসেজগুলো দ্রুত প্রসেস হয়
-MessageSchema.index({ deliverAt: 1 });
-
-// ৩. চ্যাট হিস্ট্রি দ্রুত লোড করার জন্য কম্পাউন্ড ইনডেক্সিং
+// ২. চ্যাট হিস্ট্রি দ্রুত লোড করার জন্য কম্পাউন্ড ইনডেক্সিং
 MessageSchema.index({ conversationId: 1, createdAt: -1 });
-MessageSchema.index({ communityId: 1, createdAt: -1 });
 
-// ৪. ভার্চুয়াল ফিল্ড: মেসেজটি কি বর্তমানে 'লকড' অবস্থায় আছে?
+// ৩. ভার্চুয়াল ফিল্ড: মেসেজটি কি বর্তমানে 'লকড' (টাইম ক্যাপসুল) অবস্থায় আছে?
 MessageSchema.virtual('isLocked').get(function() {
   return this.isTimeCapsule && new Date() < this.deliverAt;
 });
