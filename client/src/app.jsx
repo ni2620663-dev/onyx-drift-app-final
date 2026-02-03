@@ -5,6 +5,8 @@ import { io } from "socket.io-client";
 import { motion, AnimatePresence } from "framer-motion";
 import toast, { Toaster } from 'react-hot-toast';
 import axios from 'axios'; 
+import { HiOutlineVideoCamera, HiXMark } from "react-icons/hi2";
+import { FaPhone } from "react-icons/fa";
 
 // Components & Pages
 import Navbar from "./components/Navbar";
@@ -41,6 +43,9 @@ export default function App() {
   const socket = useRef(null); 
   const [searchQuery, setSearchQuery] = useState("");
   const [isPostModalOpen, setIsPostModalOpen] = useState(false);
+  
+  // ইনকামিং কল স্টেট
+  const [incomingCall, setIncomingCall] = useState(null);
 
   /* =================📡 USER DATA SYNC LOGIC ================= */
   useEffect(() => {
@@ -85,15 +90,7 @@ export default function App() {
         });
 
         socket.current.on("incomingCall", (data) => {
-          toast(`Incoming ${data.type} call...`, { 
-            icon: '📞',
-            style: {
-              borderRadius: '10px',
-              background: '#0f172a',
-              color: '#fff',
-              border: '1px solid #06b6d4'
-            }
-          });
+          setIncomingCall(data);
         });
       }
 
@@ -116,7 +113,10 @@ export default function App() {
     </div>
   );
 
-  /* =================📏 LAYOUT LOGIC ================= */
+  /* =================📏 LAYOUT LOGIC (FIXED) ================= */
+  // চেক করা হচ্ছে ইউজার মেসেঞ্জার বা মেসেজ পেজে আছে কিনা
+  const isMessengerPage = location.pathname.startsWith("/messages") || location.pathname.startsWith("/messenger");
+
   const isFullWidthPage = [
     "/messenger", "/messages", "/settings", "/", "/join", "/reels", "/feed"
   ].some(path => location.pathname === path || location.pathname.startsWith(path + "/"));
@@ -131,10 +131,50 @@ export default function App() {
       <Toaster position="top-center" reverseOrder={false} />
       <CustomCursor />
 
+      {/* --- 📞 GLOBAL INCOMING CALL MODAL --- */}
+      <AnimatePresence>
+        {incomingCall && (
+          <motion.div 
+            initial={{ y: -100, opacity: 0 }}
+            animate={{ y: 20, opacity: 1 }}
+            exit={{ y: -100, opacity: 0 }}
+            className="fixed top-0 left-1/2 -translate-x-1/2 z-[9999] w-[90%] max-w-md bg-zinc-900/90 backdrop-blur-2xl border border-cyan-500/30 p-5 rounded-3xl shadow-[0_0_40px_rgba(6,182,212,0.2)]"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-cyan-500/10 flex items-center justify-center animate-pulse">
+                  <HiOutlineVideoCamera className="text-cyan-500" size={24} />
+                </div>
+                <div>
+                  <h4 className="text-sm font-black text-white uppercase tracking-tight">{incomingCall.callerName || "Unknown Drifter"}</h4>
+                  <p className="text-[10px] text-cyan-500 font-bold animate-pulse">NEURAL CALL INCOMING...</p>
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <button 
+                  onClick={() => setIncomingCall(null)}
+                  className="w-10 h-10 rounded-full bg-red-500/20 text-red-500 flex items-center justify-center hover:bg-red-500 hover:text-white transition-all"
+                >
+                  <HiXMark size={20} />
+                </button>
+                <button 
+                  onClick={() => {
+                    navigate(`/call/${incomingCall.roomId}`);
+                    setIncomingCall(null);
+                  }}
+                  className="w-10 h-10 rounded-full bg-cyan-500 text-black flex items-center justify-center hover:scale-110 transition-all"
+                >
+                  <FaPhone size={18} />
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <div className="flex flex-col w-full">
-        
-        {/* --- 1. NAVBAR (HIDDEN ON AUTH, REELS, & FEED) --- */}
-        {isAuthenticated && !isAuthPage && !isReelsPage && !isFeedPage && (
+        {/* Navbar condition updated to hide on Messenger/Messages */}
+        {isAuthenticated && !isAuthPage && !isReelsPage && !isFeedPage && !isMessengerPage && (
           <Navbar 
             user={user} 
             socket={socket.current} 
@@ -144,27 +184,22 @@ export default function App() {
           />
         )}
         
-        {/* --- 2. MAIN LAYOUT --- */}
         <div className="flex justify-center w-full transition-all duration-500">
           <div className={`flex w-full ${isFullWidthPage ? "max-w-full" : "max-w-[1440px] px-0 lg:px-6"} gap-6`}>
             
-            {/* LEFT SIDEBAR (SHOWN ONLY ON PROFILE/FOLLOWING TYPE PAGES) */}
             {isAuthenticated && !isFullWidthPage && (
               <aside className="hidden lg:block w-[280px] sticky top-6 h-[calc(100vh-40px)] mt-6">
                 <Sidebar />
               </aside>
             )}
             
-            {/* MAIN CONTENT AREA */}
             <main className={`flex-1 flex justify-center ${isFullWidthPage ? "mt-0 pb-0" : "mt-6 pb-24 lg:pb-10"}`}>
               <div className={`${isFullWidthPage ? "w-full" : "w-full lg:max-w-[650px] max-w-full"}`}>
                 <AnimatePresence mode="wait">
                   <Routes location={location} key={location.pathname}>
-                    {/* Public Routes */}
                     <Route path="/" element={isAuthenticated ? <Navigate to="/feed" /> : <Landing />} />
                     <Route path="/join" element={<JoinPage />} /> 
 
-                    {/* Private Routes */}
                     <Route path="/feed" element={
                       <ProtectedRoute component={() => 
                         <PremiumHomeFeed 
@@ -180,22 +215,18 @@ export default function App() {
                     <Route path="/profile/:userId" element={<ProtectedRoute component={Profile} />} />
                     <Route path="/following" element={<ProtectedRoute component={FollowingPage} />} />
 
-                    {/* Messaging */}
                     <Route path="/messages/:userId?" element={<ProtectedRoute component={() => <Messenger socket={socket.current} />} />} />
                     <Route path="/messenger/:userId?" element={<ProtectedRoute component={() => <Messenger socket={socket.current} />} />} />
                     
-                    {/* Others */}
                     <Route path="/settings" element={<ProtectedRoute component={Settings} />} />
                     <Route path="/call/:roomId" element={<ProtectedRoute component={CallPage} />} />
                     
-                    {/* Redirects */}
                     <Route path="*" element={<Navigate to="/" />} />
                   </Routes>
                 </AnimatePresence>
               </div>
             </main>
 
-            {/* RIGHT SIDEBAR (NEURAL SUGGESTIONS) */}
             {isAuthenticated && !isFullWidthPage && (
               <aside className="hidden xl:block w-[320px] sticky top-6 h-[calc(100vh-40px)] mt-6">
                 <div className="bg-white/5 border border-white/10 rounded-3xl p-6 h-full backdrop-blur-md">
@@ -211,7 +242,6 @@ export default function App() {
         </div>
       </div>
 
-      {/* MOBILE NAVIGATION */}
       {isAuthenticated && !isReelsPage && <MobileNav userAuth0Id={user?.sub} />}
     </div>
   );

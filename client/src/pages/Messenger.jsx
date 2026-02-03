@@ -13,8 +13,8 @@ import { AnimatePresence, motion } from "framer-motion";
 // Neural Components
 import MoodSelector from "./MoodSelector";
 import GroupMessenger from "./GroupMessenger";
-import GroupCallScreen from "./GroupCallScreen"; // আপনার তৈরি করা কল স্ক্রিন
-import CallPage from "./CallPage";
+import GroupCallScreen from "./GroupCallScreen"; 
+
 const Messenger = ({ socket }) => {
   const { user, getAccessTokenSilently, isAuthenticated } = useAuth0();
   
@@ -26,8 +26,6 @@ const Messenger = ({ socket }) => {
   const [selectedMood, setSelectedMood] = useState("Neural-Flow");
   const [isIncognito, setIsIncognito] = useState(false);
   const [messageCount, setMessageCount] = useState(0); 
-  
-  // কলিং স্টেট
   const [activeCall, setActiveCall] = useState(null); 
 
   const scrollRef = useRef();
@@ -42,7 +40,57 @@ const Messenger = ({ socket }) => {
     });
   }, [getAccessTokenSilently]);
 
-  // ১. গ্রুপ চ্যাট হিস্ট্রি
+  // --- ১. ইনকামিং কল লিসেনার (অন্য ফোন থেকে কল আসলে এটি কাজ করবে) ---
+  useEffect(() => {
+    const s = socket?.current || socket;
+    if (!s) return;
+
+    s.on("incomingCall", (data) => {
+      // আপনি এখানে একটি কাস্টম মডালও দেখাতে পারেন
+      const accept = window.confirm(`${data.callerName} কল দিচ্ছেন... রিসিভ করবেন?`);
+      if (accept) {
+        setActiveCall({ 
+          roomId: data.roomId, 
+          name: data.callerName || "Unknown Drifter" 
+        });
+      }
+    });
+
+    s.on("getMessage", (data) => {
+        if(currentChat?._id === data.conversationId) {
+            setMessages(prev => [...prev, data]);
+        }
+    });
+
+    return () => {
+      s.off("incomingCall");
+      s.off("getMessage");
+    };
+  }, [socket, currentChat]);
+
+  // --- ২. কল হ্যান্ডলার (নিজের ফোন থেকে কল পাঠাতে) ---
+  const startCall = (chat) => {
+    const roomId = chat._id;
+    const receiverId = chat.isGroup ? chat._id : chat.userDetails?.userId;
+
+    setActiveCall({
+      roomId: roomId,
+      name: chat.name || getDisplayName(chat.userDetails)
+    });
+
+    const s = socket?.current || socket;
+    if (s) {
+      // সার্ভারের 'initiateCall' ইভেন্ট ট্রিগার করা
+      s.emit("initiateCall", { 
+        roomId, 
+        receiverId, 
+        callerName: user.name,
+        type: "video" 
+      });
+    }
+  };
+
+  // চ্যাট হিস্ট্রি ফেচিং
   const fetchGroupMessages = async (groupId) => {
     try {
       const token = await getAuthToken();
@@ -55,7 +103,6 @@ const Messenger = ({ socket }) => {
     } catch (err) { console.error("Neural link broken:", err); }
   };
 
-  // ২. পার্সোনাল চ্যাট হিস্ট্রি
   const fetchMessages = async (convId) => {
     try {
       const token = await getAuthToken();
@@ -76,7 +123,6 @@ const Messenger = ({ socket }) => {
     } catch (err) { console.error(err); }
   }, [getAuthToken, API_URL]);
 
-  // ৩. মেসেজ পাঠানো
   const handleSend = async () => {
     if (!newMessage.trim()) return;
     const msgData = {
@@ -100,16 +146,6 @@ const Messenger = ({ socket }) => {
     } catch (err) { console.error(err); }
   };
 
-  // ৪. কল হ্যান্ডলার
-  const startCall = (chat) => {
-    setActiveCall({
-      roomId: chat._id,
-      name: chat.name || getDisplayName(chat.userDetails)
-    });
-    const s = socket?.current || socket;
-    if (s) s.emit("initiateCall", { roomId: chat._id, caller: user.sub });
-  };
-
   useEffect(() => { if (isAuthenticated) fetchConversations(); }, [isAuthenticated, fetchConversations]);
   useEffect(() => { 
     if (currentChat) {
@@ -127,19 +163,23 @@ const Messenger = ({ socket }) => {
   return (
     <div className={`fixed inset-0 text-white h-[100dvh] overflow-hidden ${isIncognito ? 'bg-[#0a0010]' : 'bg-[#02040a]'}`}>
       
-      {/* কল স্ক্রিন ওভারলে */}
+      {/* --- কল স্ক্রিন ওভারলে --- */}
       <AnimatePresence>
         {activeCall && (
           <GroupCallScreen 
             roomId={activeCall.roomId} 
-            onHangup={() => setActiveCall(null)} 
+            onHangup={() => {
+                const s = socket?.current || socket;
+                if(s) s.emit("endCall", { to: currentChat?.userDetails?.userId || currentChat?._id });
+                setActiveCall(null);
+            }} 
           />
         )}
       </AnimatePresence>
 
       {/* মেইন ভিউ */}
       <div className={`flex flex-col h-full w-full ${currentChat ? 'hidden' : 'flex'}`}>
-        <header className="p-5 pt-10 flex flex-col gap-3 bg-black/40 border-b border-white/5 backdrop-blur-3xl">
+        <header className="p-5 pt-10 flex flex-col gap-3 bg-black/40 border-b border-white/5 backdrop-blur-3xl shrink-0">
           <div className="flex justify-between items-center">
             <div className="flex items-center gap-3">
               <img src={getAvatar(user)} className="w-10 h-10 rounded-xl border border-cyan-500/30" alt="" />
@@ -179,7 +219,7 @@ const Messenger = ({ socket }) => {
           )}
         </div>
 
-        <nav className="p-4 pb-8 flex justify-around items-center bg-black/80 backdrop-blur-2xl border-t border-white/5">
+        <nav className="p-4 pb-8 flex justify-around items-center bg-black/80 backdrop-blur-2xl border-t border-white/5 shrink-0">
           <button onClick={() => setActiveTab("chats")} className={`p-3 flex flex-col items-center gap-1 ${activeTab === "chats" ? 'text-cyan-500' : 'text-zinc-600'}`}>
             <HiChatBubbleLeftRight size={24} />
             <span className="text-[8px] font-black uppercase">Chats</span>
@@ -195,10 +235,10 @@ const Messenger = ({ socket }) => {
         </nav>
       </div>
 
-      {/* চ্যাট উইন্ডো */}
+      {/* --- চ্যাট উইন্ডো --- */}
       <AnimatePresence>
         {currentChat && (
-          <motion.div initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }} className="fixed inset-0 z-[200] flex flex-col h-[100dvh] bg-[#02040a]">
+          <motion.div initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }} transition={{ type: "spring", damping: 25 }} className="fixed inset-0 z-[200] flex flex-col h-[100dvh] bg-[#02040a]">
             <header className="p-3 pt-10 flex justify-between items-center border-b border-white/5 bg-black/80 backdrop-blur-xl shrink-0">
                <div className="flex items-center gap-2">
                  <button onClick={() => setCurrentChat(null)} className="text-zinc-400 p-2"><HiOutlineChevronLeft size={28}/></button>

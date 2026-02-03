@@ -4,7 +4,7 @@ import { ZegoUIKitPrebuilt } from '@zegocloud/zego-uikit-prebuilt';
 import { useAuth0 } from "@auth0/auth0-react";
 import { HiOutlineXMark } from "react-icons/hi2";
 
-const CallPage = ({ socket }) => { 
+const CallPage = () => { 
   const { roomId } = useParams(); 
   const { user, isAuthenticated } = useAuth0();
   const navigate = useNavigate();
@@ -25,7 +25,6 @@ const CallPage = ({ socket }) => {
       if (!roomId || !isAuthenticated || !user) return;
 
       try {
-        // স্পেশাল ক্যারেক্টার রিমুভ করে আইডি ক্লিন করা
         const cleanUserID = user.sub.replace(/[^a-zA-Z0-9_]/g, "_");
         const userName = user.name || "Onyx Drifter";
 
@@ -40,41 +39,37 @@ const CallPage = ({ socket }) => {
         const zp = ZegoUIKitPrebuilt.create(kitToken);
         zpRef.current = zp;
 
-        // কল শুরু হলে রিংটোন বাজা শুরু হবে (যতক্ষণ না অন্যজন জয়েন করে)
+        // কল শুরু হলে রিংটোন প্লে হবে
         ringtoneRef.current.play().catch(() => console.log("Audio play blocked by browser"));
 
         zp.joinRoom({
           container: containerRef.current,
           scenario: {
-            mode: ZegoUIKitPrebuilt.OneONoneCall, 
+            mode: ZegoUIKitPrebuilt.OneONoneCall, // এটি নিশ্চিত করে ২ জনের ভিডিও ফিড
           },
           showScreenSharingButton: false, 
-          showPreJoinView: false, // সরাসরি কলে ঢুকে যাবে
+          showPreJoinView: false, 
           showUserList: false,
           maxUsers: 2,
-          layout: "Auto", 
+          layout: "Grid", // 'Auto' থেকে 'Grid' এ পরিবর্তন করা হলো যাতে ২ জনের ভিডিও সমানভাবে দেখা যায়
           showLayoutButton: false,
           showAudioVideoSettingsButton: true,
-          showTextChat: false, // মেসেঞ্জারে অলরেডি চ্যাট আছে তাই এখানে অফ রাখা ভালো
+          showTextChat: false,
           showNonVideoUser: true, 
           showTurnOffRemoteCameraButton: false, 
           showTurnOffRemoteMicrophoneButton: false,
-          lowerLeftNotification: {
-            showUserJoinAndLeave: true,
-          },
-          branding: {
-            logoURL: "",
-          },
+          turnOnCameraWhenJoining: true, // জয়েন করার সময় ক্যামেরা অন থাকবে
+          turnOnMicrophoneWhenJoining: true, // জয়েন করার সময় মাইক অন থাকবে
+          useFrontFacingCamera: true, // মোবাইলে ফ্রন্ট ক্যামেরা ব্যবহার করবে
+
           onUserJoin: (users) => {
-            // অন্য কেউ জয়েন করলে রিংটোন বন্ধ হবে
-            console.log("Drifter Joined the Neural Link");
+            // অন্য কেউ জয়েন করলেই রিংটোন বন্ধ হবে
             if (ringtoneRef.current) {
               ringtoneRef.current.pause();
               ringtoneRef.current.currentTime = 0;
             }
           },
           onUserLeave: () => {
-            console.log("Neural Link Severed");
             navigate('/messages');
           },
           onLeaveRoom: () => {
@@ -91,11 +86,8 @@ const CallPage = ({ socket }) => {
       initMeeting();
     }
 
-    // ক্লিনআপ ফাংশন
     return () => {
-      if (zpRef.current) {
-        zpRef.current.destroy();
-      }
+      if (zpRef.current) zpRef.current.destroy();
       if (ringtoneRef.current) {
         ringtoneRef.current.pause();
         ringtoneRef.current.src = "";
@@ -113,9 +105,7 @@ const CallPage = ({ socket }) => {
             <div className="w-2 h-2 bg-cyan-500 rounded-full animate-ping absolute inset-0" />
             <div className="w-2 h-2 bg-cyan-400 rounded-full relative" />
           </div>
-          <div>
-            <h2 className="text-cyan-400 font-bold uppercase tracking-widest text-[10px]">Neural Connection</h2>
-          </div>
+          <h2 className="text-cyan-400 font-bold uppercase tracking-widest text-[10px]">Neural Grid Active</h2>
         </div>
         
         <button 
@@ -135,41 +125,55 @@ const CallPage = ({ socket }) => {
         className="zego-container w-full h-full"
       ></div>
 
-      {/* 🎨 CSS Fixes for Mobile & Visibility */}
+      {/* 🎨 CSS Fixes for 2-Person Visibility */}
       <style>{`
         .zego-container {
           background-color: #020617 !important;
         }
         
-        /* ভিডিওর ব্যাকগ্রাউন্ড এবং স্টাইল */
+        /* ভিডিও লেআউট মোবাইল ফ্রেন্ডলি করা */
         .ZEGO_V_W_VIDEO_PLAYER video {
           object-fit: cover !important;
-          border-radius: 0px !important;
+          border-radius: 12px !important; /* হালকা রাউন্ডেড কর্নার */
         }
 
-        /* কন্ট্রোল বার কাস্টমাইজেশন (নিচে সুন্দরভাবে দেখাবে) */
+        /* কন্ট্রোল বার ডিজাইন */
         .ZEGO_V_W_CONTROL_BAR {
-          bottom: 40px !important;
-          background: rgba(15, 23, 42, 0.8) !important;
-          backdrop-filter: blur(20px) !important;
+          bottom: 30px !important;
+          background: rgba(15, 23, 42, 0.7) !important;
+          backdrop-filter: blur(15px) !important;
           border-radius: 50px !important;
-          width: fit-content !important;
-          padding: 8px 16px !important;
-          left: 50% !important;
-          transform: translateX(-50%) !important;
           border: 1px solid rgba(34, 211, 238, 0.2) !important;
-          box-shadow: 0 10px 30px rgba(0,0,0,0.5) !important;
+          padding: 10px 20px !important;
         }
 
-        /* অপ্রয়োজনীয় জিনিস লুকানো */
-        .ZEGO_V_W_LOGO { display: none !important; }
-        .ZEGO_V_W_PREJOIN_VIEW { display: none !important; }
-        .ZEGO_V_W_TOP_BAR { display: none !important; }
-        
-        /* রিমোট ভিডিও ফুল স্ক্রিন করার জন্য */
+        /* বাটনগুলো বড় করা (টাচ করার সুবিধার জন্য) */
+        .ZEGO_V_W_CONTROL_BAR_BTN {
+          margin: 0 10px !important;
+        }
+
+        /* অপ্রয়োজনীয় UI এলিমেন্ট রিমুভ */
+        .ZEGO_V_W_LOGO, .ZEGO_V_W_TOP_BAR, .ZEGO_V_W_PREJOIN_VIEW { 
+          display: none !important; 
+        }
+
+        /* ২ জন থাকলে একজনের ভিডিও ছোট করে কর্নারে (PIP) দেখানোর স্টাইল */
+        .ZEGO_V_W_LOCAL_VIDEO {
+            position: absolute !important;
+            right: 20px !important;
+            top: 80px !important;
+            width: 120px !important;
+            height: 180px !important;
+            z-index: 100 !important;
+            border: 2px solid rgba(6, 182, 212, 0.5) !important;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.5) !important;
+            border-radius: 12px !important;
+            overflow: hidden !important;
+        }
+
         .ZEGO_V_W_REMOTE_VIDEO {
-           height: 100% !important;
-           width: 100% !important;
+            width: 100% !important;
+            height: 100% !important;
         }
       `}</style>
     </div>
