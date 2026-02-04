@@ -11,7 +11,7 @@ import axios from "axios";
 import { useNavigate } from 'react-router-dom';
 
 // কম্পোনেন্ট ইম্পোর্ট
-import Marketplace from "./marketplace"; 
+ import Marketplace from "./Marketplace"; // m এর জায়গায় M দিন
 import Notification from "./Notifications";
 import Settings from "./settings";
 
