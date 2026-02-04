@@ -15,7 +15,7 @@ import MoodSelector from "./MoodSelector";
 import GroupMessenger from "./GroupMessenger";
 import GroupCallScreen from "./GroupCallScreen"; 
 import Notification from "./Notifications"; // Import fixed
-import Settings from "./settings";         // Import fixed
+import Settings from "./Settings";         // Import fixed
 
 const Messenger = ({ socket }) => {
   const { user, getAccessTokenSilently, isAuthenticated } = useAuth0();
