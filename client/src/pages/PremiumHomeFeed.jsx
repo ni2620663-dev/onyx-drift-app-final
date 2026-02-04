@@ -13,7 +13,7 @@ import { useNavigate } from 'react-router-dom';
 // কম্পোনেন্ট ইম্পোর্ট
  import Marketplace from "./Marketplace"; // m এর জায়গায় M দিন
 import Notification from "./Notifications";
-import Settings from "./settings";
+import Settings from "./Settings";
 
 // --- উন্নত ভিডিও কম্পোনেন্ট ---
 const CompactVideo = ({ src, onVideoClick }) => {
