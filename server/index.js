@@ -12,6 +12,17 @@ dotenv.config();
 import connectDB from "./config/db.js"; 
 connectDB();
 
+// রাউট ইম্পোর্ট (নতুন Marketplace ও Admin রাউট যোগ করা হয়েছে)
+import userRoutes from './routes/user.js'; 
+import postRoutes from "./routes/posts.js";
+import messageRoutes from "./routes/messages.js";
+import storyRoute from "./routes/stories.js";
+import reelRoutes from "./routes/reels.js"; 
+import profileRoutes from "./src/routes/profile.js";
+import groupRoutes from "./routes/group.js"; 
+import marketRoutes from "./routes/market.js"; // 🛒 নতুন মার্কেটপ্লেস রাউট
+import adminRoutes from "./routes/admin.js";   // 🛡️ নতুন অ্যাডমিন রাউট
+
 // 🛡️ Auth0 JWT ভেরিফিকেশন মিডলওয়্যার
 const checkJwt = auth({
   audience: process.env.AUTH0_AUDIENCE || 'https://onyx-drift-api.com', 
@@ -24,15 +35,6 @@ cloudinary.config({
   api_key: process.env.CLOUDINARY_API_KEY, 
   api_secret: process.env.CLOUDINARY_API_SECRET 
 });
-
-// ২. রাউট ইম্পোর্ট
-import userRoutes from './routes/user.js'; 
-import postRoutes from "./routes/posts.js";
-import messageRoutes from "./routes/messages.js";
-import storyRoute from "./routes/stories.js";
-import reelRoutes from "./routes/reels.js"; 
-import profileRoutes from "./src/routes/profile.js";
-import groupRoutes from "./routes/group.js"; 
 
 const app = express();
 const server = http.createServer(app);
@@ -79,13 +81,16 @@ const redis = process.env.REDIS_URL ? new Redis(process.env.REDIS_URL, {
 }) : null;
 
 // ৬. এপিআই রাউটস (FIXED PATHS)
-app.use("/api/user", userRoutes);   
+app.use("/api/user", userRoutes);    
 app.use("/api/posts", postRoutes); 
 app.use("/api/profile", profileRoutes); 
 app.use("/api/stories", storyRoute);
 app.use("/api/reels", reelRoutes); 
 
-// এখানে checkJwt এর পরে সরাসরি messageRoutes ব্যবহার করা হয়েছে
+// নতুন মার্কেটপ্লেস এবং অ্যাডমিন API
+app.use("/api/market", marketRoutes); 
+app.use("/api/admin", adminRoutes); 
+
 app.use("/api/messages", checkJwt, messageRoutes); 
 app.use("/api/groups", checkJwt, groupRoutes); 
 
@@ -120,6 +125,17 @@ io.on("connection", (socket) => {
         }
     });
 
+    // --- নোটিফিকেশন লজিক (মার্কেটপ্লেস ও পেমেন্টের জন্য) ---
+    socket.on("sendNotification", (data) => {
+        const { receiverId, message, type } = data;
+        io.to(receiverId).emit("getNotification", {
+            senderName: data.senderName,
+            type: type,
+            message: message,
+            image: data.image
+        });
+    });
+
     socket.on("joinGroup", (groupId) => {
         socket.join(groupId);
     });
@@ -127,8 +143,6 @@ io.on("connection", (socket) => {
     /* ==========================================================
         📞 কলিং ইঞ্জিন (P2P & Group)
     ========================================================== */
-
-    // ১. কল শুরু করার ইভেন্ট
     socket.on("initiateCall", (data) => {
         const { roomId, receiverId, callerName, type } = data;
         if (receiverId) {
@@ -141,21 +155,18 @@ io.on("connection", (socket) => {
         }
     });
 
-    // ২. কল রিসিভ/অ্যাকসেপ্ট সিগন্যাল
     socket.on("answerCall", (data) => {
         if (data.to) {
             io.to(data.to).emit("callAccepted", data.signal);
         }
     });
 
-    // ৩. কল এন্ড বা ডিক্লাইন
     socket.on("endCall", (data) => {
         if (data.to) {
             io.to(data.to).emit("callEnded");
         }
     });
 
-    // ৪. গ্রুপ কলিং সিগন্যালিং
     socket.on("joinGroupCall", (data) => {
         const { groupId, userId } = data;
         const callRoom = `call_${groupId}`;

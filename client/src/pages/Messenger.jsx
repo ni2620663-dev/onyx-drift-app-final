@@ -5,7 +5,7 @@ import {
   HiChatBubbleLeftRight, HiCog6Tooth, 
   HiOutlineChevronLeft, HiOutlineVideoCamera,
   HiOutlinePaperAirplane, HiOutlineEyeSlash, 
-  HiUsers, HiMagnifyingGlass
+  HiUsers, HiMagnifyingGlass, HiOutlineBell
 } from "react-icons/hi2";
 import { FaPhone } from "react-icons/fa";
 import { AnimatePresence, motion } from "framer-motion";
@@ -14,6 +14,8 @@ import { AnimatePresence, motion } from "framer-motion";
 import MoodSelector from "./MoodSelector";
 import GroupMessenger from "./GroupMessenger";
 import GroupCallScreen from "./GroupCallScreen"; 
+import Notification from "./Notifications"; // Import fixed
+import Settings from "./settings";         // Import fixed
 
 const Messenger = ({ socket }) => {
   const { user, getAccessTokenSilently, isAuthenticated } = useAuth0();
@@ -26,6 +28,7 @@ const Messenger = ({ socket }) => {
   const [selectedMood, setSelectedMood] = useState("Neural-Flow");
   const [isIncognito, setIsIncognito] = useState(false);
   const [activeCall, setActiveCall] = useState(null); 
+  const [showNotification, setShowNotification] = useState(false);
 
   // Search States
   const [searchQuery, setSearchQuery] = useState("");
@@ -55,7 +58,7 @@ const Messenger = ({ socket }) => {
     }
   }, [getAccessTokenSilently]);
 
-  /* =================📞 CALL HANDLERS ================= */
+  /* =================📞 CALL HANDLERS (Fixed Signal) ================= */
   
   const startCall = (chat) => {
     if (!chat || !user) return;
@@ -73,8 +76,9 @@ const Messenger = ({ socket }) => {
       name: getDisplayName(chat.userDetails)
     });
 
+    // সকেট হ্যান্ডলিং ফিক্স: সিগন্যাল পাঠানোর সময় নিশ্চিত করা
     const s = socket?.current || socket;
-    if (s) {
+    if (s && s.connected) {
       s.emit("initiateCall", { 
         roomId: chat._id, 
         receiverId: receiverId, 
@@ -82,6 +86,8 @@ const Messenger = ({ socket }) => {
         callerAvatar: user.picture,
         type: "video" 
       });
+    } else {
+      console.error("Socket not connected. Call failed.");
     }
   };
 
@@ -162,21 +168,17 @@ const Messenger = ({ socket }) => {
       createdAt: new Date()
     };
 
-    // Optimistic Update
     setMessages((prev) => [...prev, { ...msgData, _id: Date.now().toString() }]);
     setNewMessage("");
 
-    // Socket Emit
     const s = socket?.current || socket;
     if (s) {
       const receiverId = currentChat.members?.find(m => m !== user.sub);
       s.emit("sendMessage", { ...msgData, receiverId });
     }
 
-    // API Call
     try {
       const token = await getAuthToken();
-      // আপনার ব্যাকএন্ড এন্ডপয়েন্ট অনুযায়ী নিচের URL টি চেক করুন (/message নাকি শুধু /)
       await axios.post(`${API_URL}/api/messages/message`, msgData, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -204,8 +206,6 @@ const Messenger = ({ socket }) => {
     return () => s.off("getMessage", handleNewMessage);
   }, [socket, currentChat, user, fetchConversations]);
 
-  /* =================✨ EFFECTS ================= */
-  
   useEffect(() => { if (isAuthenticated) fetchConversations(); }, [isAuthenticated, fetchConversations]);
 
   useEffect(() => { 
@@ -223,7 +223,7 @@ const Messenger = ({ socket }) => {
   return (
     <div className={`fixed inset-0 text-white h-[100dvh] overflow-hidden ${isIncognito ? 'bg-[#0a0010]' : 'bg-[#02040a]'}`}>
       
-      {/* 📞 ভিডিও কল স্ক্রিন ওভারলে */}
+      {/* 📞 ভিডিও কল স্ক্রিন (Overlay) */}
       <AnimatePresence>
         {activeCall && (
           <GroupCallScreen 
@@ -234,7 +234,25 @@ const Messenger = ({ socket }) => {
         )}
       </AnimatePresence>
 
-      {/* মেইন লিস্ট ভিউ */}
+      {/* 🔔 Notification Overlay (Side Drawer) */}
+      <AnimatePresence>
+        {showNotification && (
+          <motion.div 
+            initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }}
+            className="fixed inset-0 z-[300] bg-[#02040a] flex flex-col"
+          >
+            <header className="p-4 pt-12 flex items-center gap-4 border-b border-white/5">
+              <button onClick={() => setShowNotification(false)} className="p-2 text-zinc-400"><HiOutlineChevronLeft size={24}/></button>
+              <h2 className="font-bold">Neural Notifications</h2>
+            </header>
+            <div className="flex-1 overflow-y-auto p-4">
+              <Notification />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* মেইন ভিউ */}
       <div className={`flex flex-col h-full w-full ${currentChat ? 'hidden' : 'flex'}`}>
         <header className="p-5 pt-12 flex flex-col gap-4 bg-black/40 border-b border-white/5 backdrop-blur-3xl shrink-0">
           <div className="flex justify-between items-center">
@@ -245,56 +263,72 @@ const Messenger = ({ socket }) => {
                 <p className="text-[8px] text-zinc-500 font-bold uppercase tracking-widest">Neural Network Active</p>
               </div>
             </div>
-            <button onClick={() => setIsIncognito(!isIncognito)} className={`p-2.5 rounded-xl transition-all ${isIncognito ? 'bg-purple-500/20 text-purple-400' : 'bg-white/5 text-zinc-500'}`}>
-              <HiOutlineEyeSlash size={20}/>
-            </button>
+            <div className="flex gap-2">
+               <button onClick={() => setShowNotification(true)} className="p-2.5 bg-white/5 rounded-xl text-zinc-400 hover:text-cyan-500 transition-all relative">
+                 <HiOutlineBell size={20}/>
+                 <div className="absolute top-2 right-2 w-2 h-2 bg-cyan-500 rounded-full animate-pulse" />
+               </button>
+               <button onClick={() => setIsIncognito(!isIncognito)} className={`p-2.5 rounded-xl transition-all ${isIncognito ? 'bg-purple-500/20 text-purple-400' : 'bg-white/5 text-zinc-500'}`}>
+                 <HiOutlineEyeSlash size={20}/>
+               </button>
+            </div>
           </div>
 
-          <div className="relative group">
-            <HiMagnifyingGlass className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500" size={18}/>
-            <input 
-              type="text" 
-              value={searchQuery}
-              onChange={(e) => handleSearch(e.target.value)}
-              placeholder="Search Drifters..." 
-              className="w-full bg-white/5 border border-white/10 rounded-2xl py-3 pl-12 pr-4 text-sm outline-none focus:border-cyan-500/50"
-            />
-            <AnimatePresence>
-              {searchQuery.length > 0 && (
-                <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="absolute top-full left-0 right-0 mt-2 bg-[#0d1117] border border-white/10 rounded-2xl shadow-2xl z-[50] max-h-60 overflow-y-auto">
-                  {searchResults.map(u => (
-                    <div key={u.auth0Id} onClick={() => startNewConversation(u)} className="p-3 flex items-center gap-3 hover:bg-cyan-500/10 cursor-pointer border-b border-white/5 last:border-0">
-                      <img src={getAvatar(u)} className="w-8 h-8 rounded-lg" alt="" />
-                      <div className="flex flex-col">
-                        <span className="text-sm font-bold">{getDisplayName(u)}</span>
-                        <span className="text-[10px] text-zinc-500">{u.email}</span>
+          {/* Search (Hide if Settings) */}
+          {activeTab !== "settings" && (
+            <div className="relative group">
+              <HiMagnifyingGlass className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500" size={18}/>
+              <input 
+                type="text" 
+                value={searchQuery}
+                onChange={(e) => handleSearch(e.target.value)}
+                placeholder="Search Drifters..." 
+                className="w-full bg-white/5 border border-white/10 rounded-2xl py-3 pl-12 pr-4 text-sm outline-none focus:border-cyan-500/50"
+              />
+              <AnimatePresence>
+                {searchQuery.length > 0 && (
+                  <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="absolute top-full left-0 right-0 mt-2 bg-[#0d1117] border border-white/10 rounded-2xl shadow-2xl z-[50] max-h-60 overflow-y-auto">
+                    {searchResults.map(u => (
+                      <div key={u.auth0Id} onClick={() => startNewConversation(u)} className="p-3 flex items-center gap-3 hover:bg-cyan-500/10 cursor-pointer border-b border-white/5 last:border-0">
+                        <img src={getAvatar(u)} className="w-8 h-8 rounded-lg" alt="" />
+                        <div className="flex flex-col">
+                          <span className="text-sm font-bold">{getDisplayName(u)}</span>
+                          <span className="text-[10px] text-zinc-500">{u.email}</span>
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                  {searchResults.length === 0 && !isSearching && <p className="p-4 text-center text-xs text-zinc-500">NO DRIFTERS FOUND</p>}
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          )}
         </header>
 
-        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-2">
-          {conversations.map(c => (
-            <div key={c._id} onClick={() => setCurrentChat(c)} className="p-3.5 flex items-center gap-4 hover:bg-white/5 rounded-2xl cursor-pointer transition-all bg-white/[0.02] border border-white/5 group">
-              <img src={getAvatar(c.userDetails)} className="w-12 h-12 rounded-xl object-cover border border-white/10 group-hover:border-cyan-500/50" alt="" />
-              <div className="flex-1 min-w-0">
-                <div className="flex justify-between items-center mb-0.5">
-                  <span className="font-bold text-sm truncate text-zinc-200">{getDisplayName(c.userDetails)}</span>
-                  <span className="text-[8px] text-zinc-600 font-mono">
-                    {c.updatedAt ? new Date(c.updatedAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'SYNC'}
-                  </span>
-                </div>
-                <p className="text-xs text-zinc-500 truncate italic">{c.lastMessage?.text || "Establish connection..."}</p>
-              </div>
-            </div>
-          ))}
+        {/* Content Area */}
+        <div className="flex-1 overflow-y-auto px-4 py-4">
+          {activeTab === "chats" && (
+             <div className="space-y-2">
+               {conversations.map(c => (
+                 <div key={c._id} onClick={() => setCurrentChat(c)} className="p-3.5 flex items-center gap-4 hover:bg-white/5 rounded-2xl cursor-pointer transition-all bg-white/[0.02] border border-white/5 group">
+                   <img src={getAvatar(c.userDetails)} className="w-12 h-12 rounded-xl object-cover border border-white/10 group-hover:border-cyan-500/50" alt="" />
+                   <div className="flex-1 min-w-0">
+                     <div className="flex justify-between items-center mb-0.5">
+                       <span className="font-bold text-sm truncate text-zinc-200">{getDisplayName(c.userDetails)}</span>
+                       <span className="text-[8px] text-zinc-600 font-mono">
+                         {c.updatedAt ? new Date(c.updatedAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'SYNC'}
+                       </span>
+                     </div>
+                     <p className="text-xs text-zinc-500 truncate italic">{c.lastMessage?.text || "Establish connection..."}</p>
+                   </div>
+                 </div>
+               ))}
+             </div>
+          )}
+          {activeTab === "groups" && <GroupMessenger />}
+          {activeTab === "settings" && <Settings />}
         </div>
 
+        {/* Bottom Nav */}
         <nav className="p-4 pb-10 flex justify-around items-center bg-black/80 backdrop-blur-2xl border-t border-white/5 shrink-0">
           <button onClick={() => setActiveTab("chats")} className={`p-3 flex flex-col items-center gap-1 ${activeTab === "chats" ? 'text-cyan-500' : 'text-zinc-600'}`}>
             <HiChatBubbleLeftRight size={24} />
@@ -304,9 +338,9 @@ const Messenger = ({ socket }) => {
             <HiUsers size={24} />
             <span className="text-[8px] font-black uppercase">Nexus</span>
           </button>
-          <button className="p-3 flex flex-col items-center gap-1 text-zinc-600">
+          <button onClick={() => setActiveTab("settings")} className={`p-3 flex flex-col items-center gap-1 ${activeTab === "settings" ? 'text-cyan-500' : 'text-zinc-600'}`}>
             <HiCog6Tooth size={24} />
-            <span className="text-[8px] font-black uppercase">Drift</span>
+            <span className="text-[8px] font-black uppercase">Settings</span>
           </button>
         </nav>
       </div>

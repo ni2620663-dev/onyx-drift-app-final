@@ -3,11 +3,17 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   FaTimes, FaImage, FaHeart, FaComment, FaShareAlt, FaCheckCircle, 
   FaBolt, FaRegHeart, FaRegComment, FaVolumeUp, FaVolumeMute, FaEye, 
-  FaPaperPlane, FaSearch, FaRegBell, FaUserCircle, FaEnvelope, FaHome
+  FaPaperPlane, FaSearch, FaRegBell, FaUserCircle, FaEnvelope, FaHome,
+  FaStore, FaCog 
 } from 'react-icons/fa'; 
 import { useAuth0 } from "@auth0/auth0-react";
 import axios from "axios";
 import { useNavigate } from 'react-router-dom';
+
+// কম্পোনেন্ট ইম্পোর্ট
+import Marketplace from "./marketplace"; 
+import Notification from "./Notifications";
+import Settings from "./settings";
 
 // --- উন্নত ভিডিও কম্পোনেন্ট ---
 const CompactVideo = ({ src, onVideoClick }) => {
@@ -48,6 +54,7 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
   const [loading, setLoading] = useState(true);
   const [isPostModalOpen, setIsPostModalOpen] = useState(false);
   const [isSideMenuOpen, setIsSideMenuOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState("home"); 
   const [activeCommentPost, setActiveCommentPost] = useState(null);
   const [commentText, setCommentText] = useState("");
   const [postText, setPostText] = useState("");
@@ -74,13 +81,29 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
   const handleLike = async (postId) => {
     try {
       const token = await getAccessTokenSilently();
+      
+      setPosts(prevPosts => prevPosts.map(p => {
+        if (p._id === postId) {
+          const isLiked = p.likes?.includes(user?.sub);
+          const newLikes = isLiked 
+            ? p.likes.filter(id => id !== user?.sub) 
+            : [...(p.likes || []), user?.sub];
+          return { ...p, likes: newLikes };
+        }
+        return p;
+      }));
+
       const response = await axios.post(
         `${API_URL}/api/posts/${postId}/like`, 
         {}, 
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      setPosts(posts.map(p => p._id === postId ? response.data : p));
-    } catch (err) { console.error("Like error:", err); }
+      
+      setPosts(prevPosts => prevPosts.map(p => p._id === postId ? response.data : p));
+    } catch (err) { 
+        console.error("Like error:", err);
+        fetchPosts(); 
+    }
   };
 
   // --- পোস্ট সাবমিট লজিক ---
@@ -114,7 +137,10 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
   const handleShare = (post) => {
     if (navigator.share) {
       navigator.share({ title: 'OnyxDrift', text: post.text, url: window.location.href });
-    } else { alert("Link copied to clipboard!"); }
+    } else { 
+        navigator.clipboard.writeText(window.location.href);
+        alert("Link copied to clipboard!"); 
+    }
   };
 
   return (
@@ -129,9 +155,10 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
             alt="profile" 
             onClick={() => setIsSideMenuOpen(true)}
           />
-          <h2 className="text-lg font-bold italic text-cyan-500 tracking-tighter">OnyxDrift</h2>
+          <h2 className="text-lg font-bold italic text-cyan-500 tracking-tighter uppercase">OnyxDrift</h2>
         </div>
         <div className="flex gap-4 items-center">
+            <FaSearch className="text-zinc-400" onClick={() => navigate('/search')} />
             <FaEnvelope className="text-zinc-500 cursor-pointer hover:text-white transition-colors" onClick={() => navigate('/messenger')} />
             <FaBolt className="text-cyan-500 animate-pulse" />
         </div>
@@ -151,13 +178,17 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
                   </div>
                   <nav className="flex flex-col gap-2">
                     {[
-                      { icon: <FaHome />, label: 'Home Feed', path: '/feed' },
+                      { icon: <FaHome />, label: 'Home Feed', tab: 'home' },
+                      { icon: <FaStore />, label: 'Marketplace', tab: 'market' },
                       { icon: <FaUserCircle />, label: 'My Profile', path: `/profile/${user?.sub}` },
-                      { icon: <FaSearch />, label: 'Explore Search', path: '/search' },
-                      { icon: <FaRegBell />, label: 'Notifications', path: '/notifications' },
-                      { icon: <FaEnvelope />, label: 'Messages', path: '/messenger' },
+                      { icon: <FaRegBell />, label: 'Notifications', tab: 'notify' },
+                      { icon: <FaCog />, label: 'Settings', tab: 'settings' },
                     ].map((item, i) => (
-                      <div key={i} onClick={() => { navigate(item.path); setIsSideMenuOpen(false); }} className="flex items-center gap-4 p-3 rounded-xl text-gray-300 hover:text-cyan-400 hover:bg-white/5 cursor-pointer transition-all font-bold text-sm uppercase tracking-widest">
+                      <div key={i} onClick={() => { 
+                          if(item.tab) setActiveTab(item.tab);
+                          if(item.path) navigate(item.path);
+                          setIsSideMenuOpen(false); 
+                        }} className={`flex items-center gap-4 p-3 rounded-xl transition-all font-bold text-sm uppercase tracking-widest cursor-pointer ${activeTab === item.tab ? 'text-cyan-400 bg-cyan-500/10' : 'text-gray-300 hover:bg-white/5'}`}>
                         <span className="text-lg">{item.icon}</span> {item.label}
                       </div>
                     ))}
@@ -168,55 +199,61 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
         )}
       </AnimatePresence>
 
-      {/* --- FEED SECTION --- */}
+      {/* --- DYNAMIC CONTENT SECTION --- */}
       <section className="max-w-[550px] mx-auto border-x border-white/5 min-h-screen">
-        {loading ? (
-          <div className="flex justify-center py-20"><div className="w-6 h-6 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin" /></div>
-        ) : (
-          <div className="divide-y divide-white/5">
-            {posts.map((post) => (
-              <div key={post._id} className="p-4 hover:bg-white/[0.01] transition-all">
-                <div className="flex gap-3">
-                  <img src={post.authorAvatar} className="w-11 h-11 rounded-2xl border border-white/10 object-cover" alt="" />
-                  <div className="flex-1">
-                    <div className="flex items-center gap-1.5">
-                      <span className="font-bold text-[14px] text-gray-200">{post.authorName}</span>
-                      <FaCheckCircle className="text-cyan-500 text-[10px]" />
-                    </div>
-                    <p className="text-sm text-gray-300 mt-1 leading-relaxed">{post.text}</p>
-                    
-                    {post.media && (
-                      post.media.match(/\.(mp4|webm|mov)$/i) ? 
-                      <CompactVideo src={post.media} /> : 
-                      <img src={post.media} className="mt-3 rounded-2xl border border-white/5 w-full max-h-[500px] object-cover" alt="" />
-                    )}
-
-                    <div className="flex items-center justify-between mt-5 px-1 text-zinc-500">
-                      <div className="flex gap-6">
-                        <button 
-                          onClick={() => handleLike(post._id)}
-                          className={`flex items-center gap-2 transition-colors ${post.likes?.includes(user?.sub) ? 'text-rose-500' : 'hover:text-rose-500'}`}
-                        >
-                           {post.likes?.includes(user?.sub) ? <FaHeart size={16} /> : <FaRegHeart size={16} />} 
-                           <span className="text-[11px] font-bold">{post.likes?.length || 0}</span>
-                        </button>
-                        <button onClick={() => setActiveCommentPost(post)} className="flex items-center gap-2 hover:text-cyan-400 transition-colors">
-                           <FaRegComment size={16} /> <span className="text-[11px] font-bold">{post.comments?.length || 0}</span>
-                        </button>
-                        <div className="flex items-center gap-2 opacity-60">
-                           <FaEye size={14} /> <span className="text-[11px] font-bold">{Math.floor(Math.random() * 500) + 20}</span>
+        {activeTab === "home" && (
+            loading ? (
+                <div className="flex justify-center py-20"><div className="w-6 h-6 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin" /></div>
+            ) : (
+                <div className="divide-y divide-white/5">
+                {posts.map((post) => (
+                    <div key={post._id} className="p-4 hover:bg-white/[0.01] transition-all">
+                    <div className="flex gap-3">
+                        <img src={post.authorAvatar} className="w-11 h-11 rounded-2xl border border-white/10 object-cover" alt="" />
+                        <div className="flex-1">
+                        <div className="flex items-center gap-1.5">
+                            <span className="font-bold text-[14px] text-gray-200">{post.authorName}</span>
+                            <FaCheckCircle className="text-cyan-500 text-[10px]" />
                         </div>
-                      </div>
-                      <button onClick={() => handleShare(post)} className="p-2 bg-zinc-900/50 rounded-lg hover:text-cyan-400 transition-all">
-                         <FaShareAlt size={14} />
-                      </button>
+                        <p className="text-sm text-gray-300 mt-1 leading-relaxed">{post.text}</p>
+                        
+                        {post.media && (
+                            post.media.match(/\.(mp4|webm|mov)$/i) ? 
+                            <CompactVideo src={post.media} /> : 
+                            <img src={post.media} className="mt-3 rounded-2xl border border-white/5 w-full max-h-[500px] object-cover" alt="" />
+                        )}
+
+                        <div className="flex items-center justify-between mt-5 px-1 text-zinc-500">
+                            <div className="flex gap-6">
+                            <button 
+                                onClick={() => handleLike(post._id)}
+                                className={`flex items-center gap-2 transition-colors ${post.likes?.includes(user?.sub) ? 'text-rose-500' : 'hover:text-rose-500'}`}
+                            >
+                                {post.likes?.includes(user?.sub) ? <FaHeart size={16} /> : <FaRegHeart size={16} />} 
+                                <span className="text-[11px] font-bold">{post.likes?.length || 0}</span>
+                            </button>
+                            <button onClick={() => setActiveCommentPost(post)} className="flex items-center gap-2 hover:text-cyan-400 transition-colors">
+                                <FaRegComment size={16} /> <span className="text-[11px] font-bold">{post.comments?.length || 0}</span>
+                            </button>
+                            <div className="flex items-center gap-2 opacity-60">
+                                <FaEye size={14} /> <span className="text-[11px] font-bold">{Math.floor(Math.random() * 500) + 20}</span>
+                            </div>
+                            </div>
+                            <button onClick={() => handleShare(post)} className="p-2 bg-zinc-900/50 rounded-lg hover:text-cyan-400 transition-all">
+                                <FaShareAlt size={14} />
+                            </button>
+                        </div>
+                        </div>
                     </div>
-                  </div>
+                    </div>
+                ))}
                 </div>
-              </div>
-            ))}
-          </div>
+            )
         )}
+
+        {activeTab === "market" && <Marketplace />}
+        {activeTab === "notify" && <Notification />}
+        {activeTab === "settings" && <Settings />}
       </section>
 
       {/* --- COMMENT MODAL --- */}
