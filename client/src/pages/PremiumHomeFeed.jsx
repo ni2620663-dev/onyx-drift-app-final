@@ -14,7 +14,7 @@ import { useNavigate } from 'react-router-dom';
 import Marketplace from "./Marketplace"; 
 import Notification from "./Notifications";
 import Settings from "./Settings";
-
+import PostCard from "../components/PostCard";
 // --- উন্নত ভিডিও কম্পোনেন্ট (Auto Play on Scroll) ---
 const CompactVideo = ({ src, onVideoClick }) => {
   const videoRef = useRef(null);
