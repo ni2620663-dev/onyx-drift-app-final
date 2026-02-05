@@ -12,7 +12,7 @@ dotenv.config();
 import connectDB from "./config/db.js"; 
 connectDB();
 
-// রাউট ইম্পোর্ট (নতুন Marketplace ও Admin রাউট যোগ করা হয়েছে)
+// রাউট ইম্পোর্ট (Gemini AI এখন postRoutes এর ভেতর আছে)
 import userRoutes from './routes/user.js'; 
 import postRoutes from "./routes/posts.js";
 import messageRoutes from "./routes/messages.js";
@@ -80,8 +80,8 @@ const redis = process.env.REDIS_URL ? new Redis(process.env.REDIS_URL, {
     enableReadyCheck: false
 }) : null;
 
-// ৬. এপিআই রাউটস (FIXED PATHS)
-app.use("/api/user", userRoutes);    
+// ৬. এপিআই রাউটস (পোস্ট রাউটের ভেতরেই AI Analyze কাজ করবে)
+app.use("/api/user", userRoutes);     
 app.use("/api/posts", postRoutes); 
 app.use("/api/profile", profileRoutes); 
 app.use("/api/stories", storyRoute);

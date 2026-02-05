@@ -2,6 +2,9 @@ import mongoose from "mongoose";
 
 const userSchema = new mongoose.Schema(
   {
+    /* ==========================================================
+        ১. DIGITAL IDENTITY & AUTH
+    ========================================================== */
     auth0Id: { 
       type: String, 
       required: true, 
@@ -27,16 +30,75 @@ const userSchema = new mongoose.Schema(
       index: true 
     },
     avatar: { type: String, default: "" },
+    aiTwinAvatar: { type: String, default: "" }, // AI Twin Snapshot Hologram
+    aiPersona: { type: String, default: "Silent Drifter" }, // e.g., "Bold Thinker"
     coverImg: { type: String, default: "" }, 
-    bio: { type: String, maxlength: 160 }, 
+    bio: { type: String, default: "System Drifter // Neural Integrity: High", maxlength: 160 }, 
     location: { type: String, default: "" },
     workplace: { type: String, default: "" },
     
+    /* ==========================================================
+        ২. EMOTION TIMELINE & MOOD STATS
+    ========================================================== */
+    moodStats: {
+      motivated: { type: Number, default: 40 },
+      creative: { type: Number, default: 30 },
+      calm: { type: Number, default: 20 },
+      stressed: { type: Number, default: 10 }
+    },
+    moodHistory: [
+      {
+        mood: String,
+        intensity: Number,
+        timestamp: { type: Date, default: Date.now }
+      }
+    ],
+
+    /* ==========================================================
+        ৩. IMPACT, CONTRIBUTION & RANKING
+    ========================================================== */
+    neuralImpact: { type: Number, default: 0 }, 
+    decisionsInfluenced: { type: Number, default: 0 }, 
+    neuralRank: { type: Number, default: 1 },
+    drifterLevel: { 
+      type: String, 
+      enum: ["Novice Drifter", "Signal Voyager", "Time Architect", "Neural Overlord"],
+      default: "Novice Drifter"
+    },
+    influence: { type: Number, default: 0 },
+    syncRate: { type: Number, default: 85 },
     isVerified: { type: Boolean, default: false },
     isCreator: { type: Boolean, default: false }, 
     isPremium: { type: Boolean, default: false }, 
     creatorLevel: { type: Number, default: 1 }, 
+    achievements: [{ type: String }],
 
+    /* ==========================================================
+        ৪. SKILLS / INTERESTS (AI Detected)
+    ========================================================== */
+    detectedSkills: [{
+      name: String, 
+      relevance: Number,
+      icon: String
+    }],
+
+    /* ==========================================================
+        ৫. MEMORY VAULT / LEGACY
+    ========================================================== */
+    memoryVaultCount: { type: Number, default: 0 },
+    memoryVault: [
+      {
+        content: String,
+        media: String,
+        unlockDate: Date,
+        isPrivate: { type: Boolean, default: true },
+        createdAt: { type: Date, default: Date.now }
+      }
+    ],
+
+    /* ==========================================================
+        ৬. GROWTH & INVITE SYSTEM
+    ========================================================== */
     inviteCode: { 
       type: String, 
       unique: true, 
@@ -56,16 +118,9 @@ const userSchema = new mongoose.Schema(
       default: false 
     }, 
 
-    neuralRank: { 
-      type: Number, 
-      default: 0 
-    },
-    drifterLevel: { 
-      type: String, 
-      enum: ["Novice Drifter", "Signal Voyager", "Time Architect", "Neural Overlord"],
-      default: "Novice Drifter"
-    },
-
+    /* ==========================================================
+        ৭. MONETIZATION, SECURITY & NODES
+    ========================================================== */
     revenueWallet: { type: Number, default: 0 }, 
     totalImpressions: { type: Number, default: 0 },
     engagementRate: { type: Number, default: 0 },
@@ -73,7 +128,7 @@ const userSchema = new mongoose.Schema(
     ghostMode: { type: Boolean, default: false },
     antiScreenshot: { type: Boolean, default: false },
     neuralShieldActive: { type: Boolean, default: true },
-    
+
     activeNodes: [
       {
         deviceId: String,
@@ -83,6 +138,9 @@ const userSchema = new mongoose.Schema(
       }
     ],
 
+    /* ==========================================================
+        ৮. SOCIAL GRAPH
+    ========================================================== */
     followers: [{ type: String, index: true }], 
     following: [{ type: String, index: true }],
     friends: [{ type: String }],
@@ -93,15 +151,12 @@ const userSchema = new mongoose.Schema(
 );
 
 /* ==========================================================
-    🚀 OPTIMIZED INDEXING (The 500 Error Fix)
+    🚀 OPTIMIZED INDEXING
 ========================================================== */
-
-// ১. টেক্সট ইনডেক্স এর বদলে সাধারণ কম্পাউন্ড ইনডেক্স (Regex সার্চের জন্য নিরাপদ)
 userSchema.index({ name: 1, nickname: 1 });
-
-// ২. র‍্যাঙ্কিং এবং ভাইরাল গ্রোথ ইনডেক্স
 userSchema.index({ createdAt: -1, isVerified: -1 });
 userSchema.index({ inviteCount: -1 }); 
+userSchema.index({ neuralImpact: -1 });
 
 const User = mongoose.model("User", userSchema);
 export default User;

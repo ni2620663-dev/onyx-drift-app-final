@@ -6,6 +6,8 @@ import multer from "multer";
 import { v2 as cloudinary } from "cloudinary";
 import { CloudinaryStorage } from "multer-storage-cloudinary";
 import dotenv from "dotenv";
+import { processNeuralIdentity } from "../controllers/aiController.js";
+import { GoogleGenerativeAI } from "@google/generative-ai"; // ✅ Corrected: import instead of require
 
 dotenv.config();
 const router = express.Router();
@@ -19,6 +21,32 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+
+/* ==========================================================
+    🤖 AI ANALYZE (Single Reaction)
+========================================================== */
+router.post("/ai-analyze", async (req, res) => {
+  const { text, authorName } = req.body;
+
+  try {
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const prompt = `You are a Cyberpunk AI analyst for the social network "Onyx Drift". 
+    Analyze this post by user "${authorName}": "${text}". 
+    Give a short (max 20 words), witty, futuristic, and encouraging reaction. 
+    Stay in character as a neural bot.`;
+
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    res.json({ analysis: response.text() });
+  } catch (error) {
+    res.status(500).json({ analysis: "Connection to neural core lost." });
+  }
+});
+
+/* ==========================================================
+    📦 Multer & Cloudinary Storage
+========================================================== */
 const storage = new CloudinaryStorage({
   cloudinary,
   params: {
@@ -34,7 +62,7 @@ const upload = multer({
 });
 
 /* ==========================================================
-    🌍 1. GET ALL POSTS (With Safety Null Check)
+    🌍 1. GET ALL POSTS
 ========================================================== */
 router.get("/", async (req, res) => {
   try {
@@ -59,7 +87,7 @@ router.get("/", async (req, res) => {
 });
 
 /* ==========================================================
-    📺 1.5. GET ALL REELS (Optimized for Video Feed)
+    📺 1.5. GET ALL REELS
 ========================================================== */
 router.get("/reels/all", async (req, res) => {
   try {
@@ -79,13 +107,12 @@ router.get("/reels/all", async (req, res) => {
 
     res.json(safeReels);
   } catch (err) {
-    console.error("Reels Error:", err);
     res.status(500).json({ msg: "Failed to fetch neural reels" });
   }
 });
 
 /* ==========================================================
-    🚀 2. CREATE POST / REEL / STORY
+    🚀 2. CREATE POST & TRIGGER NEURAL AI
 ========================================================== */
 router.post("/", auth, upload.single("media"), async (req, res) => {
   try {
@@ -120,6 +147,12 @@ router.post("/", auth, upload.single("media"), async (req, res) => {
     };
 
     const post = await Post.create(postData);
+
+    // 🤖 Trigger AI Analysis in background for long-term profile shaping
+    if (post.text) {
+        processNeuralIdentity(currentUserId, post.text);
+    }
+
     res.status(201).json(post);
   } catch (err) {
     console.error("🔥 UPLOAD_ERROR:", err);
@@ -128,7 +161,7 @@ router.post("/", auth, upload.single("media"), async (req, res) => {
 });
 
 /* ==========================================================
-    ❤️ 4. LIKE / UNLIKE (Fixed Null Check)
+    ❤️ 4. LIKE / UNLIKE
 ========================================================== */
 router.post("/:id/like", auth, async (req, res) => {
   try {
@@ -136,7 +169,6 @@ router.post("/:id/like", auth, async (req, res) => {
     const post = await Post.findById(req.params.id);
     if (!post) return res.status(404).json({ msg: "Post not found" });
 
-    // পুরোনো ডাটার জন্য likes অ্যারে চেক করা
     const likesArray = post.likes || [];
     const isLiked = likesArray.includes(userId);
     
@@ -152,7 +184,7 @@ router.post("/:id/like", auth, async (req, res) => {
 });
 
 /* ==========================================================
-    ⚡ 5. RANK UP SYSTEM (10 Clicks = +1 Global Rank)
+    ⚡ 5. RANK UP SYSTEM
 ========================================================== */
 router.post("/:id/rank-up", auth, async (req, res) => {
   try {
@@ -160,14 +192,12 @@ router.post("/:id/rank-up", auth, async (req, res) => {
     const post = await Post.findById(req.params.id);
     if (!post) return res.status(404).json({ msg: "Post not found" });
 
-    // ১. নিশ্চিত করা যে rankClicks একটি অ্যারে
     const clicks = post.rankClicks || [];
 
     if (clicks.includes(userId)) {
       return res.status(400).json({ msg: "Neural Pulse already sent!" });
     }
 
-    // ২. আপডেট করা
     const updatedPost = await Post.findByIdAndUpdate(
       req.params.id,
       { $addToSet: { rankClicks: userId } },
@@ -177,7 +207,6 @@ router.post("/:id/rank-up", auth, async (req, res) => {
     const clickCount = updatedPost.rankClicks.length;
     let rankIncreased = false;
 
-    // ৩. প্রতি ১০ ক্লিকে ক্রিয়েটরের র‍্যাঙ্ক বাড়ানো
     if (clickCount > 0 && clickCount % 10 === 0) {
       await User.findOneAndUpdate(
         { auth0Id: updatedPost.authorAuth0Id || updatedPost.author },
@@ -193,13 +222,12 @@ router.post("/:id/rank-up", auth, async (req, res) => {
       msg: rankIncreased ? "Milestone Reached! Creator Rank Increased! ⚡" : "Neural Pulse Synced"
     });
   } catch (err) {
-    console.error("Rank Up Error:", err);
     res.status(500).json({ error: err.message });
   }
 });
 
 /* ==========================================================
-    💬 3. ADD COMMENT (Fixed)
+    💬 3. ADD COMMENT
 ========================================================== */
 router.post("/:id/comment", auth, async (req, res) => {
     try {

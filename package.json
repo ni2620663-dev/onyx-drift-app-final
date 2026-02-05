@@ -24,7 +24,7 @@
     "express": "^4.22.1",
     "express-oauth2-jwt-bearer": "^1.7.2",
     "express-rate-limit": "^8.2.1",
-    "framer-motion": "^12.23.26",
+    "framer-motion": "^12.31.0",
     "helmet": "^8.1.0",
     "ioredis": "^5.9.0",
     "jsonwebtoken": "^9.0.3",
@@ -34,6 +34,7 @@
     "multer-storage-cloudinary": "^4.0.0",
     "react-icons": "^5.5.0",
     "react-toastify": "^11.0.5",
+    "recharts": "^3.7.0",
     "socket.io": "^4.8.1",
     "socket.io-client": "^4.8.3",
     "sweetalert2": "^11.26.17"

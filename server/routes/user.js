@@ -110,6 +110,37 @@ router.get(['/profile/:id', '/:id'], auth, async (req, res) => {
   }
 });
 
+// ১. প্রোফাইল আপডেট রাউট
+router.put('/profile/update', async (req, res) => {
+  try {
+    const { name, bio } = req.body;
+    const userId = req.user.sub; // Auth0 থেকে আসা আইডি
+
+    const updatedUser = await User.findOneAndUpdate(
+      { auth0Id: userId },
+      { $set: { name, bio } },
+      { new: true }
+    );
+
+    res.json({ success: true, user: updatedUser });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to sync identity" });
+  }
+});
+
+// ২. লিডারবোর্ড রাউট (সবচেয়ে বেশি Neural Impact যাদের)
+router.get('/leaderboard', async (req, res) => {
+  try {
+    const topDrifters = await User.find()
+      .sort({ neuralImpact: -1 }) // সবচেয়ে বেশি ইমপ্যাক্ট আগে
+      .limit(10)
+      .select('name nickname avatar neuralImpact neuralRank');
+
+    res.json(topDrifters);
+  } catch (err) {
+    res.status(500).json({ error: "Leaderboard link unstable" });
+  }
+});
 /* ==========================================================
     4️⃣ UPDATE PROFILE
 ========================================================== */

@@ -2,9 +2,42 @@ import express from 'express';
 const router = express.Router();
 import Post from '../models/Post.js'; // নিশ্চিত করুন ফাইলের এক্সটেনশন .js আছে
 import authMiddleware from '../middleware/authMiddleware.js';
+import { GoogleGenerativeAI } from "@google/generative-ai"; // Gemini SDK
+
+// Gemini Config
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 /* ==========================================================
-    ১. সব রিলস গেট করা (এটি সবার উপরে রাখুন কনফ্লিক্ট এড়াতে)
+    🤖 AI Analysis Route (নতুন যোগ করা হয়েছে)
+    এন্ডপয়েন্ট: POST /api/posts/ai-analyze
+========================================================== */
+router.post("/ai-analyze", authMiddleware, async (req, res) => {
+    const { text, authorName } = req.body;
+
+    try {
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+        const prompt = `
+            System: You are 'Onyx Neural Analyst', a witty, futuristic, and mysterious AI for the Onyx Drift social network.
+            Task: Analyze the post signal from drifter '${authorName}'.
+            Post Content: "${text}"
+            Requirement: Give a reaction in max 15-20 words. Use cyberpunk slang (e.g., neural, signal, drift, echo, cyber, uplink). 
+            Be encouraging but maintain a cool AI persona.
+        `;
+
+        const result = await model.generateContent(prompt);
+        const response = await result.response;
+        const aiText = response.text();
+
+        res.json({ analysis: aiText });
+    } catch (error) {
+        console.error("Gemini Error:", error);
+        res.status(500).json({ analysis: "Neural Link unstable. Could not parse signal." });
+    }
+});
+
+/* ==========================================================
+    ১. সব রিলস গেট করা (এটি সবার উপরে রাখুন কনফ্লিক্ট এড়াতে)
     এন্ডপয়েন্ট: GET /api/posts/reels/all
 ========================================================== */
 router.get('/reels/all', async (req, res) => {
@@ -150,4 +183,4 @@ router.delete('/:id', authMiddleware, async (req, res) => {
     }
 });
 
-export default router; // CommonJS এর বদলে ES Module এক্সপোর্ট
+export default router;
