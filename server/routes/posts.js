@@ -8,6 +8,7 @@ import { CloudinaryStorage } from "multer-storage-cloudinary";
 import dotenv from "dotenv";
 import { processNeuralIdentity } from "../controllers/aiController.js";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import mongoose from "mongoose";
 
 dotenv.config();
 const router = express.Router();
@@ -33,7 +34,7 @@ router.post("/ai-analyze", async (req, res) => {
   try {
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
     const prompt = `You are a Cyberpunk AI analyst for "Onyx Drift" social network. 
-    Analyze this post by "${authorName}": "${text}". 
+    Analyze this post by "${authorName || 'Drifter'}": "${text}". 
     Short reaction (max 20 words), witty, futuristic. Stay in character.`;
 
     const result = await model.generateContent(prompt);
@@ -58,11 +59,11 @@ const storage = new CloudinaryStorage({
 
 const upload = multer({ 
   storage,
-  limits: { fileSize: 100 * 1024 * 1024 } // 100MB limit
+  limits: { fileSize: 100 * 1024 * 1024 } 
 });
 
 /* ==========================================================
-    🌍 1. GET ALL POSTS (Global Feed)
+    🌍 1. GET ALL POSTS
 ========================================================== */
 router.get("/", async (req, res) => {
   try {
@@ -82,24 +83,24 @@ router.get("/", async (req, res) => {
 
     res.json(safePosts);
   } catch (err) {
-    res.status(500).json({ msg: "Neural Fetch Failure", error: err.message });
+    res.status(500).json({ msg: "Neural Fetch Failure" });
   }
 });
 
 /* ==========================================================
-    🚀 2. CREATE POST & TRIGGER NEURAL AI
+    🚀 2. CREATE POST
 ========================================================== */
 router.post("/", auth, upload.single("media"), async (req, res) => {
   try {
-    // টেক্সট এবং মিডিয়া ফাইল উভয়ই না থাকলে এরর দিবে
     if (!req.body.text && !req.file) {
-      return res.status(400).json({ msg: "Empty transmission blocked. Add text or media." });
+      return res.status(400).json({ msg: "Empty transmission blocked." });
     }
 
     const currentUserId = req.user?.sub || req.user?.id;
+    if (!currentUserId) return res.status(401).json({ msg: "User identification failed." });
+
     const userProfile = await User.findOne({ auth0Id: currentUserId }).lean();
 
-    // মিডিয়া প্রসেসিং
     let mediaUrl = req.file ? req.file.path : "";
     let detectedType = "text";
 
@@ -127,26 +128,32 @@ router.post("/", auth, upload.single("media"), async (req, res) => {
 
     const post = await Post.create(postData);
 
-    // AI প্রসেসিং ব্যাকগ্রাউন্ডে চলবে
     if (post.text) {
-      processNeuralIdentity(currentUserId, post.text).catch(e => console.log("AI Task Error"));
+      processNeuralIdentity(currentUserId, post.text).catch(() => {});
     }
 
     res.status(201).json(post);
   } catch (err) {
-    console.error("🔥 UPLOAD_ERROR:", err);
+    console.error("UPLOAD_ERROR:", err);
     res.status(500).json({ msg: "Internal Neural Breakdown" });
   }
 });
 
 /* ==========================================================
-    ❤️ 3. LIKE / UNLIKE SYSTEM
+    ❤️ 3. LIKE SYSTEM (Stabilized)
 ========================================================== */
 router.post("/:id/like", auth, async (req, res) => {
   try {
-    const userId = req.user.sub || req.user.id;
+    const userId = req.user?.sub || req.user?.id;
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ msg: "Invalid Post ID" });
+    }
+
     const post = await Post.findById(req.params.id);
-    if (!post) return res.status(404).json({ msg: "Post missing in the drift." });
+    if (!post) return res.status(404).json({ msg: "Post missing." });
+
+    // likes অ্যারে না থাকলে তৈরি করে নিবে (Safety)
+    if (!Array.isArray(post.likes)) post.likes = [];
 
     const isLiked = post.likes.includes(userId);
     const update = isLiked 
@@ -156,16 +163,16 @@ router.post("/:id/like", auth, async (req, res) => {
     const updatedPost = await Post.findByIdAndUpdate(req.params.id, update, { new: true });
     res.json(updatedPost);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: "Sync error in the drift." });
   }
 });
 
 /* ==========================================================
-    ⚡ 4. RANK UP (Neural Pulse)
+    ⚡ 4. RANK UP
 ========================================================== */
 router.post("/:id/rank-up", auth, async (req, res) => {
   try {
-    const userId = req.user.sub || req.user.id;
+    const userId = req.user?.sub || req.user?.id;
     const post = await Post.findById(req.params.id);
     if (!post) return res.status(404).json({ msg: "Post not found" });
 
@@ -179,8 +186,8 @@ router.post("/:id/rank-up", auth, async (req, res) => {
       { new: true }
     );
 
-    const clickCount = updatedPost.rankClicks.length;
     let rankIncreased = false;
+    const clickCount = updatedPost.rankClicks?.length || 0;
 
     if (clickCount > 0 && clickCount % 10 === 0) {
       await User.findOneAndUpdate(
@@ -197,7 +204,7 @@ router.post("/:id/rank-up", auth, async (req, res) => {
       msg: rankIncreased ? "Milestone Reached! Rank Increased! ⚡" : "Pulse Synced"
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: "Rank sync failure." });
   }
 });
 
@@ -209,7 +216,7 @@ router.post("/:id/comment", auth, async (req, res) => {
       const { text } = req.body;
       if (!text) return res.status(400).json({ msg: "Message empty." });
   
-      const userId = req.user.sub || req.user.id;
+      const userId = req.user?.sub || req.user?.id;
       const userProfile = await User.findOne({ auth0Id: userId }).lean();
   
       const comment = {
@@ -240,9 +247,9 @@ router.delete("/:id", auth, async (req, res) => {
     const post = await Post.findById(req.params.id);
     if (!post) return res.status(404).json({ msg: "Post not found" });
 
-    const userId = req.user.sub || req.user.id;
+    const userId = req.user?.sub || req.user?.id;
     if (post.authorAuth0Id !== userId && post.author !== userId)
-      return res.status(401).json({ msg: "Access Denied: Not your data." });
+      return res.status(401).json({ msg: "Access Denied." });
 
     await post.deleteOne();
     res.json({ msg: "Post terminated", postId: req.params.id });
