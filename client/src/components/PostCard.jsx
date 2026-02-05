@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { 
   FaHeart, FaRegHeart, FaRegComment, FaTrashAlt, 
   FaPlay, FaPause, FaDownload, FaCertificate, FaShareAlt, FaExternalLinkAlt,
-  FaRobot, FaBrain, FaTimes, FaSparkles
+  FaRobot, FaBrain, FaTimes, FaMagic // FaSparkles সরিয়ে FaMagic যোগ করা হয়েছে
 } from "react-icons/fa";
 import { useAuth0 } from "@auth0/auth0-react";
 import axios from "axios";
@@ -15,7 +15,6 @@ const PostCard = ({ post, onAction, onDelete, onUserClick }) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
   
-  // --- AI Chatbot States ---
   const [showAIChat, setShowAIChat] = useState(false);
   const [aiResponse, setAiResponse] = useState("");
   const [isAiThinking, setIsAiThinking] = useState(false);
@@ -29,7 +28,6 @@ const PostCard = ({ post, onAction, onDelete, onUserClick }) => {
   const likesArray = Array.isArray(post.likes) ? post.likes : [];
   const isLiked = user && likesArray.includes(user.sub);
 
-  // --- তারিখ ফরম্যাট ঠিক করার ফাংশন ---
   const formatPostDate = (dateStr) => {
     try {
       const date = new Date(dateStr);
@@ -40,7 +38,6 @@ const PostCard = ({ post, onAction, onDelete, onUserClick }) => {
     }
   };
 
-  // --- 🤖 Real Gemini AI Analysis Logic (Added) ---
   const askAIAboutPost = async () => {
     if (showAIChat) {
       setShowAIChat(false);
@@ -135,7 +132,6 @@ const PostCard = ({ post, onAction, onDelete, onUserClick }) => {
       className={`bg-[#0a0f1e]/60 backdrop-blur-xl border-y border-white/[0.05] sm:border sm:rounded-[2rem] overflow-hidden mb-4 w-full transition-all group/card shadow-2xl relative ${post.feedType === 'news' ? 'border-cyan-500/20' : ''}`}
     >
       
-      {/* --- AI Intelligence Button (Floating) --- */}
       <button 
         onClick={askAIAboutPost}
         className="ai-ignore absolute top-4 right-14 p-2 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 rounded-full text-cyan-400 transition-all group/ai z-20"
@@ -144,7 +140,6 @@ const PostCard = ({ post, onAction, onDelete, onUserClick }) => {
         <FaBrain size={12} className={`${isAiThinking ? "animate-pulse" : "group-hover:rotate-12"} transition-transform`} />
       </button>
 
-      {/* --- Header --- */}
       <div className="p-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div 
@@ -181,7 +176,6 @@ const PostCard = ({ post, onAction, onDelete, onUserClick }) => {
         )}
       </div>
 
-      {/* --- Text Content --- */}
       {post.text && (
         <div className="px-5 pb-3">
           <p className="text-gray-200 text-[15px] leading-relaxed font-medium">
@@ -200,7 +194,6 @@ const PostCard = ({ post, onAction, onDelete, onUserClick }) => {
         </div>
       )}
 
-      {/* --- Media Area --- */}
       <div className="px-3 pb-2"> 
         {post.media ? (
           <div className="relative rounded-[1.5rem] overflow-hidden bg-black/40 border border-white/5 group/media shadow-inner">
@@ -236,7 +229,6 @@ const PostCard = ({ post, onAction, onDelete, onUserClick }) => {
         ) : null}
       </div>
 
-      {/* --- Action Bar --- */}
       <div className="px-5 py-3 flex items-center justify-between border-t border-white/[0.03] mt-2">
         <div className="flex items-center gap-8">
           <button 
@@ -269,7 +261,6 @@ const PostCard = ({ post, onAction, onDelete, onUserClick }) => {
         </div>
       </div>
 
-      {/* --- AI Chatbot Overlay (Inline) --- */}
       <AnimatePresence>
         {showAIChat && (
           <motion.div 
@@ -292,7 +283,7 @@ const PostCard = ({ post, onAction, onDelete, onUserClick }) => {
                 </div>
                 <div className="space-y-2">
                   <p className="text-[10px] font-black uppercase tracking-widest text-cyan-500/60 flex items-center gap-2">
-                    Neural Analyst <FaSparkles className="animate-pulse" />
+                    Neural Analyst <FaMagic className="animate-pulse" /> {/* FaSparkles এর বদলে FaMagic */}
                   </p>
                   {isAiThinking ? (
                     <div className="flex gap-1 py-2">
