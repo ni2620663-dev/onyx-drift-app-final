@@ -1,8 +1,9 @@
 import React, { useState, useRef } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { 
   FaHeart, FaRegHeart, FaRegComment, FaTrashAlt, 
-  FaPlay, FaPause, FaDownload, FaCertificate, FaShareAlt, FaExternalLinkAlt
+  FaPlay, FaPause, FaDownload, FaCertificate, FaShareAlt, FaExternalLinkAlt,
+  FaRobot, FaBrain, FaTimes, FaSparkles
 } from "react-icons/fa";
 import { useAuth0 } from "@auth0/auth0-react";
 import axios from "axios";
@@ -13,6 +14,11 @@ const PostCard = ({ post, onAction, onDelete, onUserClick }) => {
   const [isLiking, setIsLiking] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
+  
+  // --- AI Chatbot States ---
+  const [showAIChat, setShowAIChat] = useState(false);
+  const [aiResponse, setAiResponse] = useState("");
+  const [isAiThinking, setIsAiThinking] = useState(false);
   
   const videoRef = useRef(null);
   const postRef = useRef(null);
@@ -34,6 +40,34 @@ const PostCard = ({ post, onAction, onDelete, onUserClick }) => {
     }
   };
 
+  // --- 🤖 Real Gemini AI Analysis Logic (Added) ---
+  const askAIAboutPost = async () => {
+    if (showAIChat) {
+      setShowAIChat(false);
+      return;
+    }
+
+    setShowAIChat(true);
+    setIsAiThinking(true);
+    
+    try {
+      const token = await getAccessTokenSilently();
+      const res = await axios.post(`${API_URL}/api/posts/ai-analyze`, 
+        { 
+          text: post.text || "No text content", 
+          authorName: post.authorName || "Unknown Drifter" 
+        },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setAiResponse(res.data.analysis);
+    } catch (err) {
+      console.error("AI Neural Link Error:", err);
+      setAiResponse("Neural core connection timed out. Signal lost.");
+    } finally {
+      setIsAiThinking(false);
+    }
+  };
+
   const generateShareCard = async () => {
     if (!postRef.current || isCapturing) return;
     setIsCapturing(true);
@@ -44,7 +78,7 @@ const PostCard = ({ post, onAction, onDelete, onUserClick }) => {
         scale: 2, 
         logging: false,
         borderRadius: 40,
-        ignoreElements: (element) => element.tagName === "BUTTON" || element.classList.contains('video-controls'),
+        ignoreElements: (element) => element.tagName === "BUTTON" || element.classList.contains('video-controls') || element.classList.contains('ai-ignore'),
       });
       const image = canvas.toDataURL("image/png");
       const link = document.createElement("a");
@@ -60,7 +94,7 @@ const PostCard = ({ post, onAction, onDelete, onUserClick }) => {
 
   const handleProfileClick = (e) => {
     e.stopPropagation();
-    if (post.feedType === 'news') return; // নিউজের ক্ষেত্রে প্রোফাইল ক্লিক হবে না
+    if (post.feedType === 'news') return; 
     const targetId = post.authorAuth0Id || post.author;
     if (onUserClick && targetId) onUserClick(targetId);
   };
@@ -76,7 +110,7 @@ const PostCard = ({ post, onAction, onDelete, onUserClick }) => {
 
   const handleLike = async (e) => {
     e.stopPropagation();
-    if (post.feedType === 'news') return; // নিউজে লাইক সিস্টেম বন্ধ (অপশনাল)
+    if (post.feedType === 'news') return; 
     if (!isAuthenticated || isLiking) return;
     try {
       setIsLiking(true);
@@ -98,8 +132,18 @@ const PostCard = ({ post, onAction, onDelete, onUserClick }) => {
       initial={{ opacity: 0, y: 20 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, margin: "-50px" }}
-      className={`bg-[#0a0f1e]/60 backdrop-blur-xl border-y border-white/[0.05] sm:border sm:rounded-[2rem] overflow-hidden mb-4 w-full transition-all group/card shadow-2xl ${post.feedType === 'news' ? 'border-cyan-500/20' : ''}`}
+      className={`bg-[#0a0f1e]/60 backdrop-blur-xl border-y border-white/[0.05] sm:border sm:rounded-[2rem] overflow-hidden mb-4 w-full transition-all group/card shadow-2xl relative ${post.feedType === 'news' ? 'border-cyan-500/20' : ''}`}
     >
+      
+      {/* --- AI Intelligence Button (Floating) --- */}
+      <button 
+        onClick={askAIAboutPost}
+        className="ai-ignore absolute top-4 right-14 p-2 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 rounded-full text-cyan-400 transition-all group/ai z-20"
+        title="AI Analysis"
+      >
+        <FaBrain size={12} className={`${isAiThinking ? "animate-pulse" : "group-hover:rotate-12"} transition-transform`} />
+      </button>
+
       {/* --- Header --- */}
       <div className="p-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -224,6 +268,50 @@ const PostCard = ({ post, onAction, onDelete, onUserClick }) => {
           </button>
         </div>
       </div>
+
+      {/* --- AI Chatbot Overlay (Inline) --- */}
+      <AnimatePresence>
+        {showAIChat && (
+          <motion.div 
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="ai-ignore bg-cyan-500/5 border-t border-cyan-500/20 overflow-hidden"
+          >
+            <div className="p-5 relative">
+              <button 
+                onClick={() => setShowAIChat(false)}
+                className="absolute top-4 right-4 text-zinc-500 hover:text-white transition-colors"
+              >
+                <FaTimes size={14} />
+              </button>
+              
+              <div className="flex gap-4">
+                <div className="w-8 h-8 rounded-lg bg-cyan-500/20 flex items-center justify-center text-cyan-400 shrink-0 shadow-[0_0_15px_rgba(6,182,212,0.2)]">
+                  <FaRobot size={16} />
+                </div>
+                <div className="space-y-2">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-cyan-500/60 flex items-center gap-2">
+                    Neural Analyst <FaSparkles className="animate-pulse" />
+                  </p>
+                  {isAiThinking ? (
+                    <div className="flex gap-1 py-2">
+                      <div className="w-1.5 h-1.5 bg-cyan-500 rounded-full animate-bounce" />
+                      <div className="w-1.5 h-1.5 bg-cyan-500 rounded-full animate-bounce [animation-delay:-0.15s]" />
+                      <div className="w-1.5 h-1.5 bg-cyan-500 rounded-full animate-bounce [animation-delay:-0.3s]" />
+                    </div>
+                  ) : (
+                    <p className="text-sm text-cyan-100/80 font-medium leading-relaxed italic">
+                      "{aiResponse}"
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
     </motion.div>
   );
 };

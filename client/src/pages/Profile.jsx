@@ -1,74 +1,65 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuth0 } from "@auth0/auth0-react";
 import axios from "axios";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
-  FaEdit, FaShieldAlt, FaRocket, FaCamera, FaImage, 
-  FaFilm, FaPlayCircle, FaTimes, FaPlus, FaCheckCircle, 
-  FaUserPlus, FaEnvelope, FaSearch, FaMagic, FaAward,
-  FaThLarge, FaPlay, FaUsers, FaHeart 
+  FaEdit, FaRocket, FaCamera, FaBrain, FaFingerprint, 
+  FaHistory, FaTimes, FaPlus, FaCheckCircle, FaBolt,
+  FaThLarge, FaPlay, FaAward, FaSearch, FaPlayCircle, 
+  FaShoppingCart, FaCrown, FaShieldAlt, FaBoxOpen, FaMicrochip, FaWaveSquare
 } from "react-icons/fa";
-import { HiBolt, HiOutlineLink, HiOutlineLinkSlash } from "react-icons/hi2";
+import { HiBolt } from "react-icons/hi2";
+import { LineChart, Line, ResponsiveContainer, Tooltip, XAxis } from "recharts";
 import PostCard from "../components/PostCard";
+import toast from "react-hot-toast";
+import NeuralStats from "../components/NeuralStats"; // ✅ imported
 
 // --- 🚀 GenesisCard Component ---
 const GenesisCard = ({ userData }) => {
+  const navigate = useNavigate();
   const inviteCode = userData?.inviteCode || userData?.nickname?.toLowerCase() || "drifter";
   const fullInviteLink = `onyx-drift.com/join?ref=${inviteCode}`;
 
   const copyInvite = () => {
     navigator.clipboard.writeText(fullInviteLink);
-    alert("Neural Link Synced to Clipboard! 🚀");
+    toast.success("Neural Link Synced! 🚀");
   };
 
   return (
     <motion.div 
       whileHover={{ scale: 1.01 }}
-      className="mb-8 p-6 rounded-[2.5rem] bg-gradient-to-br from-cyan-500/15 via-purple-500/10 to-transparent border border-cyan-500/30 backdrop-blur-3xl relative overflow-hidden group shadow-[0_20px_50px_rgba(0,0,0,0.5)]"
+      className="p-6 rounded-[2.5rem] bg-gradient-to-br from-cyan-500/15 via-purple-500/10 to-transparent border border-cyan-500/30 backdrop-blur-3xl relative overflow-hidden group shadow-2xl h-full"
     >
-      <div className="absolute -top-4 -right-4 p-8 opacity-10 group-hover:opacity-30 group-hover:-translate-y-2 group-hover:translate-x-2 transition-all duration-700">
-          <FaRocket size={120} className="text-cyan-400 -rotate-45" />
+      <div className="absolute -top-4 -right-4 p-8 opacity-10 group-hover:opacity-30 transition-all duration-700">
+          <FaRocket size={100} className="text-cyan-400 -rotate-45" />
       </div>
       
-      <div className="flex justify-between items-start mb-6 relative z-10">
-        <div>
-          <h3 className="text-xl font-black italic text-white tracking-tighter uppercase">Genesis Node</h3>
-          <p className="text-[10px] text-cyan-400 font-bold uppercase tracking-widest flex items-center gap-2">
-            <span className="w-2 h-2 bg-cyan-400 rounded-full animate-pulse"></span>
-            Propagation Active
-          </p>
-        </div>
-        <div className="p-3 bg-white/10 rounded-2xl border border-white/10 backdrop-blur-xl group-hover:bg-cyan-500 group-hover:text-black transition-all duration-500">
-          <FaMagic className="text-sm" />
-        </div>
-      </div>
-
-      <div className="space-y-4 relative z-10">
-        <div className="bg-black/60 p-4 rounded-2xl border border-white/10 group-hover:border-cyan-500/50 transition-colors">
-          <p className="text-[9px] text-gray-500 uppercase font-black mb-2 tracking-widest">Personal Recruitment Link</p>
-          <div className="flex justify-between items-center gap-4">
-            <span className="text-[11px] font-mono text-cyan-100 italic truncate opacity-80">
-              {fullInviteLink}
-            </span>
+      <div className="relative z-10">
+        <div className="flex justify-between items-start mb-4">
+            <h3 className="text-lg font-black italic text-white tracking-tighter uppercase">Genesis Node</h3>
             <button 
-              onClick={copyInvite} 
-              className="px-4 py-1.5 bg-cyan-500/20 hover:bg-cyan-500 text-cyan-400 hover:text-black rounded-lg text-[10px] font-black transition-all uppercase tracking-tighter border border-cyan-500/50"
+                onClick={() => navigate('/marketplace')}
+                className="p-2 bg-white/5 border border-white/10 rounded-xl text-cyan-400 hover:bg-cyan-500 hover:text-black transition-all flex items-center gap-2"
             >
-              Copy
+                <FaShoppingCart size={12} />
+                <span className="text-[8px] font-black uppercase">Market</span>
             </button>
-          </div>
         </div>
-        
-        <div className="flex gap-3">
-            <div className="flex-1 text-center p-3 bg-white/5 rounded-2xl border border-white/5 backdrop-blur-md">
-               <p className="text-xl font-black text-white">{userData?.inviteCount || 0}</p>
-               <p className="text-[8px] text-gray-500 uppercase font-bold tracking-widest mt-1">Recruits</p>
-            </div>
-            <div className="flex-1 text-center p-3 bg-white/5 rounded-2xl border border-white/5 backdrop-blur-md">
-               <p className="text-xl font-black text-cyan-400 uppercase tracking-tighter">{userData?.neuralRank || 0}</p>
-               <p className="text-[8px] text-gray-500 uppercase font-bold tracking-widest mt-1">Rank Points</p>
-            </div>
+
+        <div className="bg-black/40 p-3 rounded-2xl border border-white/5 flex justify-between items-center mb-4">
+          <span className="text-[10px] font-mono text-cyan-100/60 truncate mr-4">{fullInviteLink}</span>
+          <button onClick={copyInvite} className="px-3 py-1 bg-cyan-500 text-black text-[9px] font-black rounded-lg uppercase">Copy</button>
+        </div>
+        <div className="flex gap-4">
+          <div className="flex-1 bg-white/5 p-3 rounded-xl border border-white/5 text-center">
+            <p className="text-xl font-black text-white">{userData?.followers?.length || 0}</p>
+            <p className="text-[8px] text-zinc-500 uppercase font-bold tracking-widest">Recruits</p>
+          </div>
+          <div className="flex-1 bg-white/5 p-3 rounded-xl border border-white/5 text-center cursor-help group/rank" title="Impact Points for Market">
+            <p className="text-xl font-black text-cyan-400">{userData?.neuralImpact || 0}</p>
+            <p className="text-[8px] text-zinc-500 uppercase font-bold tracking-widest">Impact Pts</p>
+          </div>
         </div>
       </div>
     </motion.div>
@@ -85,417 +76,343 @@ const Profile = () => {
   const [userReels, setUserReels] = useState([]); 
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("Echoes"); 
-  
-  const [searchQuery, setSearchQuery] = useState("");
-  const [suggestedUsers, setSuggestedUsers] = useState([]);
-
-  const isGhostMode = userProfile?.isGhostMode || false;
-  
   const [isEditOpen, setIsEditOpen] = useState(false);
-  const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [file, setFile] = useState(null);
-  const [content, setContent] = useState("");
-  const [postType, setPostType] = useState("image"); 
-  const [isTransmitting, setIsTransmitting] = useState(false);
+  const [vaultUnlocked, setVaultUnlocked] = useState(false);
 
   const API_URL = (import.meta.env.VITE_API_BASE_URL || "https://onyx-drift-app-final.onrender.com").replace(/\/$/, "");
-  const fileInputRef = useRef(null);
-  const profilePhotoRef = useRef(null);
-  const coverPhotoRef = useRef(null);
-
-  const [editData, setEditData] = useState({ nickname: "", bio: "" });
-  const [isUpdating, setIsUpdating] = useState(false);
-  const [isLinking, setIsLinking] = useState(false);
-
   const isOwnProfile = !userId || userId === currentUser?.sub;
-  const isLinked = userProfile?.followers?.includes(currentUser?.sub);
+  
+  const hasNeonAura = userProfile?.profileSettings?.activeAura === 'cyan_glow';
+  const hasVerifiedBadge = userProfile?.unlockedAssets?.includes('genesis_badge');
+
+  // মুড গ্রাফ ডাটা প্রসেসিং
+  const moodChartData = userProfile?.moodHistory?.slice(-7).map(item => ({
+    name: new Date(item.timestamp).toLocaleDateString('en-GB', { weekday: 'short' }),
+    intensity: item.intensity
+  })) || [];
 
   const fetchProfileData = async () => {
-    if (!isAuthenticated) return;
     try {
       setLoading(true);
       const token = await getAccessTokenSilently();
-      const rawId = userId || currentUser?.sub;
-      if (!rawId) return;
+      const targetId = encodeURIComponent(userId || currentUser?.sub);
       
-      const targetId = encodeURIComponent(rawId); 
+      const res = await axios.get(`${API_URL}/api/user/profile/${targetId}`, { 
+        headers: { Authorization: `Bearer ${token}` } 
+      });
 
-      const [profileRes, postsRes, usersRes] = await Promise.all([
-        axios.get(`${API_URL}/api/user/profile/${targetId}`, {
-          headers: { Authorization: `Bearer ${token}` }
-        }),
-        axios.get(`${API_URL}/api/user/posts/user/${targetId}`, {
-          headers: { Authorization: `Bearer ${token}` }
-        }),
-        axios.get(`${API_URL}/api/user/all`, {
-          headers: { Authorization: `Bearer ${token}` }
-        })
-      ]);
-
-      setUserProfile(profileRes.data);
-      const allPosts = Array.isArray(postsRes.data) ? postsRes.data : [];
-      
-      setUserPosts(allPosts.filter(p => p.postType !== 'reels'));
-      setUserReels(allPosts.filter(p => p.postType === 'reels' || p.mediaType === 'video'));
-      
-      setSuggestedUsers(Array.isArray(usersRes.data) ? usersRes.data.slice(0, 5) : []);
-
+      setUserProfile(res.data.user);
+      const posts = Array.isArray(res.data.posts) ? res.data.posts : [];
+      setUserPosts(posts.filter(p => p.postType !== 'reels'));
+      setUserReels(posts.filter(p => p.postType === 'reels'));
     } catch (err) {
-      console.error("📡 Neural Link Error:", err.message);
+      console.error("Profile Sync Error:", err);
+      toast.error("Neural Link Unstable");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleLinkProtocol = async () => {
-    if (isOwnProfile || isLinking) return;
-    setIsLinking(true);
+  const handleEquipAsset = async (assetId, type) => {
     try {
       const token = await getAccessTokenSilently();
-      const targetId = encodeURIComponent(userProfile.auth0Id);
-      const res = await axios.post(`${API_URL}/api/user/establish-link/${targetId}`, {}, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      await axios.put(`${API_URL}/api/user/equip-asset`, 
+        { assetId, type }, 
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      toast.success("Neural Asset Equipped!");
       fetchProfileData();
     } catch (err) {
-      console.error("Link Protocol Failed");
-    } finally {
-      setIsLinking(false);
+      toast.error("Sync Failed");
     }
   };
+const [editData, setEditData] = useState({ name: '', bio: '' });
 
-  const handlePhotoUpdate = async (e, type) => {
-    const photoFile = e.target.files[0];
-    if (!photoFile) return;
-
-    try {
-      const token = await getAccessTokenSilently();
-      const formData = new FormData();
-      formData.append(type === "profile" ? "avatar" : "cover", photoFile);
-
-      await axios.put(`${API_URL}/api/user/update-profile`, formData, {
-        headers: { 
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "multipart/form-data" 
-        }
-      });
-      
-      fetchProfileData();
-    } catch (err) {
-      console.error("Neural Sync Failed");
-    }
-  };
-
-  useEffect(() => {
-    if (isAuthenticated) fetchProfileData();
-  }, [userId, isAuthenticated, currentUser?.sub]);
-
-  useEffect(() => {
-    if (userProfile) {
-      setEditData({
-        nickname: userProfile.name || userProfile.nickname || "",
-        bio: userProfile.bio || ""
-      });
-    }
-  }, [userProfile]);
-
-  const handleUpdateIdentity = async () => {
-    if (!editData.nickname.trim()) return alert("Nickname is required.");
-    setIsUpdating(true);
-    try {
-      const token = await getAccessTokenSilently();
-      await axios.put(`${API_URL}/api/user/update-profile`, {
-        name: editData.nickname,
-        bio: editData.bio
-      }, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setIsEditOpen(false);
-      fetchProfileData(); 
-    } catch (err) {
-      alert("Identity Sync Failed");
-    } finally {
-      setIsUpdating(false);
-    }
-  };
-
-  const handleTransmit = async () => {
-    if (!content && !file) return alert("Empty transmission!");
-    setIsTransmitting(true);
-    try {
-      const token = await getAccessTokenSilently();
-      const formData = new FormData();
-      formData.append("text", content);
-      formData.append("mediaType", postType);
-      if (file) formData.append("media", file);
-
-      await axios.post(`${API_URL}/api/posts`, formData, { 
-        headers: { 
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "multipart/form-data"
-        } 
-      });
-      
-      fetchProfileData(); 
-      setIsCreateOpen(false);
-      setContent("");
-      setFile(null);
-    } catch (err) { 
-      alert("Transmission Interrupted"); 
-    } finally { 
-      setIsTransmitting(false); 
-    }
-  };
-
-  const handleFileSelect = (type) => {
-    setPostType(type === 'photo' ? 'image' : type);
-    setTimeout(() => fileInputRef.current?.click(), 100);
-  };
+const handleUpdateProfile = async () => {
+  try {
+    const token = await getAccessTokenSilently();
+    await axios.put(`${API_URL}/api/user/profile/update`, editData, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    toast.success("Identity Reshaped! 🧬");
+    setIsEditOpen(false);
+    fetchProfileData(); // রিফ্রেশ প্রোফাইল
+  } catch (err) {
+    toast.error("Sync Failed");
+  }
+};
+  useEffect(() => { if (isAuthenticated) fetchProfileData(); }, [userId, isAuthenticated]);
 
   if (loading) return (
-    <div className="h-screen flex items-center justify-center bg-[#020617] text-cyan-400 font-black italic uppercase tracking-[0.3em]">
-      SYNCING NEURAL IDENTITY...
+    <div className="h-screen flex items-center justify-center bg-[#020617] text-cyan-400 font-black italic uppercase tracking-widest animate-pulse">
+      Initializing Neural Link...
     </div>
   );
 
   return (
-    <div className={`w-full min-h-screen transition-all duration-700 ${isGhostMode ? 'bg-black' : 'bg-[#020617]'} text-gray-200 overflow-x-hidden flex flex-col`}>
+    <div className={`w-full min-h-screen bg-[#020617] text-gray-200 selection:bg-cyan-500/30`}>
       
-      <input type="file" ref={profilePhotoRef} hidden onChange={(e) => handlePhotoUpdate(e, "profile")} accept="image/*" />
-      <input type="file" ref={coverPhotoRef} hidden onChange={(e) => handlePhotoUpdate(e, "cover")} accept="image/*" />
+      {/* --- Cover Section --- */}
+      <div className="relative h-60 md:h-80 w-full overflow-hidden">
+        <img 
+          src={userProfile?.coverImg || "https://images.unsplash.com/photo-1614850523296-d8c1af93d400?q=80&w=1000"} 
+          className="w-full h-full object-cover opacity-40 blur-[2px]" 
+          alt="Cover"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#020617] via-transparent to-transparent" />
+      </div>
 
-      <div className="w-full py-4 px-6 border-b border-white/5 sticky top-0 z-[60] bg-[#020617]/80 backdrop-blur-xl">
-        <div className="max-w-[1400px] mx-auto flex items-center justify-between gap-4">
-          <div className="relative flex-1 max-w-xl">
-            <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" />
-            <input 
-              type="text"
-              placeholder="Search the drift..."
-              className="w-full bg-white/5 border border-white/10 rounded-full py-2.5 pl-12 pr-4 text-xs outline-none focus:border-cyan-400 transition-all"
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
+      <div className="max-w-4xl mx-auto px-4 -mt-24 relative z-20 pb-20">
+        
+        {/* 1️⃣ Header: Digital Identity with Hologram Aura */}
+        <div className="relative group p-8 bg-slate-900/40 border border-white/10 rounded-[3rem] backdrop-blur-3xl shadow-2xl mb-8">
+          <div className="flex flex-col md:flex-row items-center gap-8">
+            <div className="relative">
+              {/* Neon/Hologram Aura Animation */}
+              <div className={`absolute -inset-4 rounded-full blur-2xl z-[-1] transition-opacity duration-1000 ${hasNeonAura ? 'bg-cyan-500/40 opacity-100' : 'bg-cyan-500/10 opacity-50'}`} />
+              
+              <div className={`w-32 h-32 md:w-40 md:h-40 rounded-[2.5rem] p-1 bg-gradient-to-tr from-cyan-500 via-purple-500 to-pink-500 ${hasNeonAura ? 'animate-spin-slow' : ''}`}>
+                <div className="w-full h-full rounded-[2.4rem] bg-[#020617] p-1 overflow-hidden">
+                  <img 
+                    src={userProfile?.avatar || currentUser?.picture} 
+                    className="w-full h-full rounded-[2.3rem] object-cover filter contrast-125" 
+                    alt="Avatar"
+                  />
+                </div>
+              </div>
+
+              {hasVerifiedBadge && (
+                <div className="absolute -top-2 -right-2 bg-cyan-500 text-black p-2 rounded-xl z-20 shadow-xl border-2 border-[#020617]">
+                  <FaCrown size={14} />
+                </div>
+              )}
+            </div>
+
+            <div className="flex-1 text-center md:text-left">
+              <div className="flex items-center justify-center md:justify-start gap-3">
+                <h1 className="text-3xl md:text-5xl font-black text-white italic tracking-tighter uppercase leading-none">
+                  {userProfile?.name || userProfile?.nickname}
+                </h1>
+                {userProfile?.isVerified && <FaCheckCircle className="text-cyan-400" size={24} />}
+              </div>
+              
+              <div className="flex flex-wrap justify-center md:justify-start gap-3 mt-4">
+                <span className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-[10px] font-bold uppercase tracking-widest">
+                  <FaBrain className="animate-pulse" /> AI Twin: {userProfile?.aiPersona || "Evolving"}
+                </span>
+                <span className="px-4 py-1.5 rounded-full bg-white/5 border border-white/10 text-zinc-400 text-[10px] font-bold uppercase tracking-widest">
+                  {userProfile?.drifterLevel || "Novice Drifter"}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex gap-2">
+              {isOwnProfile ? (
+                <button onClick={() => setIsEditOpen(true)} className="p-5 bg-white/5 border border-white/10 rounded-[2rem] hover:bg-white/10 transition-all text-cyan-400">
+                  <FaEdit size={20} />
+                </button>
+              ) : (
+                <button className="px-8 py-4 bg-cyan-600 text-white rounded-[2rem] font-black text-[10px] uppercase tracking-[0.2em] flex items-center gap-2 shadow-[0_0_20px_rgba(6,182,212,0.3)] hover:scale-105 transition-all">
+                  <HiBolt size={18} /> Link Node
+                </button>
+              )}
+            </div>
           </div>
+        </div>
+
+        {/* 🚀 New Component: Neural Stats Dashboard */}
+        <NeuralStats user={userProfile} />
+
+        {/* 2️⃣ Genesis Card & Neural Resonance (Graph) */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <div className="md:col-span-1">
+              <GenesisCard userData={userProfile} />
+          </div>
+          
+          <motion.div 
+            whileHover={{ y: -5 }}
+            className="md:col-span-2 p-8 bg-zinc-900/40 border border-white/5 rounded-[3rem] backdrop-blur-xl"
+          >
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-[10px] font-black uppercase text-zinc-500 flex items-center gap-2 tracking-[0.3em]">
+                <FaWaveSquare className="text-cyan-500" /> Neural Resonance
+              </h3>
+              <div className="flex gap-4 text-[9px] font-bold text-zinc-600 uppercase">
+                <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-cyan-500" /> Pulse</span>
+              </div>
+            </div>
+            
+            <div className="h-40 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={moodChartData}>
+                  <XAxis dataKey="name" hide />
+                  <Line 
+                    type="monotone" 
+                    dataKey="intensity" 
+                    stroke="#06b6d4" 
+                    strokeWidth={3} 
+                    dot={{ r: 4, fill: '#020617', stroke: '#06b6d4', strokeWidth: 2 }} 
+                  />
+                  <Tooltip contentStyle={{ backgroundColor: '#0f172a', border: 'none', borderRadius: '12px', fontSize: '10px' }} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </motion.div>
+        </div>
+
+        {/* 3️⃣ Skills / Interests Microcards */}
+        <div className="flex flex-wrap gap-3 mb-8">
+          {userProfile?.detectedSkills?.map((skill, i) => (
+            <motion.div 
+              key={i}
+              whileHover={{ scale: 1.05, backgroundColor: "rgba(34, 211, 238, 0.1)" }}
+              className="px-6 py-3 rounded-2xl bg-white/5 border border-white/10 flex items-center gap-3 cursor-pointer transition-colors"
+            >
+              <FaMicrochip className="text-cyan-400" size={12} />
+              <span className="text-[10px] font-black tracking-widest uppercase text-zinc-300">{skill.name}</span>
+            </motion.div>
+          ))}
+          {!userProfile?.detectedSkills?.length && (
+            <div className="text-[10px] text-zinc-600 font-bold uppercase tracking-widest p-2 italic">Scanning Neural Patterns for Skills...</div>
+          )}
+        </div>
+
+        {/* 4️⃣ Memory Vault & Impact Score */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+            <motion.div 
+              onClick={() => setVaultUnlocked(!vaultUnlocked)}
+              className={`col-span-1 md:col-span-2 p-8 rounded-[3rem] border transition-all duration-700 cursor-pointer overflow-hidden relative ${vaultUnlocked ? 'bg-purple-600/10 border-purple-500/40' : 'bg-slate-900/40 border-white/5'}`}
+            >
+              <div className="flex items-center justify-between relative z-10">
+                <div className="flex items-center gap-6">
+                  <div className={`p-4 rounded-2xl transition-all duration-500 ${vaultUnlocked ? 'bg-purple-500 shadow-[0_0_20px_rgba(168,85,247,0.5)]' : 'bg-white/5'}`}>
+                    <FaFingerprint size={24} className={vaultUnlocked ? "text-white" : "text-zinc-600"} />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-black text-white uppercase tracking-tighter">Memory Vault</h4>
+                    <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest italic">
+                      {vaultUnlocked ? "Biometric Confirmed - Accessing Legacy" : `${userProfile?.memoryVaultCount || 0} Echoes Archived`}
+                    </p>
+                  </div>
+                </div>
+                <FaHistory className={`transition-transform duration-700 ${vaultUnlocked ? 'rotate-180 text-purple-400' : 'text-zinc-700'}`} size={30} />
+              </div>
+              
+              <AnimatePresence>
+                {vaultUnlocked && (
+                  <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="mt-6 pt-6 border-t border-purple-500/20 italic text-[11px] text-purple-200">
+                    "The drift never stops. Your signals are your legacy." - Stored 0.2 Cycles Ago
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </motion.div>
+
+            <div className="p-8 bg-gradient-to-br from-cyan-600/20 to-blue-900/10 border border-cyan-500/20 rounded-[3rem] flex flex-col justify-center text-center shadow-xl">
+              <p className="text-5xl font-black text-white italic tracking-tighter">{userProfile?.neuralImpact || 0}</p>
+              <p className="text-[10px] text-cyan-500 uppercase font-black tracking-[0.3em] mt-2">Neural Impact</p>
+              <div className="flex justify-center gap-2 mt-4">
+                <FaBolt className={userProfile?.neuralImpact > 100 ? "text-yellow-400" : "text-zinc-800"} />
+                <FaBolt className={userProfile?.neuralImpact > 500 ? "text-yellow-400" : "text-zinc-800"} />
+                <FaBolt className={userProfile?.neuralImpact > 1000 ? "text-yellow-400" : "text-zinc-800"} />
+              </div>
+            </div>
+        </div>
+
+        {/* 5️⃣ Tabs & Content */}
+        <div className="flex gap-8 mb-8 border-b border-white/5 px-2 overflow-x-auto no-scrollbar">
+          {[
+            { name: "Echoes", icon: <FaThLarge /> },
+            { name: "Reels", icon: <FaPlay /> },
+            { name: "Assets", icon: <FaBoxOpen /> },
+            { name: "Achievements", icon: <FaAward /> }
+          ].map((tab) => (
+            <button 
+              key={tab.name} 
+              onClick={() => setActiveTab(tab.name)} 
+              className={`pb-4 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest relative transition-all whitespace-nowrap ${activeTab === tab.name ? "text-cyan-400" : "text-zinc-600 hover:text-zinc-400"}`}
+            >
+              {tab.icon} {tab.name}
+              {activeTab === tab.name && <motion.div layoutId="activeTab" className="absolute bottom-0 left-0 right-0 h-0.5 bg-cyan-400 shadow-[0_0_10px_#06b6d4]" />}
+            </button>
+          ))}
+        </div>
+
+        <div className="min-h-[400px]">
+          <AnimatePresence mode="wait">
+            {activeTab === "Echoes" && (
+              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+                {userPosts.length > 0 ? (
+                  userPosts.map((post) => <PostCard key={post._id} post={post} onAction={fetchProfileData} />)
+                ) : (
+                  <div className="text-center py-20 text-zinc-700 font-black uppercase tracking-[0.3em] italic">Zero Signals Detected</div>
+                )}
+              </motion.div>
+            )}
+
+            {activeTab === "Reels" && (
+              <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                {userReels.map((reel) => (
+                  <div key={reel._id} className="relative aspect-[9/16] bg-zinc-900 rounded-[2.5rem] overflow-hidden group border border-white/5">
+                    <video src={reel.media} className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-700" muted onMouseOver={e => e.target.play()} onMouseOut={e => e.target.pause()} />
+                    <div className="absolute bottom-6 left-6 flex items-center gap-2 text-white text-[10px] font-black uppercase">
+                      <FaPlayCircle className="text-cyan-400" /> {reel.views || 0}
+                    </div>
+                  </div>
+                ))}
+              </motion.div>
+            )}
+
+            {activeTab === "Assets" && (
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {userProfile?.unlockedAssets?.length > 0 ? (
+                  userProfile.unlockedAssets.map((asset) => (
+                    <div key={asset} className="p-6 bg-white/5 border border-white/10 rounded-[2.5rem] flex justify-between items-center group hover:border-cyan-500/30 transition-all">
+                      <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 bg-cyan-500/10 rounded-2xl flex items-center justify-center text-cyan-400">
+                          {asset.includes('badge') ? <FaCrown /> : <FaShieldAlt />}
+                        </div>
+                        <div>
+                          <p className="text-white font-black uppercase text-[10px] tracking-widest">{asset.replace('_', ' ')}</p>
+                          <p className="text-[8px] text-zinc-600 uppercase font-bold tracking-widest">Verified System Asset</p>
+                        </div>
+                      </div>
+                      <button 
+                        onClick={() => handleEquipAsset(asset, asset.includes('badge') ? 'badge' : 'aura')}
+                        className={`px-5 py-2 rounded-xl text-[9px] font-black uppercase transition-all ${
+                          userProfile?.profileSettings?.activeAura === asset || userProfile?.profileSettings?.activeBadge === asset
+                          ? 'bg-cyan-500 text-black shadow-[0_0_15px_#06b6d4]'
+                          : 'bg-white/5 text-zinc-400 hover:bg-white/10'
+                        }`}
+                      >
+                        {userProfile?.profileSettings?.activeAura === asset || userProfile?.profileSettings?.activeBadge === asset ? 'Active' : 'Equip'}
+                      </button>
+                    </div>
+                  ))
+                ) : (
+                  <div className="col-span-full text-center py-20 text-zinc-700 font-black uppercase italic tracking-widest">
+                    No Assets Found. Check <span className="text-cyan-500 cursor-pointer" onClick={() => navigate('/marketplace')}>Market</span>.
+                  </div>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </div>
 
-      <div className="flex flex-row max-w-[1400px] mx-auto w-full flex-1">
-        <aside className="hidden lg:block w-72 p-6 sticky top-20 h-[calc(100vh-80px)] border-r border-white/5">
-          <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500 mb-6">Neural Connects</h3>
-          <div className="space-y-6">
-            {suggestedUsers.map((u) => (
-              <div key={u._id} className="group flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 transition-all cursor-pointer" onClick={() => navigate(`/profile/${encodeURIComponent(u.auth0Id)}`)}>
-                <img src={u.avatar} className="w-10 h-10 rounded-xl object-cover grayscale group-hover:grayscale-0" alt="" />
-                <div className="flex-1">
-                  <p className="text-[11px] font-bold text-white truncate">{u.name || u.nickname}</p>
-                  <p className="text-[9px] text-gray-600 uppercase font-mono">{u.drifterLevel || "Drifter"}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </aside>
-
-        <main className="flex-1 pb-20">
-          <div className="relative h-48 md:h-72 w-full overflow-hidden group">
-            <img 
-              src={userProfile?.coverImg || "https://images.unsplash.com/photo-1614850523296-d8c1af93d400?q=80&w=1000"} 
-              className={`w-full h-full object-cover transition-all duration-1000 ${isGhostMode ? 'opacity-20 grayscale blur-sm' : 'opacity-40'}`}
-              alt="Cover"
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-[#020617] via-[#020617]/40 to-transparent"></div>
-            
-            {isOwnProfile && (
-              <button 
-                onClick={() => coverPhotoRef.current.click()}
-                className="absolute bottom-4 right-4 p-3 bg-black/50 backdrop-blur-xl rounded-full border border-white/10 text-white opacity-0 group-hover:opacity-100 transition-all"
-              >
-                <FaCamera size={16} />
-              </button>
-            )}
-          </div>
-
-          <div className="max-w-[800px] mx-auto px-4 -mt-16 md:-mt-24 relative z-20">
-            {isOwnProfile && <GenesisCard userData={userProfile} />}
-
-            {userProfile ? (
-              <motion.div 
-                className={`bg-white/5 backdrop-blur-2xl border transition-all duration-700 ${isGhostMode ? 'border-white/20' : 'border-white/10'} rounded-[2.5rem] p-6 md:p-10 shadow-2xl mb-8`}
-              >
-                <div className="flex flex-col md:flex-row justify-between items-center md:items-end gap-6">
-                  <div className="flex flex-col md:flex-row items-center md:items-end gap-6">
-                    <div className="relative group">
-                      <img 
-                        src={userProfile?.avatar || currentUser?.picture} 
-                        className={`w-32 h-32 md:w-40 md:h-40 rounded-[2.5rem] border-4 border-[#020617] shadow-lg object-cover transition-all ${isGhostMode ? 'grayscale invert' : ''}`} 
-                        alt="Avatar"
-                      />
-                      {isOwnProfile && (
-                        <button 
-                          onClick={() => profilePhotoRef.current.click()}
-                          className="absolute bottom-2 right-2 p-3 bg-cyan-500 rounded-2xl border-4 border-[#020617] text-black shadow-xl hover:scale-110 transition-all"
-                        >
-                          <FaCamera size={14} />
-                        </button>
-                      )}
-                    </div>
-
-                    <div className="text-center md:text-left">
-                      <div className="flex items-center gap-2 justify-center md:justify-start">
-                        <h1 className="text-2xl md:text-4xl font-black text-white italic tracking-tighter uppercase">
-                          {userProfile?.name || userProfile?.nickname}
-                        </h1>
-                        {userProfile?.isVerified && <FaCheckCircle className="text-cyan-400" />}
-                      </div>
-                      <p className="text-xs text-cyan-400 font-black tracking-widest mt-1 uppercase font-mono">
-                         {userProfile?.drifterLevel || "Novice Drifter"}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex gap-3 w-full md:w-auto">
-                    {isOwnProfile ? (
-                      <>
-                        <button onClick={() => setIsEditOpen(true)} className="flex-1 px-6 py-3 bg-white/5 border border-white/10 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all">
-                          <FaEdit className="inline mr-2" /> Identity
-                        </button>
-                        <button onClick={() => setIsCreateOpen(true)} className="flex-1 px-6 py-3 bg-gradient-to-r from-cyan-500 to-purple-600 rounded-2xl text-[10px] font-black uppercase tracking-widest text-white shadow-lg">
-                          <FaPlus className="inline mr-2" /> New Echo
-                        </button>
-                      </>
-                    ) : (
-                      <button 
-                        onClick={handleLinkProtocol}
-                        disabled={isLinking}
-                        className={`px-8 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-all ${
-                          isLinked 
-                          ? "bg-zinc-800 text-zinc-400" 
-                          : "bg-cyan-600 text-white shadow-[0_0_20px_rgba(8,145,178,0.4)]"
-                        }`}
-                      >
-                        {isLinked ? (
-                          <><HiOutlineLinkSlash size={14}/> Sever Link</>
-                        ) : (
-                          <><HiBolt size={14} className="animate-pulse"/> Establish Link</>
-                        )}
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                <div className="flex justify-center md:justify-start gap-8 mt-8 py-4 border-y border-white/5">
-                   <div className="text-center md:text-left">
-                      <p className="text-lg font-black text-white">{userProfile?.followers?.length || 0}</p>
-                      <p className="text-[8px] text-gray-500 uppercase font-bold tracking-[0.2em] flex items-center gap-1 justify-center md:justify-start">
-                        Nodes
-                      </p>
-                   </div>
-                   <div className="w-[1px] bg-white/5"></div>
-                   <div className="text-center md:text-left">
-                      <p className="text-lg font-black text-white">{userProfile?.following?.length || 0}</p>
-                      <p className="text-[8px] text-gray-500 uppercase font-bold tracking-[0.2em]">Syncing</p>
-                   </div>
-                   <div className="w-[1px] bg-white/5"></div>
-                   <div className="text-center md:text-left">
-                      <p className="text-lg font-black text-white">{userPosts.length + userReels.length}</p>
-                      <p className="text-[8px] text-gray-500 uppercase font-bold tracking-[0.2em]">Signals</p>
-                   </div>
-                </div>
-
-                <div className="mt-6">
-                    <p className="text-gray-400 text-sm italic leading-relaxed text-center md:text-left">
-                      "{userProfile?.bio || "No neural signature detected..."}"
-                    </p>
-                </div>
-              </motion.div>
-            ) : null}
-
-            <div className="mt-12">
-              <div className="flex gap-8 mb-8 border-b border-white/5">
-                {[
-                  { name: "Echoes", icon: <FaThLarge size={14} /> },
-                  { name: "Reels", icon: <FaPlay size={14} /> },
-                  { name: "Insights", icon: <FaAward size={14} /> }
-                ].map((tab) => (
-                  <button 
-                    key={tab.name} 
-                    onClick={() => setActiveTab(tab.name)} 
-                    className={`pb-4 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest relative ${activeTab === tab.name ? "text-cyan-400" : "text-gray-600"}`}
-                  >
-                    {tab.icon} {tab.name}
-                    {activeTab === tab.name && <motion.div layoutId="activeTab" className="absolute bottom-0 left-0 right-0 h-0.5 bg-cyan-400" />}
-                  </button>
-                ))}
-              </div>
-              
-              <div className="min-h-[400px]">
-                {activeTab === "Echoes" && (
-                   <div className="space-y-6">
-                     {userPosts.length > 0 ? (
-                       userPosts.map((post) => (
-                         <PostCard key={post._id} post={post} onAction={fetchProfileData} />
-                       ))
-                     ) : (
-                       <div className="text-center py-20 opacity-20 italic uppercase tracking-[0.2em]">Zero Echoes Found</div>
-                     )}
-                   </div>
-                )}
-
-                {activeTab === "Reels" && (
-                   <div className="grid grid-cols-2 md:grid-cols-3 gap-2 md:gap-4">
-                      {userReels.length > 0 ? (
-                        userReels.map((reel) => (
-                          <div key={reel._id} className="relative aspect-[9/16] bg-white/5 rounded-3xl overflow-hidden group cursor-pointer border border-white/5">
-                             <video 
-                                src={reel.media || reel.mediaUrl} 
-                                className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-500"
-                                muted 
-                                onMouseOver={(e) => e.target.play()}
-                                onMouseOut={(e) => { e.target.pause(); e.target.currentTime = 0; }}
-                             />
-                             <div className="absolute bottom-4 left-4 flex items-center gap-1 text-white/70 text-[10px] font-black uppercase tracking-tighter">
-                                <FaPlayCircle size={14} className="text-cyan-400" />
-                                {reel.views || 0}
-                             </div>
-                          </div>
-                        ))
-                      ) : (
-                        <div className="col-span-full text-center py-20 opacity-20 italic uppercase tracking-[0.2em]">Zero Signals Captured</div>
-                      )}
-                   </div>
-                )}
-
-                {activeTab === "Insights" && (
-                  <div className="text-center py-20 opacity-20 italic uppercase tracking-[0.2em]">Node Insights Restricted</div>
-                )}
-              </div>
-            </div>
-          </div>
-        </main>
-      </div>
-
+      {/* Identity Edit Modal */}
       <AnimatePresence>
         {isEditOpen && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-xl">
-            <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} className="bg-[#0f172a] w-full max-w-md rounded-[2.5rem] p-8 border border-white/10">
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-cyan-400 font-black uppercase italic tracking-tighter">Edit Identity</h2>
-                <FaTimes className="cursor-pointer" onClick={() => setIsEditOpen(false)} />
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-2xl">
+            <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} className="bg-[#0f172a] w-full max-w-md rounded-[3rem] p-10 border border-white/10 shadow-3xl">
+              <div className="flex justify-between items-center mb-8">
+                <h2 className="text-cyan-400 font-black uppercase italic tracking-tighter text-xl">Reshape Identity</h2>
+                <FaTimes className="cursor-pointer text-zinc-500 hover:text-white" onClick={() => setIsEditOpen(false)} />
               </div>
-              <input 
-                type="text" 
-                className="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-sm mb-4 outline-none focus:border-cyan-500 text-white" 
-                placeholder="Nickname" 
-                value={editData.nickname} 
-                onChange={(e) => setEditData({...editData, nickname: e.target.value})} 
-              />
-              <textarea 
-                className="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-sm h-32 outline-none focus:border-cyan-500 text-white" 
-                placeholder="Neural Bio" 
-                value={editData.bio} 
-                onChange={(e) => setEditData({...editData, bio: e.target.value})} 
-              />
-              <button onClick={handleUpdateIdentity} disabled={isUpdating} className="w-full mt-6 py-4 bg-cyan-500 rounded-xl font-black uppercase text-[10px] tracking-widest text-black">
-                {isUpdating ? "Syncing..." : "Update Node"}
-              </button>
+              <div className="space-y-4">
+                <input type="text" className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 text-sm outline-none focus:border-cyan-500 text-white font-mono" placeholder="New Nickname..." />
+                <textarea className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 text-sm h-32 outline-none focus:border-cyan-500 text-white font-mono" placeholder="Update Neural Bio..." />
+                <button className="w-full py-4 bg-cyan-500 hover:bg-cyan-400 text-black rounded-2xl font-black uppercase text-[10px] tracking-[0.2em] transition-all shadow-[0_0_20px_rgba(6,182,212,0.4)]">Synchronize Node</button>
+              </div>
             </motion.div>
           </motion.div>
         )}
