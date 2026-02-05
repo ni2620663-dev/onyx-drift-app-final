@@ -93,41 +93,48 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
     try {
       const token = await getAccessTokenSilently();
       // Optimistic UI update
-      setPosts(prev => prev.map(p => p._id === postId ? { ...p, likes: p.likes?.includes(user?.sub) ? p.likes.filter(id => id !== user?.sub) : [...(p.likes || []), user?.sub] } : p));
+      setPosts(prev => prev.map(p => p._id === postId ? { 
+        ...p, 
+        likes: p.likes?.includes(user?.sub) 
+          ? p.likes.filter(id => id !== user?.sub) 
+          : [...(p.likes || []), user?.sub] 
+      } : p));
       
-      // Backend expects POST based on console errors
-      await axios.post(`${API_URL}/api/posts/${postId}/like`, {}, { headers: { Authorization: `Bearer ${token}` } });
-    } catch (err) { fetchPosts(); }
+      await axios.post(`${API_URL}/api/posts/${postId}/like`, {}, { 
+        headers: { Authorization: `Bearer ${token}` } 
+      });
+    } catch (err) { 
+      console.error("Like failed");
+      fetchPosts(); 
+    }
   };
 
-  // --- পোস্ট সাবমিট (FIXED: JSON instead of FormData to match common backends) ---
+  // --- পোস্ট সাবমিট (FIXED: Correct Path and FormData) ---
   const handlePostSubmit = async () => {
     if (!postText.trim() && !mediaFile) return;
     setIsSubmitting(true);
     try {
       const token = await getAccessTokenSilently();
       
-      // যদি আপনার ব্যাকএন্ডে ইমেজ হ্যান্ডলার (Multer) না থাকে, তবে এইভাবে অবজেক্ট আকারে ডাটা পাঠাতে হবে
-      const postData = {
-        text: postText,
-        isEncrypted: isEncrypted,
-        authorName: user?.name,
-        authorAvatar: user?.picture,
-        media: "", // আপাতত খালি, কারণ mediaFile হ্যান্ডেল করার জন্য স্টোরেজ প্রয়োজন
-        mediaType: "photo"
-      };
+      const formData = new FormData();
+      formData.append("text", postText);
+      formData.append("isEncrypted", isEncrypted);
+      if (mediaFile) {
+        formData.append("media", mediaFile); // "media" key matches backend upload.single("media")
+      }
 
-      const response = await axios.post(`${API_URL}/api/posts/create`, postData, {
+      // Path changed from /api/posts/create to /api/posts to match backend
+      const response = await axios.post(`${API_URL}/api/posts`, formData, {
         headers: { 
           Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json" 
+          "Content-Type": "multipart/form-data" 
         }
       });
 
       setPosts([response.data, ...posts]);
       setPostText(""); setMediaFile(null); setIsEncrypted(false); setIsPostModalOpen(false);
     } catch (err) { 
-        console.error("Transmission Failed:", err.response?.data); 
+        console.error("Transmission Failed:", err.response?.data || err.message); 
     } finally { 
         setIsSubmitting(false); 
     }
@@ -143,7 +150,7 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
           <h2 className="text-lg font-bold italic text-cyan-500 tracking-tighter uppercase">OnyxDrift</h2>
         </div>
         <div className="flex gap-4 items-center">
-            <FaSearch className="text-zinc-400" onClick={() => navigate('/search')} />
+            <FaSearch className="text-zinc-400 cursor-pointer" onClick={() => navigate('/search')} />
             <FaEnvelope className="text-zinc-500 cursor-pointer" onClick={() => navigate('/messenger')} />
             <FaBolt className="text-cyan-500 animate-pulse" />
         </div>
@@ -214,13 +221,13 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
                           {post.media && (post.media.match(/\.(mp4|webm|mov)$/i) ? <CompactVideo src={post.media} /> : <img src={post.media} className="mt-3 rounded-2xl border border-white/5 w-full max-h-[500px] object-cover" alt="" />)}
                           <div className="flex items-center justify-between mt-5 px-1 text-zinc-500">
                               <div className="flex gap-6">
-                                <button onClick={() => handleLike(post._id)} className={`flex items-center gap-2 ${post.likes?.includes(user?.sub) ? 'text-rose-500' : 'hover:text-rose-500'}`}>
+                                <button onClick={() => handleLike(post._id)} className={`flex items-center gap-2 transition-colors ${post.likes?.includes(user?.sub) ? 'text-rose-500' : 'hover:text-rose-500'}`}>
                                   {post.likes?.includes(user?.sub) ? <FaHeart size={16} /> : <FaRegHeart size={16} />}
                                   <span className="text-[11px] font-bold">{post.likes?.length || 0}</span>
                                 </button>
-                                <button onClick={() => setActiveCommentPost(post)} className="hover:text-cyan-400 flex items-center gap-2"><FaRegComment size={16} /><span className="text-[11px] font-bold">{post.comments?.length || 0}</span></button>
+                                <button onClick={() => setActiveCommentPost(post)} className="hover:text-cyan-400 flex items-center gap-2 transition-colors"><FaRegComment size={16} /><span className="text-[11px] font-bold">{post.comments?.length || 0}</span></button>
                               </div>
-                              <button onClick={() => navigator.share?.({url: window.location.href})} className="p-2 bg-zinc-900/50 rounded-lg hover:text-cyan-400"><FaShareAlt size={14} /></button>
+                              <button onClick={() => navigator.share?.({url: window.location.href, title: 'OnyxDrift Post'})} className="p-2 bg-zinc-900/50 rounded-lg hover:text-cyan-400 transition-colors"><FaShareAlt size={14} /></button>
                           </div>
                         </div>
                       </div>
@@ -285,7 +292,7 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
               <div className="flex-1 overflow-y-auto space-y-4 pr-1 no-scrollbar text-left">
                 {activeCommentPost.comments?.map((c, i) => (
                   <div key={i} className="flex gap-3 items-start">
-                    <img src={c.userPicture} className="w-8 h-8 rounded-full border border-white/10" alt="" />
+                    <img src={c.userAvatar || c.userPicture} className="w-8 h-8 rounded-full border border-white/10" alt="" />
                     <div className="bg-white/5 p-3 rounded-2xl flex-1 border border-white/[0.03]">
                       <p className="text-cyan-500 font-bold text-[11px]">{c.userName}</p>
                       <p className="text-xs text-gray-300">{c.text}</p>
@@ -299,9 +306,15 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
                 <button onClick={async () => {
                    if(!commentText.trim()) return;
                    const token = await getAccessTokenSilently();
-                   const res = await axios.post(`${API_URL}/api/posts/${activeCommentPost._id}/comment`, { text: commentText, userPicture: user?.picture, userName: user?.name }, { headers: { Authorization: `Bearer ${token}` } });
+                   const res = await axios.post(`${API_URL}/api/posts/${activeCommentPost._id}/comment`, { 
+                     text: commentText, 
+                     userPicture: user?.picture, 
+                     userName: user?.name 
+                   }, { headers: { Authorization: `Bearer ${token}` } });
+                   
                    setPosts(posts.map(p => p._id === activeCommentPost._id ? res.data : p));
-                   setActiveCommentPost(res.data); setCommentText("");
+                   setActiveCommentPost(res.data); 
+                   setCommentText("");
                 }} className="bg-cyan-500 text-black p-2.5 rounded-xl"><FaPaperPlane size={12}/></button>
               </div>
             </motion.div>
@@ -310,7 +323,14 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
       </AnimatePresence>
 
       {/* Floating Bolt Button */}
-      <motion.button whileHover={{ scale: 1.1, rotate: 5 }} whileTap={{ scale: 0.9 }} onClick={() => setIsPostModalOpen(true)} className="fixed bottom-24 right-6 w-14 h-14 bg-cyan-500 text-black rounded-2xl flex items-center justify-center shadow-[0_0_20px_rgba(6,182,212,0.4)] z-[100]"><FaBolt size={20} /></motion.button>
+      <motion.button 
+        whileHover={{ scale: 1.1, rotate: 5 }} 
+        whileTap={{ scale: 0.9 }} 
+        onClick={() => setIsPostModalOpen(true)} 
+        className="fixed bottom-24 right-6 w-14 h-14 bg-cyan-500 text-black rounded-2xl flex items-center justify-center shadow-[0_0_20px_rgba(6,182,212,0.4)] z-[100]"
+      >
+        <FaBolt size={20} />
+      </motion.button>
     </div>
   );
 };
