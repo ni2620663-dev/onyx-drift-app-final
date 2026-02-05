@@ -39,6 +39,7 @@ router.post("/ai-analyze", async (req, res) => {
     const result = await model.generateContent(prompt);
     res.json({ analysis: result.response.text() });
   } catch (error) {
+    console.error("Gemini Error:", error);
     res.status(500).json({ analysis: "Connection to neural core lost." });
   }
 });
@@ -57,7 +58,7 @@ const storage = new CloudinaryStorage({
 
 const upload = multer({ 
   storage,
-  limits: { fileSize: 100 * 1024 * 1024 } 
+  limits: { fileSize: 100 * 1024 * 1024 } // 100MB limit
 });
 
 /* ==========================================================
@@ -70,7 +71,6 @@ router.get("/", async (req, res) => {
       .limit(30)
       .lean();
     
-    // Default values if fields are missing
     const safePosts = posts.map(post => ({
       ...post,
       authorName: post.authorName || "Unknown Drifter",
@@ -87,40 +87,29 @@ router.get("/", async (req, res) => {
 });
 
 /* ==========================================================
-    📺 2. GET ALL REELS (Video Only Feed)
-========================================================== */
-router.get("/reels/all", async (req, res) => {
-  try {
-    const reels = await Post.find({ 
-      mediaType: { $in: ["video", "reel"] } 
-    })
-    .sort({ createdAt: -1 })
-    .lean();
-
-    res.json(reels);
-  } catch (err) {
-    res.status(500).json({ msg: "Failed to fetch neural reels" });
-  }
-});
-
-/* ==========================================================
-    🚀 3. CREATE POST & TRIGGER NEURAL AI
+    🚀 2. CREATE POST & TRIGGER NEURAL AI
 ========================================================== */
 router.post("/", auth, upload.single("media"), async (req, res) => {
   try {
-    if (!req.file) {
-      return res.status(400).json({ msg: "No media file detected." });
+    // টেক্সট এবং মিডিয়া ফাইল উভয়ই না থাকলে এরর দিবে
+    if (!req.body.text && !req.file) {
+      return res.status(400).json({ msg: "Empty transmission blocked. Add text or media." });
     }
 
     const currentUserId = req.user?.sub || req.user?.id;
     const userProfile = await User.findOne({ auth0Id: currentUserId }).lean();
 
-    // Type detection logic
-    const isVideo = req.file.mimetype.startsWith("video");
-    let detectedType = isVideo ? "video" : "image";
-    
-    if (req.body.type === "story" || req.body.isStory === "true") detectedType = "story";
-    else if ((req.body.type === "reel" || req.body.isReel === "true") && isVideo) detectedType = "reel";
+    // মিডিয়া প্রসেসিং
+    let mediaUrl = req.file ? req.file.path : "";
+    let detectedType = "text";
+
+    if (req.file) {
+      const isVideo = req.file.mimetype.startsWith("video");
+      detectedType = isVideo ? "video" : "image";
+      
+      if (req.body.type === "story" || req.body.isStory === "true") detectedType = "story";
+      else if ((req.body.type === "reel" || req.body.isReel === "true") && isVideo) detectedType = "reel";
+    }
 
     const postData = {
       author: currentUserId,
@@ -128,7 +117,7 @@ router.post("/", auth, upload.single("media"), async (req, res) => {
       authorName: userProfile?.name || req.user?.name || "Drifter",
       authorAvatar: userProfile?.avatar || req.user?.picture || "",
       text: req.body.text || "",
-      media: req.file.path, 
+      media: mediaUrl, 
       mediaType: detectedType,
       isEncrypted: req.body.isEncrypted === "true",
       likes: [],
@@ -138,9 +127,9 @@ router.post("/", auth, upload.single("media"), async (req, res) => {
 
     const post = await Post.create(postData);
 
-    // 🤖 Background Neural Identity Processing
+    // AI প্রসেসিং ব্যাকগ্রাউন্ডে চলবে
     if (post.text) {
-        processNeuralIdentity(currentUserId, post.text).catch(e => console.log("AI Task Error"));
+      processNeuralIdentity(currentUserId, post.text).catch(e => console.log("AI Task Error"));
     }
 
     res.status(201).json(post);
@@ -151,7 +140,7 @@ router.post("/", auth, upload.single("media"), async (req, res) => {
 });
 
 /* ==========================================================
-    ❤️ 4. LIKE / UNLIKE SYSTEM
+    ❤️ 3. LIKE / UNLIKE SYSTEM
 ========================================================== */
 router.post("/:id/like", auth, async (req, res) => {
   try {
@@ -172,7 +161,7 @@ router.post("/:id/like", auth, async (req, res) => {
 });
 
 /* ==========================================================
-    ⚡ 5. RANK UP (Neural Pulse)
+    ⚡ 4. RANK UP (Neural Pulse)
 ========================================================== */
 router.post("/:id/rank-up", auth, async (req, res) => {
   try {
@@ -180,7 +169,7 @@ router.post("/:id/rank-up", auth, async (req, res) => {
     const post = await Post.findById(req.params.id);
     if (!post) return res.status(404).json({ msg: "Post not found" });
 
-    if (post.rankClicks.includes(userId)) {
+    if (post.rankClicks?.includes(userId)) {
       return res.status(400).json({ msg: "Neural Pulse already sent!" });
     }
 
@@ -193,7 +182,6 @@ router.post("/:id/rank-up", auth, async (req, res) => {
     const clickCount = updatedPost.rankClicks.length;
     let rankIncreased = false;
 
-    // Every 10 pulses increase user rank
     if (clickCount > 0 && clickCount % 10 === 0) {
       await User.findOneAndUpdate(
         { auth0Id: updatedPost.authorAuth0Id },
@@ -214,7 +202,7 @@ router.post("/:id/rank-up", auth, async (req, res) => {
 });
 
 /* ==========================================================
-    💬 6. ADD COMMENT
+    💬 5. ADD COMMENT
 ========================================================== */
 router.post("/:id/comment", auth, async (req, res) => {
     try {
@@ -242,10 +230,10 @@ router.post("/:id/comment", auth, async (req, res) => {
     } catch (err) {
       res.status(500).json({ msg: "Comment Failure" });
     }
-  });
+});
 
 /* ==========================================================
-    🗑️ 7. DELETE POST
+    🗑️ 6. DELETE POST
 ========================================================== */
 router.delete("/:id", auth, async (req, res) => {
   try {
@@ -264,7 +252,7 @@ router.delete("/:id", auth, async (req, res) => {
 });
 
 /* ==========================================================
-    ✅ 8. GET POSTS BY USER ID
+    ✅ 7. GET POSTS BY USER ID
 ========================================================== */
 router.get("/user/:userId", async (req, res) => {
   try {
@@ -273,7 +261,7 @@ router.get("/user/:userId", async (req, res) => {
       $or: [{ authorAuth0Id: targetId }, { author: targetId }]
     }).sort({ createdAt: -1 }).lean();
 
-    res.json(userPosts);
+    res.json(userPosts || []);
   } catch (err) {
     res.status(500).json({ msg: "Neural signal lost" });
   }

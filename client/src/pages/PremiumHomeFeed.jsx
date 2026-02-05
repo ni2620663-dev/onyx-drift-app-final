@@ -14,8 +14,8 @@ import { useNavigate } from 'react-router-dom';
 import Marketplace from "./Marketplace"; 
 import Notification from "./Notifications";
 import Settings from "./Settings";
-import PostCard from "../components/PostCard";
-// --- উন্নত ভিডিও কম্পোনেন্ট (Auto Play on Scroll) ---
+
+// --- উন্নত ভিডিও কম্পোনেন্ট ---
 const CompactVideo = ({ src, onVideoClick }) => {
   const videoRef = useRef(null);
   const [isMuted, setIsMuted] = useState(true);
@@ -73,7 +73,11 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
       setLoading(true);
       const response = await axios.get(`${API_URL}/api/posts`);
       setPosts(response.data);
-    } catch (err) { console.error("Fetch Error"); } finally { setLoading(false); }
+    } catch (err) { 
+      console.error("Neural Fetch Error"); 
+    } finally { 
+      setLoading(false); 
+    }
   };
 
   useEffect(() => {
@@ -88,42 +92,45 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
     return list;
   }, [posts, activeFilter]);
 
-  // --- লাইক হ্যান্ডলার ---
+  // --- লাইক হ্যান্ডলার (Optimized) ---
   const handleLike = async (postId) => {
+    const userId = user?.sub;
+    if (!userId) return;
+
+    // Optimistic UI Update
+    setPosts(prev => prev.map(p => {
+      if (p._id === postId) {
+        const isLiked = p.likes?.includes(userId);
+        return {
+          ...p,
+          likes: isLiked ? p.likes.filter(id => id !== userId) : [...(p.likes || []), userId]
+        };
+      }
+      return p;
+    }));
+
     try {
       const token = await getAccessTokenSilently();
-      // Optimistic UI update
-      setPosts(prev => prev.map(p => p._id === postId ? { 
-        ...p, 
-        likes: p.likes?.includes(user?.sub) 
-          ? p.likes.filter(id => id !== user?.sub) 
-          : [...(p.likes || []), user?.sub] 
-      } : p));
-      
       await axios.post(`${API_URL}/api/posts/${postId}/like`, {}, { 
         headers: { Authorization: `Bearer ${token}` } 
       });
     } catch (err) { 
-      console.error("Like failed");
-      fetchPosts(); 
+      console.error("Sync Failed");
+      fetchPosts(); // Error হলে ডাটাবেস থেকে ফ্রেশ ডাটা আনা
     }
   };
 
-  // --- পোস্ট সাবমিট (FIXED: Correct Path and FormData) ---
+  // --- পোস্ট সাবমিট ---
   const handlePostSubmit = async () => {
     if (!postText.trim() && !mediaFile) return;
     setIsSubmitting(true);
     try {
       const token = await getAccessTokenSilently();
-      
       const formData = new FormData();
       formData.append("text", postText);
       formData.append("isEncrypted", isEncrypted);
-      if (mediaFile) {
-        formData.append("media", mediaFile); // "media" key matches backend upload.single("media")
-      }
+      if (mediaFile) formData.append("media", mediaFile);
 
-      // Path changed from /api/posts/create to /api/posts to match backend
       const response = await axios.post(`${API_URL}/api/posts`, formData, {
         headers: { 
           Authorization: `Bearer ${token}`,
@@ -131,12 +138,33 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
         }
       });
 
-      setPosts([response.data, ...posts]);
-      setPostText(""); setMediaFile(null); setIsEncrypted(false); setIsPostModalOpen(false);
+      setPosts(prev => [response.data, ...prev]);
+      setPostText(""); 
+      setMediaFile(null); 
+      setIsEncrypted(false); 
+      setIsPostModalOpen(false);
     } catch (err) { 
-        console.error("Transmission Failed:", err.response?.data || err.message); 
+        console.error("Transmission Failure:", err.response?.data?.msg || "Network Error"); 
     } finally { 
         setIsSubmitting(false); 
+    }
+  };
+
+  // --- কমেন্ট সাবমিট ---
+  const handleCommentSubmit = async () => {
+    if(!commentText.trim() || !activeCommentPost) return;
+    try {
+      const token = await getAccessTokenSilently();
+      const res = await axios.post(`${API_URL}/api/posts/${activeCommentPost._id}/comment`, { 
+        text: commentText 
+      }, { headers: { Authorization: `Bearer ${token}` } });
+      
+      // আপডেট পোস্ট লিস্ট
+      setPosts(prev => prev.map(p => p._id === activeCommentPost._id ? res.data : p));
+      setActiveCommentPost(res.data); 
+      setCommentText("");
+    } catch (err) {
+      console.error("Comment failed to sync");
     }
   };
 
@@ -190,7 +218,6 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
               {['Global', 'Encrypted', 'Resonance'].map((f) => (
                 <button key={f} onClick={() => setActiveFilter(f)} className={`px-5 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${activeFilter === f ? 'bg-cyan-500 text-black shadow-[0_0_15px_#06b6d4]' : 'bg-white/5 text-zinc-500 hover:text-white'}`}>
                   {f === 'Encrypted' && (userLevel < 3 ? <FaLock /> : <FaFingerprint />)}
-                  {f === 'Resonance' && <FaSatellite className="animate-pulse" />}
                   {f}
                 </button>
               ))}
@@ -210,15 +237,15 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
                   filteredPosts.map((post) => (
                     <div key={post._id} className="p-4 hover:bg-white/[0.01] transition-all">
                       <div className="flex gap-3">
-                        <img src={post.authorAvatar} className="w-11 h-11 rounded-2xl border border-white/10 object-cover" alt="" />
+                        <img src={post.authorAvatar || `https://ui-avatars.com/api/?name=${post.authorName}`} className="w-11 h-11 rounded-2xl border border-white/10 object-cover" alt="" />
                         <div className="flex-1">
                           <div className="flex items-center gap-2">
                             <span className="font-bold text-[14px] text-gray-200">{post.authorName}</span>
                             {post.isEncrypted && <FaFingerprint className="text-cyan-500 text-[10px]" />}
-                            <FaCheckCircle className="text-cyan-500/50 text-[10px]" />
                           </div>
                           <p className="text-sm text-gray-300 mt-1 leading-relaxed">{post.text}</p>
                           {post.media && (post.media.match(/\.(mp4|webm|mov)$/i) ? <CompactVideo src={post.media} /> : <img src={post.media} className="mt-3 rounded-2xl border border-white/5 w-full max-h-[500px] object-cover" alt="" />)}
+                          
                           <div className="flex items-center justify-between mt-5 px-1 text-zinc-500">
                               <div className="flex gap-6">
                                 <button onClick={() => handleLike(post._id)} className={`flex items-center gap-2 transition-colors ${post.likes?.includes(user?.sub) ? 'text-rose-500' : 'hover:text-rose-500'}`}>
@@ -292,7 +319,7 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
               <div className="flex-1 overflow-y-auto space-y-4 pr-1 no-scrollbar text-left">
                 {activeCommentPost.comments?.map((c, i) => (
                   <div key={i} className="flex gap-3 items-start">
-                    <img src={c.userAvatar || c.userPicture} className="w-8 h-8 rounded-full border border-white/10" alt="" />
+                    <img src={c.userAvatar || `https://ui-avatars.com/api/?name=${c.userName}`} className="w-8 h-8 rounded-full border border-white/10" alt="" />
                     <div className="bg-white/5 p-3 rounded-2xl flex-1 border border-white/[0.03]">
                       <p className="text-cyan-500 font-bold text-[11px]">{c.userName}</p>
                       <p className="text-xs text-gray-300">{c.text}</p>
@@ -302,20 +329,8 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
               </div>
               <div className="mt-4 flex gap-3 items-center bg-zinc-900/50 p-2 rounded-2xl border border-white/5">
                 <img src={user?.picture} className="w-8 h-8 rounded-full" alt="" />
-                <input value={commentText} onChange={(e) => setCommentText(e.target.value)} placeholder="Type response..." className="flex-1 bg-transparent outline-none text-xs text-gray-200" />
-                <button onClick={async () => {
-                   if(!commentText.trim()) return;
-                   const token = await getAccessTokenSilently();
-                   const res = await axios.post(`${API_URL}/api/posts/${activeCommentPost._id}/comment`, { 
-                     text: commentText, 
-                     userPicture: user?.picture, 
-                     userName: user?.name 
-                   }, { headers: { Authorization: `Bearer ${token}` } });
-                   
-                   setPosts(posts.map(p => p._id === activeCommentPost._id ? res.data : p));
-                   setActiveCommentPost(res.data); 
-                   setCommentText("");
-                }} className="bg-cyan-500 text-black p-2.5 rounded-xl"><FaPaperPlane size={12}/></button>
+                <input value={commentText} onChange={(e) => setCommentText(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && handleCommentSubmit()} placeholder="Type response..." className="flex-1 bg-transparent outline-none text-xs text-gray-200" />
+                <button onClick={handleCommentSubmit} className="bg-cyan-500 text-black p-2.5 rounded-xl transition-all hover:scale-105 active:scale-95"><FaPaperPlane size={12}/></button>
               </div>
             </motion.div>
           </div>

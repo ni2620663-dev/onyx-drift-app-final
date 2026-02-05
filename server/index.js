@@ -12,7 +12,7 @@ dotenv.config();
 import connectDB from "./config/db.js"; 
 connectDB();
 
-// রাউট ইম্পোর্ট (Gemini AI এখন postRoutes এর ভেতর আছে)
+// রাউট ইম্পোর্ট
 import userRoutes from './routes/user.js'; 
 import postRoutes from "./routes/posts.js";
 import messageRoutes from "./routes/messages.js";
@@ -20,8 +20,8 @@ import storyRoute from "./routes/stories.js";
 import reelRoutes from "./routes/reels.js"; 
 import profileRoutes from "./src/routes/profile.js";
 import groupRoutes from "./routes/group.js"; 
-import marketRoutes from "./routes/market.js"; // 🛒 নতুন মার্কেটপ্লেস রাউট
-import adminRoutes from "./routes/admin.js";   // 🛡️ নতুন অ্যাডমিন রাউট
+import marketRoutes from "./routes/market.js"; 
+import adminRoutes from "./routes/admin.js";   
 
 // 🛡️ Auth0 JWT ভেরিফিকেশন মিডলওয়্যার
 const checkJwt = auth({
@@ -30,6 +30,7 @@ const checkJwt = auth({
   tokenSigningAlg: 'RS256'
 });
 
+// Cloudinary Config
 cloudinary.config({ 
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME, 
   api_key: process.env.CLOUDINARY_API_KEY, 
@@ -39,7 +40,7 @@ cloudinary.config({
 const app = express();
 const server = http.createServer(app);
 
-// ৩. CORS কনফিগারেশন
+// ৩. CORS কনফিগারেশন (উন্নত ও ফ্লেক্সিবল)
 const allowedOrigins = [
     "http://localhost:5173", 
     "https://onyx-drift-app-final.onrender.com",
@@ -50,6 +51,7 @@ const allowedOrigins = [
 
 const corsOptions = {
     origin: function (origin, callback) {
+        // origin না থাকলেও এলাউ করা (যেমন কিছু মোবাইল ব্রাউজার বা টুলস)
         if (!origin || allowedOrigins.includes(origin)) {
             callback(null, true);
         } else {
@@ -62,10 +64,12 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-app.use(express.json({ limit: "50mb" }));
-app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
-// ৪. সকেট আইও কনফিগারেশন
+// ৪. বডি পার্সার লিমিট (বড় ইমেজ বা ভিডিওর জন্য ৫০এমবি থেকে বাড়িয়ে ১০০এমবি করা হয়েছে)
+app.use(express.json({ limit: "100mb" }));
+app.use(express.urlencoded({ limit: "100mb", extended: true }));
+
+// ৫. সকেট আইও কনফিগারেশন
 const io = new Server(server, {
     cors: corsOptions,
     transports: ['polling', 'websocket'], 
@@ -74,23 +78,22 @@ const io = new Server(server, {
     pingInterval: 25000
 });
 
-// ৫. Redis Setup
+// ৬. Redis Setup
 const redis = process.env.REDIS_URL ? new Redis(process.env.REDIS_URL, {
     maxRetriesPerRequest: null,
     enableReadyCheck: false
 }) : null;
 
-// ৬. এপিআই রাউটস (পোস্ট রাউটের ভেতরেই AI Analyze কাজ করবে)
-app.use("/api/user", userRoutes);     
-app.use("/api/posts", postRoutes); 
+// ৭. এপিআই রাউটস
+app.use("/api/user", userRoutes);      
+app.use("/api/posts", postRoutes);  
 app.use("/api/profile", profileRoutes); 
 app.use("/api/stories", storyRoute);
 app.use("/api/reels", reelRoutes); 
-
-// নতুন মার্কেটপ্লেস এবং অ্যাডমিন API
 app.use("/api/market", marketRoutes); 
 app.use("/api/admin", adminRoutes); 
 
+// সুরক্ষিত রাউটস
 app.use("/api/messages", checkJwt, messageRoutes); 
 app.use("/api/groups", checkJwt, groupRoutes); 
 
@@ -125,15 +128,17 @@ io.on("connection", (socket) => {
         }
     });
 
-    // --- নোটিফিকেশন লজিক (মার্কেটপ্লেস ও পেমেন্টের জন্য) ---
+    // --- নোটিফিকেশন লজিক ---
     socket.on("sendNotification", (data) => {
         const { receiverId, message, type } = data;
-        io.to(receiverId).emit("getNotification", {
-            senderName: data.senderName,
-            type: type,
-            message: message,
-            image: data.image
-        });
+        if (receiverId) {
+            io.to(receiverId).emit("getNotification", {
+                senderName: data.senderName,
+                type: type,
+                message: message,
+                image: data.image
+            });
+        }
     });
 
     socket.on("joinGroup", (groupId) => {
@@ -141,7 +146,7 @@ io.on("connection", (socket) => {
     });
 
     /* ==========================================================
-        📞 কলিং ইঞ্জিন (P2P & Group)
+        📞 কলিং ইঞ্জিন
     ========================================================== */
     socket.on("initiateCall", (data) => {
         const { roomId, receiverId, callerName, type } = data;
@@ -187,6 +192,7 @@ io.on("connection", (socket) => {
     });
 });
 
+// ৮. সার্ভার স্টার্ট
 const PORT = process.env.PORT || 10000;
 server.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Core Active on Port: ${PORT}`);
