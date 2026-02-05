@@ -11,11 +11,9 @@ import {
   FaWaveSquare, FaTrophy, FaMedal, FaLeaf, FaGem, FaCompass, FaWind, FaHandsHelping
 } from "react-icons/fa";
 import { HiBolt } from "react-icons/hi2";
-import { LineChart, Line, ResponsiveContainer, Tooltip, XAxis, AreaChart, Area } from "recharts";
 import PostCard from "../components/PostCard";
 import toast from "react-hot-toast";
-import NeuralStats from "../components/NeuralStats";
-import NeuralForge from "../components/NeuralForge"; // নিশ্চিত করো এই ফাইলটি তোমার components ফোল্ডারে আছে
+import NeuralForge from "../components/NeuralForge"; 
 
 // --- 🧘 ZenMissionHub Component ---
 const ZenMissionHub = () => {
@@ -51,7 +49,7 @@ const ZenMissionHub = () => {
 
   return (
     <div className="py-2">
-      <div className="mb-10">
+      <div className="mb-10 px-2">
         <h2 className="text-2xl font-black italic uppercase text-white tracking-tighter flex items-center gap-3">
             <FaCompass className="text-cyan-500" /> Zen Missions
         </h2>
@@ -98,13 +96,6 @@ const ZenMissionHub = () => {
           </motion.div>
         ))}
       </div>
-
-      <div className="mt-12 p-8 bg-zinc-900/30 border-2 border-dashed border-zinc-800 rounded-[40px] text-center">
-          <FaBolt className="text-yellow-500 mx-auto mb-4 opacity-50" size={24}/>
-          <p className="text-xs font-bold text-zinc-500 uppercase tracking-widest leading-loose">
-            High-quality interactions increase your <span className="text-white">Neural Resonance</span>. 
-          </p>
-      </div>
     </div>
   );
 };
@@ -131,7 +122,7 @@ const GlobalLeaderboard = ({ apiUrl }) => {
   if (loading) return <div className="text-center py-10 animate-pulse text-cyan-500 font-black uppercase tracking-widest">Scanning Global Nodes...</div>;
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4 px-2">
       <div className="flex items-center gap-3 mb-6">
         <FaTrophy className="text-yellow-400" size={24} />
         <h2 className="text-xl font-black italic uppercase text-white tracking-tighter">Top Drifters</h2>
@@ -205,6 +196,7 @@ const GenesisCard = ({ userData }) => {
   );
 };
 
+// --- 👤 Main Profile Component ---
 const Profile = () => {
   const { userId } = useParams(); 
   const navigate = useNavigate();
@@ -219,11 +211,11 @@ const Profile = () => {
   const [vaultUnlocked, setVaultUnlocked] = useState(false);
   const [editData, setEditData] = useState({ nickname: '', bio: '' });
 
-  const API_URL = (import.meta.env.VITE_API_BASE_URL || "https://onyx-drift-app-final.onrender.com").replace(/\/$/, "");
+  const API_URL = "https://onyx-drift-app-final-u29m.onrender.com";
   const isOwnProfile = !userId || userId === currentUser?.sub;
   
   const hasNeonAura = userProfile?.profileSettings?.activeAura === 'cyan_glow';
-  const hasVerifiedBadge = userProfile?.unlockedAssets?.includes('genesis_badge');
+  const hasVerifiedBadge = userProfile?.isVerified;
 
   const fetchProfileData = async () => {
     try {
@@ -231,7 +223,7 @@ const Profile = () => {
       const token = await getAccessTokenSilently();
       const targetId = encodeURIComponent(userId || currentUser?.sub);
       
-      const res = await axios.get(`${API_URL}/api/user/profile/${targetId}`, { 
+      const res = await axios.get(`${API_URL}/api/users/profile/${targetId}`, { 
         headers: { Authorization: `Bearer ${token}` } 
       });
 
@@ -254,25 +246,11 @@ const Profile = () => {
   const handleUpdateProfile = async () => {
     try {
       const token = await getAccessTokenSilently();
-      await axios.put(`${API_URL}/api/user/profile/update`, editData, {
+      await axios.put(`${API_URL}/api/users/profile/update`, editData, {
         headers: { Authorization: `Bearer ${token}` }
       });
       toast.success("Identity Reshaped! 🧬");
       setIsEditOpen(false);
-      fetchProfileData();
-    } catch (err) {
-      toast.error("Sync Failed");
-    }
-  };
-
-  const handleEquipAsset = async (assetId, type) => {
-    try {
-      const token = await getAccessTokenSilently();
-      await axios.put(`${API_URL}/api/user/equip-asset`, 
-        { assetId, type }, 
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      toast.success("Neural Asset Equipped!");
       fetchProfileData();
     } catch (err) {
       toast.error("Sync Failed");
@@ -300,15 +278,15 @@ const Profile = () => {
         <div className="absolute inset-0 bg-gradient-to-t from-[#020617] via-transparent to-transparent" />
       </div>
 
-      <div className="max-w-4xl mx-auto px-4 -mt-24 relative z-20 pb-20">
+      <div className="max-w-4xl mx-auto px-4 -mt-24 relative z-20 pb-24">
         
         {/* Profile Header */}
-        <div className="relative group p-8 bg-slate-900/40 border border-white/10 rounded-[3rem] backdrop-blur-3xl shadow-2xl mb-8">
+        <div className="relative group p-6 md:p-8 bg-slate-900/40 border border-white/10 rounded-[3rem] backdrop-blur-3xl shadow-2xl mb-8">
           <div className="flex flex-col md:flex-row items-center gap-8">
             <div className="relative">
               <div className={`absolute -inset-4 rounded-full blur-2xl z-[-1] transition-opacity duration-1000 ${hasNeonAura ? 'bg-cyan-500/40 opacity-100' : 'bg-cyan-500/10 opacity-50'}`} />
               
-              <div className={`w-32 h-32 md:w-40 md:h-40 rounded-[2.5rem] p-1 bg-gradient-to-tr from-cyan-500 via-purple-500 to-pink-500 ${hasNeonAura ? 'animate-spin-slow' : ''}`}>
+              <div className="w-32 h-32 md:w-40 md:h-40 rounded-[2.5rem] p-1 bg-gradient-to-tr from-cyan-500 via-purple-500 to-pink-500">
                 <div className="w-full h-full rounded-[2.4rem] bg-[#020617] p-1 overflow-hidden">
                   <img 
                     src={userProfile?.avatar || currentUser?.picture} 
@@ -336,7 +314,7 @@ const Profile = () => {
                   <FaBrain className="animate-pulse" /> AI Twin: {userProfile?.aiPersona || "Evolving"}
                 </span>
                 <span className="px-4 py-1.5 rounded-full bg-white/5 border border-white/10 text-zinc-400 text-[10px] font-bold uppercase tracking-widest">
-                  {userProfile?.neuralImpact > 1500 ? "Architect" : userProfile?.neuralImpact > 500 ? "Drifter" : "Novice"} 
+                  {userProfile?.drifterLevel || "Novice Drifter"}
                 </span>
               </div>
             </div>
@@ -356,7 +334,7 @@ const Profile = () => {
         </div>
 
         {/* Tab Selection */}
-        <div className="flex gap-8 mb-8 border-b border-white/5 px-2 overflow-x-auto no-scrollbar">
+        <div className="flex gap-8 mb-8 border-b border-white/5 px-2 overflow-x-auto no-scrollbar scroll-smooth">
           {[
             { name: "Identity", icon: <FaFingerprint /> },
             { name: "Missions", icon: <FaCompass /> },
@@ -385,8 +363,8 @@ const Profile = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="bg-zinc-900/40 border border-white/5 p-6 rounded-[35px] backdrop-blur-md">
                       <FaShieldAlt className="text-purple-500 mb-4" size={22} />
-                      <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Trust Score</p>
-                      <p className="text-3xl font-black italic text-white mt-1">98.2%</p>
+                      <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Neural Integrity</p>
+                      <p className="text-3xl font-black italic text-white mt-1">{userProfile?.syncRate || 85}%</p>
                   </div>
                   <div className="bg-zinc-900/40 border border-white/5 p-6 rounded-[35px] backdrop-blur-md">
                       <FaGem className="text-cyan-500 mb-4" size={22} />
@@ -427,9 +405,10 @@ const Profile = () => {
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                    <div className="md:col-span-2"><GenesisCard userData={userProfile} /></div>
-                   <motion.div onClick={() => setVaultUnlocked(!vaultUnlocked)} className={`p-6 rounded-[2.5rem] border transition-all duration-700 cursor-pointer ${vaultUnlocked ? 'bg-purple-600/10 border-purple-500/40' : 'bg-slate-900/40 border-white/5'}`}>
-                      <FaFingerprint size={32} className={vaultUnlocked ? "text-purple-400" : "text-zinc-700"} />
-                      <p className="text-[10px] font-black text-white uppercase mt-4 italic">Memory Vault</p>
+                   <motion.div onClick={() => setVaultUnlocked(!vaultUnlocked)} className={`p-6 rounded-[2.5rem] border transition-all duration-700 cursor-pointer flex flex-col items-center justify-center ${vaultUnlocked ? 'bg-purple-600/10 border-purple-500/40 shadow-[0_0_30px_rgba(168,85,247,0.2)]' : 'bg-slate-900/40 border-white/5'}`}>
+                      <FaFingerprint size={32} className={vaultUnlocked ? "text-purple-400 animate-pulse" : "text-zinc-700"} />
+                      <p className="text-[10px] font-black text-white uppercase mt-4 italic tracking-widest text-center">Memory Vault</p>
+                      <span className="text-[8px] text-zinc-600 mt-2 uppercase font-bold">{vaultUnlocked ? 'Access Granted' : 'Locked'}</span>
                    </motion.div>
                 </div>
               </motion.div>
@@ -446,7 +425,7 @@ const Profile = () => {
                 {userPosts.length > 0 ? (
                   userPosts.map((post) => <PostCard key={post._id} post={post} onAction={fetchProfileData} />)
                 ) : (
-                  <div className="text-center py-20 text-zinc-700 uppercase italic">Zero Signals Detected</div>
+                  <div className="text-center py-20 text-zinc-700 uppercase italic tracking-widest font-black">Zero Signals Detected</div>
                 )}
               </motion.div>
             )}
@@ -460,37 +439,36 @@ const Profile = () => {
                     <video src={reel.media} className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all" muted onMouseOver={e => e.target.play()} onMouseOut={e => e.target.pause()} />
                   </div>
                 ))}
+                {userReels.length === 0 && <div className="col-span-full text-center py-20 text-zinc-700 uppercase italic font-black">No Reels Found</div>}
               </motion.div>
             )}
 
             {activeTab === "Assets" && (
               <motion.div key="assets" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-8">
-                
                 {/* --- Neural Level Display --- */}
                 <div className="p-8 bg-gradient-to-br from-cyan-900/20 to-purple-900/10 border border-white/5 rounded-[40px] flex flex-col md:flex-row justify-between items-center gap-6">
-                  <div>
+                  <div className="text-center md:text-left">
                     <p className="text-[10px] font-black text-cyan-500 uppercase tracking-[0.4em]">Current Evolution</p>
-                    <h2 className="text-4xl font-black italic text-white uppercase tracking-tighter mt-1">
-                      {userProfile?.neuralImpact > 1500 ? "Architect" : userProfile?.neuralImpact > 500 ? "Drifter" : "Novice"} 
-                      <span className="text-zinc-600 ml-2 text-2xl">LVL {Math.floor((userProfile?.neuralImpact || 0) / 500) + 1}</span>
+                    <h2 className="text-3xl md:text-4xl font-black italic text-white uppercase tracking-tighter mt-1">
+                      {userProfile?.drifterLevel || "Novice Drifter"}
+                      <span className="text-zinc-600 ml-2 text-xl md:text-2xl font-mono">LVL {userProfile?.neuralRank || 1}</span>
                     </h2>
                   </div>
                   <div className="w-full md:w-64">
-                    <div className="flex justify-between text-[8px] font-black text-zinc-500 uppercase mb-2">
-                        <span>Progress to Next Rank</span>
-                        <span>{userProfile?.neuralImpact % 500} / 500</span>
+                    <div className="flex justify-between text-[8px] font-black text-zinc-500 uppercase mb-2 tracking-widest">
+                        <span>Rank Progress</span>
+                        <span>{userProfile?.neuralImpact % 1000} / 1000</span>
                     </div>
                     <div className="h-1.5 w-full bg-black/40 rounded-full overflow-hidden border border-white/5">
                         <motion.div 
                           initial={{ width: 0 }}
-                          animate={{ width: `${(userProfile?.neuralImpact % 500) / 5}%` }}
+                          animate={{ width: `${(userProfile?.neuralImpact % 1000) / 10}%` }}
                           className="h-full bg-cyan-500 shadow-[0_0_15px_#06b6d4]"
                         />
                     </div>
                   </div>
                 </div>
 
-                {/* --- The Forge --- */}
                 <NeuralForge 
                   userImpact={userProfile?.neuralImpact || 0} 
                   onPurchase={(item) => {
@@ -498,22 +476,6 @@ const Profile = () => {
                     fetchProfileData();
                   }} 
                 />
-
-                {/* --- Inventory --- */}
-                <div className="mt-10">
-                  <h3 className="text-xs font-black text-zinc-500 uppercase tracking-widest mb-6 px-4">Your Inventory</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {userProfile?.unlockedAssets?.map((asset) => (
-                      <div key={asset} className="p-6 bg-white/5 border border-white/10 rounded-[2.5rem] flex justify-between items-center">
-                        <div className="flex items-center gap-4">
-                          <FaBoxOpen className="text-purple-400" />
-                          <p className="text-white font-black uppercase text-[10px] tracking-widest">{asset.replace('_', ' ')}</p>
-                        </div>
-                        <button onClick={() => handleEquipAsset(asset, 'aura')} className="px-5 py-2 rounded-xl text-[9px] font-black uppercase bg-cyan-500 text-black shadow-lg">Equip</button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
               </motion.div>
             )}
           </AnimatePresence>
@@ -523,8 +485,8 @@ const Profile = () => {
       {/* Identity Edit Modal */}
       <AnimatePresence>
         {isEditOpen && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-2xl">
-            <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} className="bg-[#0f172a] w-full max-w-md rounded-[3rem] p-10 border border-white/10 shadow-3xl">
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-black/90 backdrop-blur-2xl">
+            <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} className="bg-[#0f172a] w-full max-w-md rounded-[3rem] p-8 md:p-10 border border-white/10 shadow-3xl">
               <div className="flex justify-between items-center mb-8">
                 <h2 className="text-cyan-400 font-black uppercase italic tracking-tighter text-xl">Reshape Identity</h2>
                 <FaTimes className="cursor-pointer text-zinc-500 hover:text-white" onClick={() => setIsEditOpen(false)} />
@@ -534,18 +496,18 @@ const Profile = () => {
                   type="text" 
                   value={editData.nickname}
                   onChange={(e) => setEditData({...editData, nickname: e.target.value})}
-                  className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 text-sm outline-none focus:border-cyan-500 text-white" 
+                  className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 text-sm outline-none focus:border-cyan-500 text-white transition-all" 
                   placeholder="New Nickname..." 
                 />
                 <textarea 
                   value={editData.bio}
                   onChange={(e) => setEditData({...editData, bio: e.target.value})}
-                  className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 text-sm h-32 outline-none focus:border-cyan-500 text-white" 
+                  className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 text-sm h-32 outline-none focus:border-cyan-500 text-white resize-none transition-all" 
                   placeholder="Update Neural Bio..." 
                 />
                 <button 
                   onClick={handleUpdateProfile}
-                  className="w-full py-4 bg-cyan-500 hover:bg-cyan-400 text-black rounded-2xl font-black uppercase text-[10px] tracking-[0.2em]"
+                  className="w-full py-4 bg-cyan-500 hover:bg-cyan-400 text-black rounded-2xl font-black uppercase text-[10px] tracking-[0.2em] shadow-[0_0_20px_rgba(6,182,212,0.4)]"
                 >
                   Synchronize Node
                 </button>

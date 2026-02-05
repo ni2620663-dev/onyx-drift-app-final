@@ -1,15 +1,14 @@
 import express from 'express';
 const router = express.Router();
-import Post from '../models/Post.js'; // নিশ্চিত করুন ফাইলের এক্সটেনশন .js আছে
+import Post from '../models/Post.js'; 
 import authMiddleware from '../middleware/authMiddleware.js';
-import { GoogleGenerativeAI } from "@google/generative-ai"; // Gemini SDK
+import { GoogleGenerativeAI } from "@google/generative-ai"; 
 
 // Gemini Config
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 /* ==========================================================
-    🤖 AI Analysis Route (নতুন যোগ করা হয়েছে)
-    এন্ডপয়েন্ট: POST /api/posts/ai-analyze
+    🤖 AI Analysis Route
 ========================================================== */
 router.post("/ai-analyze", authMiddleware, async (req, res) => {
     const { text, authorName } = req.body;
@@ -37,12 +36,10 @@ router.post("/ai-analyze", authMiddleware, async (req, res) => {
 });
 
 /* ==========================================================
-    ১. সব রিলস গেট করা (এটি সবার উপরে রাখুন কনফ্লিক্ট এড়াতে)
-    এন্ডপয়েন্ট: GET /api/posts/reels/all
+    ১. সব রিলস গেট করা
 ========================================================== */
 router.get('/reels/all', async (req, res) => {
     try {
-        // রিলস এবং ভিডিও টাইপ পোস্টগুলো ফিল্টার করবে
         const reels = await Post.find({ 
             $or: [
                 { postType: 'reels' }, 
@@ -91,9 +88,9 @@ router.get('/user/:userId', authMiddleware, async (req, res) => {
 });
 
 /* ==========================================================
-    ৪. নতুন পোস্ট তৈরি করা
+    ৪. নতুন পোস্ট তৈরি করা (FIXED: Added '/create' path)
 ========================================================== */
-router.post('/', authMiddleware, async (req, res) => {
+router.post('/create', authMiddleware, async (req, res) => {
     try {
         const { text, media, mediaType, authorName, authorAvatar } = req.body;
         const currentUserId = req.user.sub || req.user.id; 
@@ -105,7 +102,8 @@ router.post('/', authMiddleware, async (req, res) => {
             authorName, 
             authorAvatar, 
             authorId: currentUserId,
-            authorAuth0Id: currentUserId 
+            authorAuth0Id: currentUserId,
+            likes: [] 
         });
 
         const savedPost = await newPost.save();
@@ -132,7 +130,8 @@ router.post('/reels', authMiddleware, async (req, res) => {
             authorName,
             authorAvatar,
             authorId: currentUserId,
-            authorAuth0Id: currentUserId
+            authorAuth0Id: currentUserId,
+            likes: []
         });
 
         const savedReel = await newReel.save();
@@ -151,15 +150,22 @@ router.put('/:id/like', authMiddleware, async (req, res) => {
         if (!post) return res.status(404).json({ message: "Post not found" });
 
         const userId = req.user.sub || req.user.id;
+
+        if (!Array.isArray(post.likes)) {
+            post.likes = [];
+        }
+
         if (post.likes.includes(userId)) {
             post.likes = post.likes.filter(id => id !== userId);
         } else {
             post.likes.push(userId);
         }
+
         await post.save();
         res.json(post);
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        console.error("Like Error:", err);
+        res.status(500).json({ message: "Internal Server Error", error: err.message });
     }
 });
 
