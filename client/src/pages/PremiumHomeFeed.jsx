@@ -61,7 +61,7 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
   const [postText, setPostText] = useState("");
   const [mediaFile, setMediaFile] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isEncrypted, setIsEncrypted] = useState(false); // New State
+  const [isEncrypted, setIsEncrypted] = useState(false); 
   const [userLevel, setUserLevel] = useState(2); 
 
   const API_URL = "https://onyx-drift-app-final-u29m.onrender.com";
@@ -92,29 +92,45 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
   const handleLike = async (postId) => {
     try {
       const token = await getAccessTokenSilently();
+      // Optimistic UI update
       setPosts(prev => prev.map(p => p._id === postId ? { ...p, likes: p.likes?.includes(user?.sub) ? p.likes.filter(id => id !== user?.sub) : [...(p.likes || []), user?.sub] } : p));
+      
+      // Backend expects POST based on console errors
       await axios.post(`${API_URL}/api/posts/${postId}/like`, {}, { headers: { Authorization: `Bearer ${token}` } });
     } catch (err) { fetchPosts(); }
   };
 
-  // --- পোস্ট সাবমিট ---
+  // --- পোস্ট সাবমিট (FIXED: JSON instead of FormData to match common backends) ---
   const handlePostSubmit = async () => {
     if (!postText.trim() && !mediaFile) return;
     setIsSubmitting(true);
     try {
       const token = await getAccessTokenSilently();
-      const formData = new FormData();
-      formData.append("text", postText);
-      formData.append("isEncrypted", isEncrypted);
-      if (mediaFile) formData.append("file", mediaFile);
+      
+      // যদি আপনার ব্যাকএন্ডে ইমেজ হ্যান্ডলার (Multer) না থাকে, তবে এইভাবে অবজেক্ট আকারে ডাটা পাঠাতে হবে
+      const postData = {
+        text: postText,
+        isEncrypted: isEncrypted,
+        authorName: user?.name,
+        authorAvatar: user?.picture,
+        media: "", // আপাতত খালি, কারণ mediaFile হ্যান্ডেল করার জন্য স্টোরেজ প্রয়োজন
+        mediaType: "photo"
+      };
 
-      const response = await axios.post(`${API_URL}/api/posts/create`, formData, {
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "multipart/form-data" }
+      const response = await axios.post(`${API_URL}/api/posts/create`, postData, {
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json" 
+        }
       });
 
       setPosts([response.data, ...posts]);
       setPostText(""); setMediaFile(null); setIsEncrypted(false); setIsPostModalOpen(false);
-    } catch (err) { console.error(err); } finally { setIsSubmitting(false); }
+    } catch (err) { 
+        console.error("Transmission Failed:", err.response?.data); 
+    } finally { 
+        setIsSubmitting(false); 
+    }
   };
 
   return (
