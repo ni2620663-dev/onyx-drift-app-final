@@ -116,35 +116,43 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
       });
     } catch (err) { 
       console.error("Sync Failed");
-      fetchPosts(); // Error হলে ডাটাবেস থেকে ফ্রেশ ডাটা আনা
+      fetchPosts(); 
     }
   };
 
-  // --- পোস্ট সাবমিট ---
+  // --- পোস্ট সাবমিট (FIXED VERSION) ---
   const handlePostSubmit = async () => {
     if (!postText.trim() && !mediaFile) return;
     setIsSubmitting(true);
+    
     try {
+      // টোকেন সংগ্রহের সময় অডিয়েন্স চেক নিশ্চিত করা জরুরি
       const token = await getAccessTokenSilently();
+      
       const formData = new FormData();
       formData.append("text", postText);
       formData.append("isEncrypted", isEncrypted);
-      if (mediaFile) formData.append("media", mediaFile);
+      if (mediaFile) {
+        formData.append("media", mediaFile);
+      }
 
       const response = await axios.post(`${API_URL}/api/posts`, formData, {
         headers: { 
           Authorization: `Bearer ${token}`,
-          "Content-Type": "multipart/form-data" 
+          // মাল্টিপার্ট ফর্মে ব্রাউজার অটো বাউন্ডারি সেট করবে, তাই ম্যানুয়ালি Content-Type না দিলেও চলে
         }
       });
 
-      setPosts(prev => [response.data, ...prev]);
-      setPostText(""); 
-      setMediaFile(null); 
-      setIsEncrypted(false); 
-      setIsPostModalOpen(false);
+      if (response.data) {
+        setPosts(prev => [response.data, ...prev]);
+        setPostText(""); 
+        setMediaFile(null); 
+        setIsEncrypted(false); 
+        setIsPostModalOpen(false);
+      }
     } catch (err) { 
-        console.error("Transmission Failure:", err.response?.data?.msg || "Network Error"); 
+        console.error("Transmission Failure:", err.response?.data || err.message);
+        alert(err.response?.data?.msg || "Unauthorized: Check your connection."); 
     } finally { 
         setIsSubmitting(false); 
     }
@@ -159,7 +167,6 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
         text: commentText 
       }, { headers: { Authorization: `Bearer ${token}` } });
       
-      // আপডেট পোস্ট লিস্ট
       setPosts(prev => prev.map(p => p._id === activeCommentPost._id ? res.data : p));
       setActiveCommentPost(res.data); 
       setCommentText("");
@@ -213,7 +220,6 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
       <section className="max-w-[550px] mx-auto border-x border-white/5 min-h-screen text-left">
         {activeTab === "home" && (
           <>
-            {/* Feed Tabs */}
             <div className="flex justify-center gap-2 py-4 border-b border-white/5 bg-black/50 backdrop-blur-md sticky top-14 z-50 px-4">
               {['Global', 'Encrypted', 'Resonance'].map((f) => (
                 <button key={f} onClick={() => setActiveFilter(f)} className={`px-5 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${activeFilter === f ? 'bg-cyan-500 text-black shadow-[0_0_15px_#06b6d4]' : 'bg-white/5 text-zinc-500 hover:text-white'}`}>
