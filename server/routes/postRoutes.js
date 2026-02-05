@@ -12,26 +12,20 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 ========================================================== */
 router.post("/ai-analyze", authMiddleware, async (req, res) => {
     const { text, authorName } = req.body;
-
     try {
         const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-
         const prompt = `
             System: You are 'Onyx Neural Analyst', a witty, futuristic, and mysterious AI for the Onyx Drift social network.
             Task: Analyze the post signal from drifter '${authorName}'.
             Post Content: "${text}"
-            Requirement: Give a reaction in max 15-20 words. Use cyberpunk slang (e.g., neural, signal, drift, echo, cyber, uplink). 
+            Requirement: Give a reaction in max 15-20 words. Use cyberpunk slang. 
             Be encouraging but maintain a cool AI persona.
         `;
-
         const result = await model.generateContent(prompt);
         const response = await result.response;
-        const aiText = response.text();
-
-        res.json({ analysis: aiText });
+        res.json({ analysis: response.text() });
     } catch (error) {
-        console.error("Gemini Error:", error);
-        res.status(500).json({ analysis: "Neural Link unstable. Could not parse signal." });
+        res.status(500).json({ analysis: "Neural Link unstable." });
     }
 });
 
@@ -46,53 +40,45 @@ router.get('/reels/all', async (req, res) => {
                 { mediaType: 'video' }
             ] 
         }).sort({ createdAt: -1 });
-        
         res.json(reels);
     } catch (err) {
-        console.error("Neural Reels Fetch Error:", err);
         res.status(500).json({ message: "Failed to fetch neural reels" });
     }
 });
 
 /* ==========================================================
-    ২. সব পোস্ট গেট করা (Public Feed)
+    ২. সব পোস্ট গেট করা
 ========================================================== */
 router.get('/', async (req, res) => {
     try {
         const posts = await Post.find().sort({ createdAt: -1 });
         res.json(posts);
     } catch (err) {
-        res.status(500).json({ message: "Server Error", error: err.message });
+        res.status(500).json({ message: "Server Error" });
     }
 });
 
 /* ==========================================================
-    ৩. নির্দিষ্ট ইউজারের পোস্ট গেট করা
+    ৩. নির্দিষ্ট ইউজারের পোস্ট
 ========================================================== */
 router.get('/user/:userId', authMiddleware, async (req, res) => {
     try {
         const targetId = decodeURIComponent(req.params.userId);
-        
         const posts = await Post.find({ 
-            $or: [
-                { authorId: targetId },
-                { authorAuth0Id: targetId }
-            ] 
+            $or: [ { authorId: targetId }, { authorAuth0Id: targetId } ] 
         }).sort({ createdAt: -1 });
-
         res.json(posts);
     } catch (err) {
-        console.error("Neural Fetch Error:", err);
         res.status(500).json({ message: "Failed to fetch user signals" });
     }
 });
 
 /* ==========================================================
-    ৪. নতুন পোস্ট তৈরি করা (FIXED: Added '/create' path)
+    ৪. নতুন পোস্ট তৈরি (FIXED: Added '/create')
 ========================================================== */
 router.post('/create', authMiddleware, async (req, res) => {
     try {
-        const { text, media, mediaType, authorName, authorAvatar } = req.body;
+        const { text, media, mediaType, authorName, authorAvatar, isEncrypted } = req.body;
         const currentUserId = req.user.sub || req.user.id; 
 
         const newPost = new Post({ 
@@ -103,48 +89,21 @@ router.post('/create', authMiddleware, async (req, res) => {
             authorAvatar, 
             authorId: currentUserId,
             authorAuth0Id: currentUserId,
+            isEncrypted: isEncrypted === true || isEncrypted === 'true',
             likes: [] 
         });
 
         const savedPost = await newPost.save();
         res.status(201).json(savedPost);
     } catch (err) {
-        res.status(400).json({ message: "Post creation failed", error: err.message });
+        res.status(400).json({ message: "Post creation failed" });
     }
 });
 
 /* ==========================================================
-    ৫. রিলস ভিডিও আপলোড করা
+    ৫. পোস্ট লাইক (CHANGED to POST to match Frontend)
 ========================================================== */
-router.post('/reels', authMiddleware, async (req, res) => {
-    try {
-        const { text, mediaUrl, authorName, authorAvatar } = req.body;
-        const currentUserId = req.user.sub || req.user.id;
-
-        const newReel = new Post({
-            text,
-            media: mediaUrl,
-            mediaUrl: mediaUrl, 
-            mediaType: 'video',
-            postType: 'reels', 
-            authorName,
-            authorAvatar,
-            authorId: currentUserId,
-            authorAuth0Id: currentUserId,
-            likes: []
-        });
-
-        const savedReel = await newReel.save();
-        res.status(201).json(savedReel);
-    } catch (err) {
-        res.status(400).json({ message: "Reel transmission failed", error: err.message });
-    }
-});
-
-/* ==========================================================
-    ৬. পোস্ট লাইক করা
-========================================================== */
-router.put('/:id/like', authMiddleware, async (req, res) => {
+router.post('/:id/like', authMiddleware, async (req, res) => {
     try {
         const post = await Post.findById(req.params.id);
         if (!post) return res.status(404).json({ message: "Post not found" });
@@ -164,13 +123,12 @@ router.put('/:id/like', authMiddleware, async (req, res) => {
         await post.save();
         res.json(post);
     } catch (err) {
-        console.error("Like Error:", err);
-        res.status(500).json({ message: "Internal Server Error", error: err.message });
+        res.status(500).json({ message: "Internal Server Error" });
     }
 });
 
 /* ==========================================================
-    ৭. পোস্ট ডিলিট করা
+    ৬. পোস্ট ডিলিট
 ========================================================== */
 router.delete('/:id', authMiddleware, async (req, res) => {
     try {
@@ -183,9 +141,9 @@ router.delete('/:id', authMiddleware, async (req, res) => {
         }
         
         await post.deleteOne();
-        res.json({ message: "Post deleted successfully", postId: req.params.id });
+        res.json({ message: "Post deleted successfully" });
     } catch (err) {
-        res.status(500).json({ message: "Delete failed", error: err.message });
+        res.status(500).json({ message: "Delete failed" });
     }
 });
 
