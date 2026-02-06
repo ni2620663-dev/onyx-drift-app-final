@@ -21,7 +21,7 @@ import reelRoutes from "./routes/reels.js";
 import profileRoutes from "./src/routes/profile.js";
 import groupRoutes from "./routes/group.js"; 
 import marketRoutes from "./routes/market.js"; 
-import adminRoutes from "./routes/admin.js";   
+import adminRoutes from "./routes/admin.js";    
 
 // 🛡️ Auth0 JWT ভেরিফিকেশন মিডলওয়্যার
 const checkJwt = auth({
@@ -51,7 +51,6 @@ const allowedOrigins = [
 
 const corsOptions = {
     origin: function (origin, callback) {
-        // origin না থাকলেও এলাউ করা (যেমন কিছু মোবাইল ব্রাউজার বা টুলস)
         if (!origin || allowedOrigins.includes(origin)) {
             callback(null, true);
         } else {
@@ -65,24 +64,33 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 
-// ৪. বডি পার্সার লিমিট (বড় ইমেজ বা ভিডিওর জন্য ৫০এমবি থেকে বাড়িয়ে ১০০এমবি করা হয়েছে)
+// ৪. বডি পার্সার লিমিট
 app.use(express.json({ limit: "100mb" }));
 app.use(express.urlencoded({ limit: "100mb", extended: true }));
 
-// ৫. সকেট আইও কনফিগারেশন
+// ৫. সকেট আইও কনফিগারেশন (সংশোধিত - ৪0৪ এরর এড়াতে)
 const io = new Server(server, {
     cors: corsOptions,
-    transports: ['polling', 'websocket'], 
+    transports: ['websocket', 'polling'], // Websocket অগ্রাধিকার দেওয়া হয়েছে
     allowEIO3: true, 
+    path: '/socket.io/', // পাথ নিশ্চিত করা হয়েছে
+    connectTimeout: 45000,
     pingTimeout: 60000,   
     pingInterval: 25000
 });
 
-// ৬. Redis Setup
+// ৬. Redis Setup (Error Handling সহ)
 const redis = process.env.REDIS_URL ? new Redis(process.env.REDIS_URL, {
     maxRetriesPerRequest: null,
-    enableReadyCheck: false
+    enableReadyCheck: false,
+    retryStrategy(times) {
+      return Math.min(times * 50, 2000);
+    }
 }) : null;
+
+if (redis) {
+    redis.on("error", (err) => console.error("📡 Redis Sync Error:", err));
+}
 
 // ৭. এপিআই রাউটস
 app.use("/api/user", userRoutes);      
@@ -97,14 +105,15 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/messages", checkJwt, messageRoutes); 
 app.use("/api/groups", checkJwt, groupRoutes); 
 
-app.get("/", (req, res) => res.send("🚀 OnyxDrift Neural Core is Online!"));
+app.get("/", (req, res) => res.status(200).send("🚀 OnyxDrift Neural Core is Online!"));
 
 /* ==========================================================
     📡 REAL-TIME ENGINE (Socket.io)
 ========================================================== */
 
 io.on("connection", (socket) => {
-    
+    console.log(`⚡ New Neural Link: ${socket.id}`);
+
     // অনলাইন ইউজার ট্র্যাকিং
     socket.on("addNewUser", async (userId) => {
         if (!userId) return;
@@ -141,49 +150,9 @@ io.on("connection", (socket) => {
         }
     });
 
-    socket.on("joinGroup", (groupId) => {
-        socket.join(groupId);
-    });
-
-    /* ==========================================================
-        📞 কলিং ইঞ্জিন
-    ========================================================== */
-    socket.on("initiateCall", (data) => {
-        const { roomId, receiverId, callerName, type } = data;
-        if (receiverId) {
-            io.to(receiverId).emit("incomingCall", {
-                roomId,
-                callerName,
-                from: socket.userId,
-                type: type || "video"
-            });
-        }
-    });
-
-    socket.on("answerCall", (data) => {
-        if (data.to) {
-            io.to(data.to).emit("callAccepted", data.signal);
-        }
-    });
-
-    socket.on("endCall", (data) => {
-        if (data.to) {
-            io.to(data.to).emit("callEnded");
-        }
-    });
-
-    socket.on("joinGroupCall", (data) => {
-        const { groupId, userId } = data;
-        const callRoom = `call_${groupId}`;
-        socket.join(callRoom);
-        socket.to(callRoom).emit("userJoinedCall", { 
-            userId: userId || socket.userId, 
-            socketId: socket.id 
-        });
-    });
-
     // --- ডিসকানেকশন ---
     socket.on("disconnect", async () => {
+        console.log(`🔌 Link Severed: ${socket.id}`);
         if (redis && socket.userId) {
             await redis.hdel("online_users", socket.userId);
             const updated = await redis.hgetall("online_users");
@@ -192,8 +161,14 @@ io.on("connection", (socket) => {
     });
 });
 
-// ৮. সার্ভার স্টার্ট
+// ৮. সার্ভার স্টার্ট (Error handling সহ)
 const PORT = process.env.PORT || 10000;
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 Core Active on Port: ${PORT}`);
+    console.log(`
+    =========================================
+    🚀 ONYX CORE: ACTIVE
+    📡 PORT: ${PORT}
+    🌐 NODE_ENV: ${process.env.NODE_ENV || 'development'}
+    =========================================
+    `);
 });

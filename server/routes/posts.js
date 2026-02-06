@@ -25,6 +25,31 @@ cloudinary.config({
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 /* ==========================================================
+    🧠 0. NEURAL FEED (Fixes 404 Error)
+========================================================== */
+// এই রাউটটি সবার উপরে রাখা হয়েছে যাতে অন্য ডাইনামিক রাউটের সাথে কনফ্লিক্ট না করে
+router.get("/neural-feed", async (req, res) => {
+  try {
+    const posts = await Post.find()
+      .sort({ createdAt: -1 })
+      .limit(50)
+      .lean();
+
+    // ফ্রন্টএন্ডের জন্য ডেটা স্ট্রাকচার সেফ করা
+    const optimizedPosts = posts.map(post => ({
+      ...post,
+      resonanceScore: (post.likes?.length || 0) * 2 + (post.comments?.length || 0) * 5,
+      neuralSync: true
+    }));
+
+    res.json(optimizedPosts);
+  } catch (err) {
+    console.error("Neural Feed Fetch Error:", err);
+    res.status(500).json({ msg: "Neural Grid Offline" });
+  }
+});
+
+/* ==========================================================
     🤖 AI ANALYZE (Quick Reaction)
 ========================================================== */
 router.post("/ai-analyze", async (req, res) => {
@@ -152,7 +177,6 @@ router.post("/:id/like", auth, async (req, res) => {
     const post = await Post.findById(req.params.id);
     if (!post) return res.status(404).json({ msg: "Post missing." });
 
-    // likes অ্যারে না থাকলে তৈরি করে নিবে (Safety)
     if (!Array.isArray(post.likes)) post.likes = [];
 
     const isLiked = post.likes.includes(userId);

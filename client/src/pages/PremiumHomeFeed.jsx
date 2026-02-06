@@ -5,7 +5,6 @@ import {
   FaBolt, FaRegHeart, FaRegComment, FaVolumeUp, FaVolumeMute, FaEye, 
   FaPaperPlane, FaSearch, FaRegBell, FaUserCircle, FaEnvelope, FaHome,
   FaStore, FaCog, FaLock, FaSatellite, FaFingerprint, FaUnlock, FaBrain
-  // FaZap এখান থেকে সরিয়ে দেওয়া হয়েছে কারণ এটি fa লাইব্রেরিতে নেই
 } from 'react-icons/fa'; 
 import { useAuth0 } from "@auth0/auth0-react";
 import axios from "axios";
@@ -39,34 +38,35 @@ const NeuralToast = ({ isVisible, message }) => (
           </div>
           <FaBolt className="ml-auto text-yellow-500 text-[10px] animate-bounce" />
         </div>
-        <motion.div 
-          initial={{ width: "100%" }} animate={{ width: "0%" }} transition={{ duration: 4 }}
-          className="h-0.5 bg-purple-500 mt-1 rounded-full shadow-[0_0_10px_#a855f7]"
-        />
       </motion.div>
     )}
   </AnimatePresence>
 );
 
 // --- ২. ভিডিও কম্পোনেন্ট ---
-const CompactVideo = ({ src, onVideoClick }) => {
+const CompactVideo = ({ src }) => {
   const videoRef = useRef(null);
   const [isMuted, setIsMuted] = useState(true);
 
   useEffect(() => {
     const currentVideo = videoRef.current;
     const observer = new IntersectionObserver(([entry]) => {
-      if (currentVideo && entry.isIntersecting) currentVideo.play().catch(() => {});
-      else if (currentVideo) currentVideo.pause();
+      if (currentVideo) {
+        if (entry.isIntersecting) currentVideo.play().catch(() => {});
+        else currentVideo.pause();
+      }
     }, { threshold: 0.6 });
     if (currentVideo) observer.observe(currentVideo);
     return () => { if (currentVideo) observer.unobserve(currentVideo); };
   }, [src]);
 
   return (
-    <div onClick={onVideoClick} className="relative mt-3 rounded-2xl overflow-hidden border border-white/10 bg-black max-w-[400px] cursor-pointer group">
+    <div className="relative mt-3 rounded-2xl overflow-hidden border border-white/10 bg-black max-w-[400px] group">
       <video ref={videoRef} src={src} muted={isMuted} loop playsInline className="w-full h-72 object-cover" />
-      <button onClick={(e) => { e.stopPropagation(); setIsMuted(!isMuted); }} className="absolute bottom-3 right-3 p-2 bg-black/60 backdrop-blur-md rounded-full text-white border border-white/20 z-10">
+      <button 
+        onClick={(e) => { e.preventDefault(); e.stopPropagation(); setIsMuted(!isMuted); }} 
+        className="absolute bottom-3 right-3 p-2 bg-black/60 backdrop-blur-md rounded-full text-white border border-white/20 z-10"
+      >
         {isMuted ? <FaVolumeMute size={14} /> : <FaVolumeUp size={14} className="text-cyan-400" />}
       </button>
     </div>
@@ -89,24 +89,30 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
   const [mediaFile, setMediaFile] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isEncrypted, setIsEncrypted] = useState(false); 
-  const [userLevel, setUserLevel] = useState(3); 
+  const [userLevel] = useState(3); 
   const [toast, setToast] = useState({ show: false, message: "" });
 
   const API_URL = "https://onyx-drift-app-final-u29m.onrender.com";
   const postMediaRef = useRef(null);
 
-  // --- ডাটা ফেচিং ---
+  // --- ডাটা ফেচিং (সংশোধিত) ---
   const fetchPosts = async () => {
     try {
       setLoading(true);
       const token = await getAccessTokenSilently();
+      // Route path check
       const response = await axios.get(`${API_URL}/api/posts/neural-feed`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setPosts(response.data);
     } catch (err) { 
-      const fallback = await axios.get(`${API_URL}/api/posts`);
-      setPosts(fallback.data);
+      console.warn("Neural feed failed, trying global feed...");
+      try {
+        const fallback = await axios.get(`${API_URL}/api/posts`);
+        setPosts(fallback.data);
+      } catch (finalErr) {
+        console.error("Critical: Network Failure");
+      }
     } finally { setLoading(false); }
   };
 
@@ -117,16 +123,15 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
       "Shadow AI just synchronized your latest drift.",
       "Resonance score increased by +0.42",
       "Neural link established with nearby node.",
-      "Optimizing your profile for global sync.",
-      "Shadow replied to 3 recent transmissions."
+      "Optimizing your profile for global sync."
     ];
 
     const interval = setInterval(() => {
-      if (Math.random() > 0.6) {
+      if (Math.random() > 0.7) {
         setToast({ show: true, message: aiMessages[Math.floor(Math.random() * aiMessages.length)] });
         setTimeout(() => setToast({ show: false, message: "" }), 4000);
       }
-    }, 45000);
+    }, 30000);
     return () => clearInterval(interval);
   }, []);
 
@@ -140,10 +145,15 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
   const handleLike = async (postId) => {
     const userId = user?.sub;
     if (!userId) return;
-    setPosts(prev => prev.map(p => p._id === postId ? { ...p, likes: p.likes?.includes(userId) ? p.likes.filter(id => id !== userId) : [...(p.likes || []), userId] } : p));
+    setPosts(prev => prev.map(p => p._id === postId ? { 
+        ...p, 
+        likes: p.likes?.includes(userId) ? p.likes.filter(id => id !== userId) : [...(p.likes || []), userId] 
+    } : p));
     try {
       const token = await getAccessTokenSilently();
-      await axios.post(`${API_URL}/api/posts/${postId}/like`, {}, { headers: { Authorization: `Bearer ${token}` } });
+      await axios.post(`${API_URL}/api/posts/${postId}/like`, {}, { 
+        headers: { Authorization: `Bearer ${token}` } 
+      });
     } catch (err) { fetchPosts(); }
   };
 
@@ -156,20 +166,30 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
       formData.append("text", postText);
       formData.append("isEncrypted", isEncrypted);
       if (mediaFile) formData.append("media", mediaFile);
-      const response = await axios.post(`${API_URL}/api/posts`, formData, { headers: { Authorization: `Bearer ${token}` } });
+      
+      const response = await axios.post(`${API_URL}/api/posts`, formData, { 
+        headers: { 
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'multipart/form-data'
+        } 
+      });
       setPosts(prev => [response.data, ...prev]);
       setPostText(""); setMediaFile(null); setIsPostModalOpen(false);
-    } catch (err) { alert("Sync failed."); } finally { setIsSubmitting(false); }
+    } catch (err) { 
+        alert("Transmission Failed. Check Connection."); 
+    } finally { setIsSubmitting(false); }
   };
 
   const handleCommentSubmit = async () => {
     if(!commentText.trim() || !activeCommentPost) return;
     try {
       const token = await getAccessTokenSilently();
-      const res = await axios.post(`${API_URL}/api/posts/${activeCommentPost._id}/comment`, { text: commentText }, { headers: { Authorization: `Bearer ${token}` } });
+      const res = await axios.post(`${API_URL}/api/posts/${activeCommentPost._id}/comment`, { 
+        text: commentText 
+      }, { headers: { Authorization: `Bearer ${token}` } });
       setPosts(prev => prev.map(p => p._id === activeCommentPost._id ? res.data : p));
       setActiveCommentPost(res.data); setCommentText("");
-    } catch (err) { console.error("Error"); }
+    } catch (err) { console.error("Comment Sync Error"); }
   };
 
   return (
@@ -177,9 +197,14 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
       <NeuralToast isVisible={toast.show} message={toast.message} />
 
       {/* --- HEADER --- */}
-      <div className="sticky top-0 z-[100] bg-black/80 backdrop-blur-md border-b border-white/5 px-4 h-14 flex justify-between items-center">
+      <header className="sticky top-0 z-[100] bg-black/80 backdrop-blur-md border-b border-white/5 px-4 h-14 flex justify-between items-center">
         <div className="flex items-center gap-3">
-          <img src={user?.picture} className="w-8 h-8 rounded-full border border-cyan-500/50 cursor-pointer" onClick={() => setIsSideMenuOpen(true)} alt="" />
+          <img 
+            src={user?.picture} 
+            className="w-8 h-8 rounded-full border border-cyan-500/50 cursor-pointer object-cover" 
+            onClick={() => setIsSideMenuOpen(true)} 
+            alt="profile" 
+          />
           <h2 className="text-lg font-bold italic text-cyan-500 tracking-tighter uppercase">OnyxDrift</h2>
         </div>
         <div className="flex gap-4 items-center text-zinc-400">
@@ -190,25 +215,30 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
           </div>
           <FaBolt className="text-cyan-500 animate-pulse cursor-pointer" onClick={() => setActiveFilter('Resonance')} />
         </div>
-      </div>
+      </header>
 
       {/* --- SIDE MENU --- */}
       <AnimatePresence>
         {isSideMenuOpen && (
           <>
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsSideMenuOpen(false)} className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[200]" />
-            <motion.div initial={{ x: "-100%" }} animate={{ x: 0 }} exit={{ x: "-100%" }} className="fixed top-0 left-0 h-full w-[280px] bg-[#050505] border-r border-white/10 z-[201] p-6 text-left shadow-2xl">
+            <motion.div initial={{ x: "-100%" }} animate={{ x: 0 }} exit={{ x: "-100%" }} className="fixed top-0 left-0 h-full w-[280px] bg-[#050505] border-r border-white/10 z-[201] p-6 shadow-2xl">
                <div className="mb-10">
                   <div className="relative w-16 h-16 mb-4">
-                    <img src={user?.picture} className="w-full h-full rounded-2xl border-2 border-cyan-500/20 object-cover shadow-[0_0_15px_rgba(6,182,212,0.1)]" alt="" />
+                    <img src={user?.picture} className="w-full h-full rounded-2xl border-2 border-cyan-500/20 object-cover" alt="user" />
                     <div className="absolute -bottom-1 -right-1 bg-cyan-500 p-1 rounded-lg text-[8px] text-black font-black uppercase">Level {userLevel}</div>
                   </div>
                   <h4 className="font-black text-gray-100 text-lg uppercase tracking-tighter">{user?.nickname}</h4>
                   <p className="text-[9px] text-cyan-500 font-mono font-bold tracking-[2px]">NEURAL STATUS: OPTIMIZED</p>
                </div>
                <nav className="flex flex-col gap-2">
-                 {[{ icon: <FaHome />, label: 'Home Feed', tab: 'home' }, { icon: <FaStore />, label: 'Marketplace', tab: 'market' }, { icon: <FaUserCircle />, label: 'My Profile', path: `/profile/${user?.sub}` }, { icon: <FaRegBell />, label: 'Notifications', tab: 'notify' }, { icon: <FaCog />, label: 'Settings', tab: 'settings' }].map((item, i) => (
-                   <div key={i} onClick={() => { if(item.tab) setActiveTab(item.tab); if(item.path) navigate(item.path); setIsSideMenuOpen(false); }} className={`flex items-center gap-4 p-3 rounded-xl transition-all font-bold text-[10px] uppercase tracking-widest cursor-pointer ${activeTab === item.tab ? 'text-cyan-400 bg-cyan-500/10 shadow-[inset_0_0_10px_rgba(6,182,212,0.05)]' : 'text-zinc-500 hover:text-white hover:bg-white/5'}`}>
+                 {[
+                   { icon: <FaHome />, label: 'Home Feed', tab: 'home' }, 
+                   { icon: <FaStore />, label: 'Marketplace', tab: 'market' }, 
+                   { icon: <FaUserCircle />, label: 'My Profile', path: `/profile/${user?.sub}` }, 
+                   { icon: <FaCog />, label: 'Settings', tab: 'settings' }
+                 ].map((item, i) => (
+                   <div key={i} onClick={() => { if(item.tab) setActiveTab(item.tab); if(item.path) navigate(item.path); setIsSideMenuOpen(false); }} className={`flex items-center gap-4 p-3 rounded-xl transition-all font-bold text-[10px] uppercase tracking-widest cursor-pointer ${activeTab === item.tab ? 'text-cyan-400 bg-cyan-500/10' : 'text-zinc-500 hover:text-white hover:bg-white/5'}`}>
                      <span className="text-lg">{item.icon}</span> {item.label}
                    </div>
                  ))}
@@ -219,13 +249,13 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
       </AnimatePresence>
 
       {/* --- MAIN CONTENT --- */}
-      <section className="max-w-[550px] mx-auto border-x border-white/5 min-h-screen">
+      <main className="max-w-[550px] mx-auto border-x border-white/5 min-h-screen">
         {activeTab === "home" && (
           <>
             <div className="flex justify-center gap-2 py-4 border-b border-white/5 bg-black/50 backdrop-blur-md sticky top-14 z-50 px-4">
               {['Global', 'Encrypted', 'Resonance'].map((f) => (
                 <button key={f} onClick={() => setActiveFilter(f)} className={`px-5 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${activeFilter === f ? 'bg-cyan-500 text-black shadow-[0_0_15px_#06b6d4]' : 'bg-white/5 text-zinc-500 hover:text-white'}`}>
-                  {f === 'Encrypted' && (userLevel < 3 ? <FaLock /> : <FaFingerprint />)}
+                  {f === 'Encrypted' && <FaLock />}
                   {f === 'Resonance' && <FaBrain className="animate-pulse" />}
                   {f}
                 </button>
@@ -239,18 +269,11 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
                 </div>
             ) : (
                 <div className="divide-y divide-white/5">
-                {activeFilter === 'Encrypted' && userLevel < 3 ? (
-                  <div className="p-20 text-center">
-                    <FaLock className="text-zinc-800 mx-auto mb-4" size={50} />
-                    <h3 className="text-white font-black uppercase text-[10px] tracking-[0.2em]">Signal Restricted</h3>
-                    <p className="text-[10px] text-zinc-600 mt-2">Level 3 Clearance required for decryption.</p>
-                  </div>
-                ) : (
-                  filteredPosts.map((post) => (
+                  {filteredPosts.map((post) => (
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} key={post._id} className={`p-5 transition-all ${post.isAiGenerated ? 'bg-purple-500/[0.04] border-l-2 border-purple-500' : 'hover:bg-white/[0.01]'}`}>
                       <div className="flex gap-3">
                         <div className="relative">
-                          <img src={post.authorAvatar || `https://ui-avatars.com/api/?name=${post.authorName}`} className={`w-11 h-11 rounded-2xl border object-cover ${post.isAiGenerated ? 'border-purple-500/50 shadow-[0_0_10px_rgba(168,85,247,0.2)]' : 'border-white/10'}`} alt="" />
+                          <img src={post.authorAvatar || `https://ui-avatars.com/api/?name=${post.authorName}`} className={`w-11 h-11 rounded-2xl border object-cover ${post.isAiGenerated ? 'border-purple-500/50' : 'border-white/10'}`} alt="avatar" />
                           {post.isAiGenerated && <div className="absolute -bottom-1 -right-1 bg-purple-500 p-1 rounded-full"><FaBrain size={8} className="text-white"/></div>}
                         </div>
                         <div className="flex-1 text-left">
@@ -259,12 +282,11 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
                               <span className={`font-bold text-[13px] ${post.isAiGenerated ? 'text-purple-400' : 'text-gray-200'}`}>{post.authorName} {post.isAiGenerated && "[SHADOW]"}</span>
                               {post.isEncrypted && <FaFingerprint className="text-cyan-500 text-[10px]" />}
                             </div>
-                            {post.isAiGenerated && <span className="text-[8px] text-purple-600 font-mono font-black uppercase tracking-tighter">Sync: {post.neuralSyncLevel}%</span>}
                           </div>
                           <p className={`text-sm leading-relaxed ${post.isAiGenerated ? 'text-gray-300 italic' : 'text-gray-400'}`}>{post.text}</p>
                           {post.media && (
                             <div className="mt-3">
-                              {post.media.match(/\.(mp4|webm|mov)$/i) ? <CompactVideo src={post.media} /> : <img src={post.media} className="rounded-2xl border border-white/5 w-full max-h-[450px] object-cover" alt="" />}
+                              {post.media.match(/\.(mp4|webm|mov)$/i) ? <CompactVideo src={post.media} /> : <img src={post.media} className="rounded-2xl border border-white/5 w-full max-h-[450px] object-cover" alt="post media" />}
                             </div>
                           )}
                           <div className="flex items-center justify-between mt-5 px-1 text-zinc-500">
@@ -273,15 +295,17 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
                                   {post.likes?.includes(user?.sub) ? <FaHeart size={15} /> : <FaRegHeart size={15} />}
                                   <span className="text-[10px] font-black">{post.likes?.length || 0}</span>
                                 </button>
-                                <button onClick={() => setActiveCommentPost(post)} className="hover:text-cyan-400 flex items-center gap-2 transition-colors"><FaRegComment size={15} /><span className="text-[10px] font-black">{post.comments?.length || 0}</span></button>
+                                <button onClick={() => setActiveCommentPost(post)} className="hover:text-cyan-400 flex items-center gap-2 transition-colors">
+                                  <FaRegComment size={15} />
+                                  <span className="text-[10px] font-black">{post.comments?.length || 0}</span>
+                                </button>
                               </div>
                               <button onClick={() => navigator.share?.({url: window.location.href, title: 'OnyxDrift Sync'})} className="p-2 bg-zinc-900/40 rounded-lg hover:text-cyan-400"><FaShareAlt size={12} /></button>
                           </div>
                         </div>
                       </div>
                     </motion.div>
-                  ))
-                )}
+                  ))}
                 </div>
             )}
           </>
@@ -289,7 +313,7 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
         {activeTab === "market" && <Marketplace />}
         {activeTab === "notify" && <Notification />}
         {activeTab === "settings" && <Settings />}
-      </section>
+      </main>
 
       {/* --- CREATE POST MODAL --- */}
       <AnimatePresence>
@@ -303,12 +327,17 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
                 <button onClick={() => setIsPostModalOpen(false)} className="text-zinc-500 hover:text-white"><FaTimes /></button>
               </div>
               <textarea placeholder={isEncrypted ? "Encrypting node data..." : "Initiate drift..."} value={postText} onChange={(e) => setPostText(e.target.value)} className="w-full bg-transparent outline-none text-lg text-white resize-none min-h-[160px] placeholder-zinc-800 font-mono" />
-              {mediaFile && <div className="relative mb-4 rounded-2xl overflow-hidden"><img src={URL.createObjectURL(mediaFile)} className="w-full h-40 object-cover" alt="" /><button onClick={() => setMediaFile(null)} className="absolute top-2 right-2 bg-black/60 p-1 rounded-full"><FaTimes size={10} /></button></div>}
+              {mediaFile && (
+                <div className="relative mb-4 rounded-2xl overflow-hidden">
+                    <img src={URL.createObjectURL(mediaFile)} className="w-full h-40 object-cover" alt="preview" />
+                    <button onClick={() => setMediaFile(null)} className="absolute top-2 right-2 bg-black/60 p-1 rounded-full"><FaTimes size={10} /></button>
+                </div>
+              )}
               <div className="flex items-center justify-between pt-6 border-t border-white/5">
                 <div className="flex gap-5">
                   <input type="file" hidden ref={postMediaRef} onChange={(e) => setMediaFile(e.target.files[0])} accept="image/*,video/*" />
                   <button onClick={() => postMediaRef.current.click()} className="text-zinc-500 hover:text-cyan-500"><FaImage size={18} /></button>
-                  <button onClick={() => setIsEncrypted(!isEncrypted)} className={`flex items-center gap-2 px-3 py-1 rounded-full border text-[8px] font-black uppercase transition-all ${isEncrypted ? 'border-cyan-500 text-cyan-500 bg-cyan-500/10' : 'border-white/10 text-zinc-600'}`}>
+                  <button onClick={() => setIsEncrypted(!isEncrypted)} className={`flex items-center gap-2 px-3 py-1 rounded-full border text-[8px] font-black uppercase transition-all ${isEncrypted ? 'border-cyan-500 text-cyan-500' : 'border-white/10 text-zinc-600'}`}>
                     {isEncrypted ? <FaFingerprint size={12}/> : <FaUnlock size={10}/>} {isEncrypted ? "Encrypted" : "Public"}
                   </button>
                 </div>
@@ -335,7 +364,7 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
               <div className="flex-1 overflow-y-auto space-y-4 no-scrollbar text-left">
                 {activeCommentPost.comments?.map((c, i) => (
                   <div key={i} className="flex gap-3">
-                    <img src={c.userAvatar || `https://ui-avatars.com/api/?name=${c.userName}`} className="w-8 h-8 rounded-xl border border-white/5" alt="" />
+                    <img src={c.userAvatar || `https://ui-avatars.com/api/?name=${c.userName}`} className="w-8 h-8 rounded-xl border border-white/5" alt="user avatar" />
                     <div className="bg-white/[0.03] p-3 rounded-2xl flex-1 border border-white/5">
                       <p className="text-cyan-500 font-bold text-[10px] uppercase">{c.userName}</p>
                       <p className="text-[12px] text-gray-400 mt-1">{c.text}</p>
@@ -353,7 +382,12 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
       </AnimatePresence>
 
       {/* FAB */}
-      <motion.button whileHover={{ scale: 1.1, rotate: 90 }} whileTap={{ scale: 0.9 }} onClick={() => setIsPostModalOpen(true)} className="fixed bottom-24 right-6 w-14 h-14 bg-cyan-500 text-black rounded-2xl flex items-center justify-center shadow-[0_0_30px_rgba(6,182,212,0.4)] z-[100]">
+      <motion.button 
+        whileHover={{ scale: 1.1, rotate: 90 }} 
+        whileTap={{ scale: 0.9 }} 
+        onClick={() => setIsPostModalOpen(true)} 
+        className="fixed bottom-24 right-6 w-14 h-14 bg-cyan-500 text-black rounded-2xl flex items-center justify-center shadow-[0_0_30px_rgba(6,182,212,0.4)] z-[100]"
+      >
         <FaBolt size={22} />
       </motion.button>
     </div>
