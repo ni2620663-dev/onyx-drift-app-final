@@ -5,6 +5,19 @@ import Conversation from "../models/Conversation.js";
  * 🚀 PHASE-10: CREATE NEW MESSAGE 
  * With Self-Destruct (TTL) & Optimistic UI Support
  */
+// messengerController.js এর ভেতরে
+export const handleAiAutoReply = async (receiverId, senderName, messageText) => {
+  const user = await User.findOne({ auth0Id: receiverId });
+  
+  if (user.isAiAutopilotActive) {
+     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+     const prompt = `You are ${user.name}'s AI assistant. ${senderName} sent a message: "${messageText}". 
+     Reply in a short, cyberpunk style.`;
+
+     const result = await model.generateContent(prompt);
+     return result.response.text();
+  }
+};
 export const createMessage = async (req, res) => {
   const { 
     conversationId, 

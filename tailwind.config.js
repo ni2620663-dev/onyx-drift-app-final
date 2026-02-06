@@ -20,10 +20,11 @@ module.exports = {
       },
       animation: {
         // কাস্টম অ্যানিমেশনস
-        'spin-slow': 'spin 6s linear infinite',
+        'spin-slow': 'spin 8s linear infinite', // আপনার রিকোয়েস্ট অনুযায়ী ৮ সেকেন্ড করা হয়েছে
         'marquee': 'marquee 10s linear infinite',
         'marquee-text': 'marquee-text 12s linear infinite',
         'pulse-slow': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+        'gradient-x': 'gradient-x 3s ease infinite', // ল্যান্ডিং পেজ বাটনের জন্য
       },
       keyframes: {
         marquee: {
@@ -33,7 +34,17 @@ module.exports = {
         'marquee-text': {
           '0%': { transform: 'translateX(0%)' },
           '100%': { transform: 'translateX(-50%)' },
-        }
+        },
+        'gradient-x': {
+          '0%, 100%': {
+            'background-size': '200% 200%',
+            'background-position': 'left center',
+          },
+          '50%': {
+            'background-size': '200% 200%',
+            'background-position': 'right center',
+          },
+        },
       },
       boxShadow: {
         // নিওন এবং গ্লাস গ্লো ইফেক্ট
@@ -53,7 +64,7 @@ module.exports = {
     },
   },
   plugins: [
-    // স্ক্রলবার হাইড করার জন্য প্লাগইন (ঐচ্ছিক কিন্তু রিলসের জন্য প্রয়োজনীয়)
+    // স্ক্রলবার হাইড করার জন্য প্লাগইন
     function ({ addUtilities }) {
       addUtilities({
         '.hide-scrollbar': {
@@ -66,11 +77,4 @@ module.exports = {
       });
     },
   ],
-}
-theme: {
-  extend: {
-    animation: {
-      'spin-slow': 'spin 8s linear infinite',
-    }
-  }
 }

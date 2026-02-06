@@ -18,7 +18,7 @@ import Settings from "./pages/Settings";
 import FollowingPage from "./pages/FollowingPage";
 import ReelsFeed from "./pages/ReelsFeed";
 import ReelsEditor from "./pages/ReelsEditor";     
-import Landing from "./pages/Landing"; 
+import Landing from "./pages/Landing"; // আপনার নতুন ল্যান্ডিং পেজ
 import JoinPage from "./pages/JoinPage";
 import CallPage from "./pages/CallPage";
 import CustomCursor from "./components/CustomCursor";
@@ -113,8 +113,7 @@ export default function App() {
     </div>
   );
 
-  /* =================📏 LAYOUT LOGIC (FIXED) ================= */
-  // চেক করা হচ্ছে ইউজার মেসেঞ্জার বা মেসেজ পেজে আছে কিনা
+  /* =================📏 LAYOUT LOGIC ================= */
   const isMessengerPage = location.pathname.startsWith("/messages") || location.pathname.startsWith("/messenger");
 
   const isFullWidthPage = [
@@ -123,7 +122,7 @@ export default function App() {
 
   const isReelsPage = location.pathname.startsWith("/reels");
   const isFeedPage = location.pathname.startsWith("/feed"); 
-  const isAuthPage = ["/", "/join"].includes(location.pathname);
+  const isAuthPage = location.pathname === "/" || location.pathname === "/join";
 
   return (
     <div className="min-h-screen bg-[#020617] text-gray-200 font-sans relative overflow-x-hidden">
@@ -173,7 +172,7 @@ export default function App() {
       </AnimatePresence>
 
       <div className="flex flex-col w-full">
-        {/* Navbar condition updated to hide on Messenger/Messages */}
+        {/* Navbar condition: hide on Auth Page and Messenger */}
         {isAuthenticated && !isAuthPage && !isReelsPage && !isFeedPage && !isMessengerPage && (
           <Navbar 
             user={user} 
@@ -197,6 +196,7 @@ export default function App() {
               <div className={`${isFullWidthPage ? "w-full" : "w-full lg:max-w-[650px] max-w-full"}`}>
                 <AnimatePresence mode="wait">
                   <Routes location={location} key={location.pathname}>
+                    {/* Landing Page Route */}
                     <Route path="/" element={isAuthenticated ? <Navigate to="/feed" /> : <Landing />} />
                     <Route path="/join" element={<JoinPage />} /> 
 

@@ -2,6 +2,46 @@ import express from 'express';
 import Post from '../models/Post.js'; 
 import User from '../models/User.js';
 import auth from '../middleware/auth.js';
+export const toggleAutopilot = async (req, res) => {
+  try {
+    const user = await User.findOne({ auth0Id: req.user.sub });
+    if (!user) return res.status(404).json({ msg: "User not found" });
+
+    user.aiAutopilot = !user.aiAutopilot;
+    await user.save();
+    
+    res.json({ aiAutopilot: user.aiAutopilot, msg: "Neural Autopilot Updated" });
+  } catch (err) {
+    res.status(500).json({ msg: "System Sync Failure" });
+  }
+};
+
+// ২. এআই টোন (Personality) আপডেট
+export const updateAiTone = async (req, res) => {
+  try {
+    const { tone } = req.body;
+    const user = await User.findOneAndUpdate(
+      { auth0Id: req.user.sub },
+      { aiTone: tone },
+      { new: true }
+    );
+    res.json({ aiTone: user.aiTone, msg: "Personality Calibrated" });
+  } catch (err) {
+    res.status(500).json({ msg: "Calibration Failure" });
+  }
+};
+
+// ৩. ঘোস্ট মোড টগল (আগের লজিক থাকলে এটি আপডেট করে নিন)
+export const toggleGhostMode = async (req, res) => {
+  try {
+    const user = await User.findOne({ auth0Id: req.user.sub });
+    user.ghostMode = !user.ghostMode;
+    await user.save();
+    res.json({ ghostMode: user.ghostMode });
+  } catch (err) {
+    res.status(500).json({ msg: "Ghost Protocol Error" });
+  }
+};
 
 const router = express.Router();
 

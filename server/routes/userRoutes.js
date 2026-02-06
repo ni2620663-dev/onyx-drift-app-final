@@ -327,7 +327,9 @@ router.post("/follow/:targetId", auth, async (req, res) => {
     res.status(500).json({ msg: "Connection failed" });
   }
 });
-
+router.put('/toggle-autopilot', auth, toggleAutopilot);
+router.put('/update-ai-tone', auth, updateAiTone);
+router.put('/toggle-ghost', auth, toggleGhostMode);
 /**
  * ৭. (NEW) Neural Stats Update - ইমপ্যাক্ট ও মুড আপডেট করার জন্য
  */

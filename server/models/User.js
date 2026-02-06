@@ -30,13 +30,25 @@ const userSchema = new mongoose.Schema(
       index: true 
     },
     avatar: { type: String, default: "" },
-    aiTwinAvatar: { type: String, default: "" }, // AI Twin Snapshot Hologram
-    aiPersona: { type: String, default: "Silent Drifter" }, // e.g., "Bold Thinker"
+    aiTwinAvatar: { type: String, default: "" }, 
+    aiPersona: { type: String, default: "Neural Drifter" }, 
     coverImg: { type: String, default: "" }, 
     bio: { type: String, default: "System Drifter // Neural Integrity: High", maxlength: 160 }, 
     location: { type: String, default: "" },
     workplace: { type: String, default: "" },
-    
+    aiAutopilot: { 
+      type: Boolean, 
+      default: true 
+    },
+    aiTone: { 
+      type: Number, 
+      default: 50 
+    }, 
+    ghostMode: { 
+      type: Boolean, 
+      default: false 
+    },
+
     /* ==========================================================
         ২. EMOTION TIMELINE & MOOD STATS
     ========================================================== */
@@ -124,8 +136,6 @@ const userSchema = new mongoose.Schema(
     revenueWallet: { type: Number, default: 0 }, 
     totalImpressions: { type: Number, default: 0 },
     engagementRate: { type: Number, default: 0 },
-
-    ghostMode: { type: Boolean, default: false },
     antiScreenshot: { type: Boolean, default: false },
     neuralShieldActive: { type: Boolean, default: true },
 
