@@ -4,7 +4,8 @@ import {
   FaTimes, FaImage, FaHeart, FaComment, FaShareAlt, FaCheckCircle, 
   FaBolt, FaRegHeart, FaRegComment, FaVolumeUp, FaVolumeMute, FaEye, 
   FaPaperPlane, FaSearch, FaRegBell, FaUserCircle, FaEnvelope, FaHome,
-  FaStore, FaCog, FaLock, FaSatellite, FaFingerprint, FaUnlock, FaBrain, FaZap
+  FaStore, FaCog, FaLock, FaSatellite, FaFingerprint, FaUnlock, FaBrain
+  // FaZap এখান থেকে সরিয়ে দেওয়া হয়েছে কারণ এটি fa লাইব্রেরিতে নেই
 } from 'react-icons/fa'; 
 import { useAuth0 } from "@auth0/auth0-react";
 import axios from "axios";
@@ -36,7 +37,7 @@ const NeuralToast = ({ isVisible, message }) => (
             <h4 className="text-[9px] font-black text-purple-500 uppercase tracking-[0.2em] mb-0.5">Neural Shadow Sync</h4>
             <p className="text-[11px] text-gray-300 font-mono italic">{message}</p>
           </div>
-          <FaZap className="ml-auto text-yellow-500 text-[10px] animate-bounce" />
+          <FaBolt className="ml-auto text-yellow-500 text-[10px] animate-bounce" />
         </div>
         <motion.div 
           initial={{ width: "100%" }} animate={{ width: "0%" }} transition={{ duration: 4 }}
@@ -112,7 +113,6 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
   useEffect(() => {
     fetchPosts();
     
-    // AI Activity Simulation
     const aiMessages = [
       "Shadow AI just synchronized your latest drift.",
       "Resonance score increased by +0.42",
