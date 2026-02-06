@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   User, Lock, Bell, Moon, LogOut, Shield, ChevronRight, 
   Palette, EyeOff, ShieldCheck, Smartphone, ArrowLeft,
-  Cpu, AdjustmentsHorizontal,Zap
+  Cpu, SlidersHorizontal, Zap // এখানে AdjustmentsHorizontal পরিবর্তন করে SlidersHorizontal করা হয়েছে
 } from 'lucide-react';
 import axios from 'axios';
 import { motion } from 'framer-motion';
@@ -131,7 +131,7 @@ const Settings = () => {
             <div className="p-6">
               <div className="flex items-center gap-4 mb-4">
                 <div className="p-3 bg-pink-500/10 rounded-2xl text-pink-400">
-                  <AdjustmentsHorizontal size={22} />
+                  <SlidersHorizontal size={22} />
                 </div>
                 <div>
                   <h3 className="font-bold text-sm italic">Personality Calibration</h3>
