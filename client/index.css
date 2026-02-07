@@ -1,15 +1,18 @@
 /* ১. গুগল ফন্ট ইম্পোর্ট */
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap');
 
-/* ২. টেলউইন্ড ডিরেক্টিভস */
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* ২. টেলউইন্ড ৪ এর নতুন ইম্পোর্ট সিস্টেম (Fix for PostCSS error) */
+@import "tailwindcss";
 
 /* ৩. বেইস স্টাইলস */
+@theme {
+  --font-jakarta: "Plus Jakarta Sans", sans-serif;
+  --color-zenith-bg: #050508;
+  --color-cyan-neon: #00BFFF;
+}
+
 @layer base {
   body {
-    /* সরাসরি কালার কোড ব্যবহার করছি এরর এড়াতে */
     background-color: #050508; 
     color: #e2e8f0;
     font-family: 'Plus Jakarta Sans', sans-serif;
@@ -20,7 +23,7 @@
   }
 }
 
-/* ৪. প্রিমিয়াম স্ক্রলবার (ছবির মতো ক্লিন) */
+/* ৪. প্রিমিয়াম স্ক্রলবার */
 ::-webkit-scrollbar {
   width: 5px;
 }
@@ -32,17 +35,17 @@
   border-radius: 20px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #00BFFF; /* আপনার কনফিগের cyan-neon */
+  background: #00BFFF;
 }
 
-/* ৫. আপনার কনফিগ অনুযায়ী কাস্টম ক্লাস */
+/* ৫. কাস্টম ইউটিলিটি ক্লাস */
 @layer components {
-  /* প্রিমিয়াম গ্লাস কার্ড */
+  /* প্রিমিয়াম গ্লাস কার্ড */
   .glass-card {
-    background: rgba(255, 255, 255, 0.05); /* zenith-card */
+    background: rgba(255, 255, 255, 0.05);
     backdrop-filter: blur(25px);
     -webkit-backdrop-filter: blur(25px);
-    border: 1px solid rgba(255, 255, 255, 0.1); /* zenith-border */
+    border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 2.5rem;
     box-shadow: 0 4px 6px rgba(255, 255, 255, 0.05);
   }
@@ -76,7 +79,6 @@
   animation: float 5s ease-in-out infinite;
 }
 
-/* ছবির মতো হালকা নয়েজ বা দানা ব্যাকগ্রাউন্ড */
 .bg-grainy {
   position: fixed;
   inset: 0;
@@ -88,7 +90,7 @@
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
 }
 
-/* নো স্ক্রলবার ইউটিলিটি */
+/* স্ক্রলবার ইউটিলিটি */
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
