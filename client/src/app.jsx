@@ -23,6 +23,7 @@ import JoinPage from "./pages/JoinPage";
 import CallPage from "./pages/CallPage";
 import CustomCursor from "./components/CustomCursor";
 import MobileNav from "./components/MobileNav";
+import AITwinSync from './components/AITwinSync';
 
 // Protected Route Wrapper
 const ProtectedRoute = ({ component: Component, ...props }) => {
@@ -220,6 +221,7 @@ export default function App() {
                     
                     <Route path="/settings" element={<ProtectedRoute component={Settings} />} />
                     <Route path="/call/:roomId" element={<ProtectedRoute component={CallPage} />} />
+                    <Route path="/ai-twin" element={<AITwinSync />} />
                     
                     <Route path="*" element={<Navigate to="/" />} />
                   </Routes>
