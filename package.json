@@ -7,45 +7,28 @@
   "scripts": {
     "start": "node server/index.js",
     "server": "nodemon server/index.js",
-    "build": "npm install && cd client && npm install && npm run build",
+    "build": "cd client && npm install --legacy-peer-deps && npm run build",
     "dev": "concurrently \"npm run server\" \"cd client && npm run dev\""
   },
   "engines": {
-    "node": "22.12.0"
+    "node": "22.x"
   },
   "dependencies": {
-    "@google/generative-ai": "^0.24.1",
-    "@react-three/drei": "^10.7.7",
-    "@react-three/fiber": "^9.5.0",
-    "@tailwindcss/postcss": "^4.1.18",
-    "@zegocloud/zego-uikit-prebuilt": "^2.17.2",
-    "axios": "^1.13.2",
-    "bcryptjs": "^3.0.3",
     "cloudinary": "^2.8.0",
     "cors": "^2.8.5",
     "dotenv": "^16.6.1",
     "express": "^4.22.1",
     "express-oauth2-jwt-bearer": "^1.7.2",
     "express-rate-limit": "^8.2.1",
-    "framer-motion": "^12.31.0",
     "helmet": "^8.1.0",
-    "ioredis": "^5.9.0",
     "jsonwebtoken": "^9.0.3",
-    "lucide-react": "^0.562.0",
     "mongoose": "^8.21.0",
     "multer": "^2.0.2",
     "multer-storage-cloudinary": "^4.0.0",
-    "react-icons": "^5.5.0",
-    "react-toastify": "^11.0.5",
-    "recharts": "^3.7.0",
-    "socket.io": "^4.8.1",
-    "socket.io-client": "^4.8.3",
-    "sweetalert2": "^11.26.17",
-    "three": "^0.182.0"
+    "socket.io": "^4.8.1"
   },
   "devDependencies": {
     "concurrently": "^9.1.0",
-    "nodemon": "^3.1.7",
-    "vite": "^5.0.0"
+    "nodemon": "^3.1.7"
   }
 }
