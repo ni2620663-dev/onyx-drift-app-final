@@ -15,7 +15,7 @@ import { useNavigate } from 'react-router-dom';
 import Marketplace from "./Marketplace"; 
 import Notification from "./Notifications";
 import Settings from "./Settings";
-import LegacySetup from "./LegacySetup"; // নতুন কম্পোনেন্ট ইম্পোর্ট
+import LegacySetup from '../components/LegacySetup';
 
 // --- ১. NEURAL TOAST COMPONENT ---
 const NeuralToast = ({ isVisible, message }) => (
