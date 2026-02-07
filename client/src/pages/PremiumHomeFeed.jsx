@@ -5,7 +5,7 @@ import {
   FaBolt, FaRegHeart, FaRegComment, FaVolumeUp, FaVolumeMute, FaEye, 
   FaPaperPlane, FaSearch, FaRegBell, FaUserCircle, FaEnvelope, FaHome,
   FaStore, FaCog, FaLock, FaSatellite, FaFingerprint, FaUnlock, FaBrain,
-  FaGhost, FaSyncAlt
+  FaGhost, FaSyncAlt, FaHourglassHalf
 } from 'react-icons/fa'; 
 import { useAuth0 } from "@auth0/auth0-react";
 import axios from "axios";
@@ -15,6 +15,7 @@ import { useNavigate } from 'react-router-dom';
 import Marketplace from "./Marketplace"; 
 import Notification from "./Notifications";
 import Settings from "./Settings";
+import LegacySetup from "./LegacySetup"; // নতুন কম্পোনেন্ট ইম্পোর্ট
 
 // --- ১. NEURAL TOAST COMPONENT ---
 const NeuralToast = ({ isVisible, message }) => (
@@ -115,7 +116,6 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
     } finally { setLoading(false); }
   };
 
-  // ইউজারের নিউরাল প্রোফাইল ফেচ করা
   const fetchUserProfile = async () => {
     try {
       const token = await getAccessTokenSilently();
@@ -256,7 +256,7 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
                    { icon: <FaHome />, label: 'Neural Feed', tab: 'home' }, 
                    { icon: <FaStore />, label: 'Marketplace', tab: 'market' }, 
                    { icon: <FaBrain />, label: 'AI Twin Sync', path: `/ai-twin` }, 
-                   { icon: <FaUserCircle />, label: 'Digital Legacy', path: `/profile/${user?.sub}` }, 
+                   { icon: <FaFingerprint />, label: 'Digital Legacy', tab: 'legacy' }, // লিগ্যাসি ট্যাব যোগ
                    { icon: <FaCog />, label: 'Settings', tab: 'settings' }
                  ].map((item, i) => (
                    <div key={i} onClick={() => { if(item.tab) setActiveTab(item.tab); if(item.path) navigate(item.path); setIsSideMenuOpen(false); }} className={`flex items-center gap-4 p-3 rounded-xl transition-all font-bold text-[10px] uppercase tracking-widest cursor-pointer group ${activeTab === item.tab ? 'text-cyan-400 bg-cyan-500/10 border border-cyan-500/20' : 'text-zinc-500 hover:text-white hover:bg-white/5'}`}>
@@ -279,7 +279,6 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
       <main className="max-w-[550px] mx-auto border-x border-white/5 min-h-screen">
         {activeTab === "home" && (
           <>
-            {/* --- FILTER TABS --- */}
             <div className="flex justify-center gap-2 py-4 border-b border-white/5 bg-black/50 backdrop-blur-md sticky top-14 z-50 px-4">
               {['Global', 'Encrypted', 'Resonance'].map((f) => (
                 <button key={f} onClick={() => setActiveFilter(f)} className={`px-5 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-2 border ${activeFilter === f ? 'bg-cyan-500 text-black border-cyan-400 shadow-[0_0_15px_#06b6d4]' : 'bg-white/5 text-zinc-500 border-white/5 hover:text-white hover:border-white/10'}`}>
@@ -356,18 +355,28 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
                 </div>
             )}
             
-            {/* EMPTY FEED STATE */}
             {!loading && filteredPosts.length === 0 && (
-               <div className="py-20 flex flex-col items-center opacity-30">
-                  <FaSatellite size={40} className="mb-4 animate-bounce" />
-                  <p className="text-[10px] font-black uppercase tracking-[0.3em]">No Neural Signals Detected</p>
-               </div>
+                <div className="py-20 flex flex-col items-center opacity-30">
+                   <FaSatellite size={40} className="mb-4 animate-bounce" />
+                   <p className="text-[10px] font-black uppercase tracking-[0.3em]">No Neural Signals Detected</p>
+                </div>
             )}
           </>
         )}
         {activeTab === "market" && <Marketplace />}
         {activeTab === "notify" && <Notification />}
         {activeTab === "settings" && <Settings />}
+        
+        {/* --- ৩. DIGITAL LEGACY TAB --- */}
+        {activeTab === "legacy" && (
+          <div className="p-6">
+             <div className="mb-8 text-center">
+                <h3 className="text-cyan-500 font-black text-[12px] uppercase tracking-[0.4em] mb-2">Neural Infrastructure</h3>
+                <p className="text-[9px] text-zinc-500 uppercase tracking-widest font-mono">Quantum-Resistant Digital Afterlife</p>
+             </div>
+             <LegacySetup />
+          </div>
+        )}
       </main>
 
       {/* --- CREATE POST MODAL --- */}
@@ -480,24 +489,6 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
         </div>
       </motion.button>
       
-      {/* BOTTOM NAVIGATION (For Mobile Feel) */}
-      <nav className="fixed bottom-0 left-0 right-0 h-20 bg-black/90 backdrop-blur-2xl border-t border-white/5 flex justify-around items-center px-6 z-[1000]">
-         {[
-           { icon: <FaHome />, tab: 'home' },
-           { icon: <FaStore />, tab: 'market' },
-           { icon: <FaBrain />, path: '/ai-twin' },
-           { icon: <FaUserCircle />, path: `/profile/${user?.sub}` }
-         ].map((nav, idx) => (
-           <button 
-             key={idx}
-             onClick={() => nav.tab ? setActiveTab(nav.tab) : navigate(nav.path)}
-             className={`p-4 rounded-2xl transition-all ${activeTab === nav.tab ? 'text-cyan-500 bg-cyan-500/10' : 'text-zinc-600 hover:text-zinc-400'}`}
-           >
-             <span className="text-xl">{nav.icon}</span>
-             {activeTab === nav.tab && <motion.div layoutId="nav-active" className="w-1 h-1 bg-cyan-500 rounded-full mx-auto mt-1" />}
-           </button>
-         ))}
-      </nav>
     </div>
   );
 };

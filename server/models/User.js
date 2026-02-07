@@ -95,13 +95,34 @@ const userSchema = new mongoose.Schema(
     }],
 
     /* ==========================================================
-        ৫. MEMORY VAULT / LEGACY
+        ৫. NEURAL DEATH-SWITCH & LEGACY (The "Vayankar" Feature)
+    ========================================================== */
+    deathSwitch: {
+      isActive: { type: Boolean, default: false },
+      inactivityThresholdMonths: { type: Number, default: 12 }, // ১ থেকে ২৪ মাস পর্যন্ত
+      lastPulseTimestamp: { type: Date, default: Date.now }, // শেষ অ্যাক্টিভিটি চেক
+      isTriggered: { type: Boolean, default: false } // ইউজার কি ডিজিটালি মৃত?
+    },
+    legacyProtocol: {
+      inheritorNeuralId: { type: String, default: null }, // মনোনীত উত্তরাধিকারীর আইডি
+      recoveryKeyHash: { type: String, default: null }, // সিকিউর কি হ্যাশ
+      vaultStatus: { 
+        type: String, 
+        enum: ["AWAITING_SEAL", "SEALED", "RELEASED"], 
+        default: "AWAITING_SEAL" 
+      },
+      inheritanceDate: { type: Date } // কবে ভল্ট রিলিজ হলো
+    },
+
+    /* ==========================================================
+        ৬. MEMORY VAULT 
     ========================================================== */
     memoryVaultCount: { type: Number, default: 0 },
     memoryVault: [
       {
         content: String,
         media: String,
+        emotionVector: [Number], // AI যাতে মুড বুঝতে পারে
         unlockDate: Date,
         isPrivate: { type: Boolean, default: true },
         createdAt: { type: Date, default: Date.now }
@@ -109,7 +130,7 @@ const userSchema = new mongoose.Schema(
     ],
 
     /* ==========================================================
-        ৬. GROWTH & INVITE SYSTEM
+        ৭. GROWTH & INVITE SYSTEM
     ========================================================== */
     inviteCode: { 
       type: String, 
@@ -131,7 +152,7 @@ const userSchema = new mongoose.Schema(
     }, 
 
     /* ==========================================================
-        ৭. MONETIZATION, SECURITY & NODES
+        ৮. MONETIZATION, SECURITY & NODES
     ========================================================== */
     revenueWallet: { type: Number, default: 0 }, 
     totalImpressions: { type: Number, default: 0 },
@@ -149,7 +170,7 @@ const userSchema = new mongoose.Schema(
     ],
 
     /* ==========================================================
-        ৮. SOCIAL GRAPH
+        ৯. SOCIAL GRAPH
     ========================================================== */
     followers: [{ type: String, index: true }], 
     following: [{ type: String, index: true }],
@@ -167,6 +188,7 @@ userSchema.index({ name: 1, nickname: 1 });
 userSchema.index({ createdAt: -1, isVerified: -1 });
 userSchema.index({ inviteCount: -1 }); 
 userSchema.index({ neuralImpact: -1 });
+userSchema.index({ "deathSwitch.lastPulseTimestamp": 1 }); // ক্রন জবের পারফরম্যান্সের জন্য
 
 const User = mongoose.model("User", userSchema);
 export default User;
