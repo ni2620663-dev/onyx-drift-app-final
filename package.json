@@ -28,6 +28,7 @@
     "mongoose": "^8.21.0",
     "multer": "^2.0.2",
     "multer-storage-cloudinary": "^4.0.0",
+    "node-cron": "^3.0.3",
     "socket.io": "^4.8.1",
     "sweetalert2": "^11.1.0"
   },
