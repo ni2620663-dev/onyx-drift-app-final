@@ -262,6 +262,37 @@ router.post("/:id/comment", auth, async (req, res) => {
       res.status(500).json({ msg: "Comment Failure" });
     }
 });
+/* ==========================================================
+    🧬 NEURAL IDENTITY ENGINE (The Heart of your Living System)
+========================================================== */
+
+const trainAITwin = async (userId, postText, authorName) => {
+  try {
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    
+    // AI-কে নির্দেশ দেওয়া হচ্ছে ইউজারের পার্সোনালিটি ডিকোড করতে
+    const prompt = `Analyze this transmission from "${authorName}": "${postText}". 
+    Extract: 1. Core Emotion 2. Vocabulary Style 3. Philosophical Leanings.
+    Return only a JSON object like: 
+    {"emotion": "string", "style": "string", "traits": ["list"], "syncLevel": number}`;
+
+    const result = await model.generateContent(prompt);
+    const analysis = JSON.parse(result.response.text());
+
+    // ইউজার মডেলে এই 'Neural Snapshot' সেভ করা
+    await User.findOneAndUpdate(
+      { auth0Id: userId },
+      { 
+        $push: { neuralHistory: { ...analysis, timestamp: new Date() } },
+        $inc: { neuralSyncScore: 1 } // ইউজার যত পোস্ট করবে, AI তত বেশি তাকে চিনবে
+      }
+    );
+    
+    console.log(`🧬 Neural Link Updated for ${authorName}: Sync at ${analysis.syncLevel}%`);
+  } catch (error) {
+    console.error("Neural Training Interrupted:", error);
+  }
+};
 
 /* ==========================================================
     🗑️ 6. DELETE POST
@@ -279,6 +310,25 @@ router.delete("/:id", auth, async (req, res) => {
     res.json({ msg: "Post terminated", postId: req.params.id });
   } catch (err) {
     res.status(500).json({ msg: "Deletion failed" });
+  }
+});
+// AI Twin এর স্ট্যাটাস চেক করার রাউট
+router.get("/ai-twin/status", async (req, res) => {
+  try {
+    const user = await User.findOne({ auth0Id: req.user.sub });
+    
+    // সিমুলেটেড নিউরাল ক্যালকুলেশন
+    const syncPercentage = Math.min((user.postsCount || 0) * 2, 100); 
+    const traits = ["Analytical", "Cyberpunk-enthusiast", "Direct"]; // এগুলো Gemini থেকে আসবে
+    
+    res.json({
+      syncLevel: syncPercentage,
+      activeNodes: user.postsCount || 0,
+      personalityTraits: traits,
+      lastSync: new Date()
+    });
+  } catch (err) {
+    res.status(500).json({ error: "Neural link failed" });
   }
 });
 
