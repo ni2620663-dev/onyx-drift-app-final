@@ -9,7 +9,8 @@ const userSchema = new mongoose.Schema(
       type: String, 
       required: true, 
       unique: true, 
-      immutable: true 
+      immutable: true,
+      index: true // দ্রুত ইউজার খোঁজার জন্য
     }, 
     name: { 
       type: String, 
@@ -20,13 +21,14 @@ const userSchema = new mongoose.Schema(
       type: String, 
       trim: true, 
       unique: true, 
-      sparse: true 
+      sparse: true // যাতে nickname না থাকলেও ডুপ্লিকেট এরর না দেয়
     },
     email: { 
       type: String, 
-      unique: true, 
       lowercase: true, 
-      sparse: true, 
+      trim: true,
+      sparse: true, // এটি অত্যন্ত গুরুত্বপূর্ণ: খালি ইমেইল থাকলে এরর আটকাবে
+      unique: true,
       index: true 
     },
     avatar: { type: String, default: "" },
@@ -99,19 +101,19 @@ const userSchema = new mongoose.Schema(
     ========================================================== */
     deathSwitch: {
       isActive: { type: Boolean, default: false },
-      inactivityThresholdMonths: { type: Number, default: 12 }, // ১ থেকে ২৪ মাস পর্যন্ত
-      lastPulseTimestamp: { type: Date, default: Date.now }, // শেষ অ্যাক্টিভিটি চেক
-      isTriggered: { type: Boolean, default: false } // ইউজার কি ডিজিটালি মৃত?
+      inactivityThresholdMonths: { type: Number, default: 12 }, 
+      lastPulseTimestamp: { type: Date, default: Date.now }, 
+      isTriggered: { type: Boolean, default: false } 
     },
     legacyProtocol: {
-      inheritorNeuralId: { type: String, default: null }, // মনোনীত উত্তরাধিকারীর আইডি
-      recoveryKeyHash: { type: String, default: null }, // সিকিউর কি হ্যাশ
+      inheritorNeuralId: { type: String, default: null }, 
+      recoveryKeyHash: { type: String, default: null }, 
       vaultStatus: { 
         type: String, 
         enum: ["AWAITING_SEAL", "SEALED", "RELEASED"], 
         default: "AWAITING_SEAL" 
       },
-      inheritanceDate: { type: Date } // কবে ভল্ট রিলিজ হলো
+      inheritanceDate: { type: Date } 
     },
 
     /* ==========================================================
@@ -122,7 +124,7 @@ const userSchema = new mongoose.Schema(
       {
         content: String,
         media: String,
-        emotionVector: [Number], // AI যাতে মুড বুঝতে পারে
+        emotionVector: [Number], 
         unlockDate: Date,
         isPrivate: { type: Boolean, default: true },
         createdAt: { type: Date, default: Date.now }
@@ -188,7 +190,7 @@ userSchema.index({ name: 1, nickname: 1 });
 userSchema.index({ createdAt: -1, isVerified: -1 });
 userSchema.index({ inviteCount: -1 }); 
 userSchema.index({ neuralImpact: -1 });
-userSchema.index({ "deathSwitch.lastPulseTimestamp": 1 }); // ক্রন জবের পারফরম্যান্সের জন্য
+userSchema.index({ "deathSwitch.lastPulseTimestamp": 1, "deathSwitch.isActive": 1 });
 
 const User = mongoose.model("User", userSchema);
 export default User;

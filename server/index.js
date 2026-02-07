@@ -14,13 +14,13 @@ import connectDB from "./config/db.js";
 import User from "./models/User.js"; 
 connectDB();
 
-// রাউট ইম্পোর্ট (নিশ্চিত করুন এই ফাইলগুলো routes ফোল্ডারে আছে)
+// রাউট ইম্পোর্ট
 import userRoutes from './routes/user.js'; 
 import postRoutes from "./routes/posts.js";
 import messageRoutes from "./routes/messages.js";
 import storyRoute from "./routes/stories.js";
 import reelRoutes from "./routes/reels.js"; 
-import profileRoutes from "./routes/profile.js"; // পাথ ঠিক করা হয়েছে
+import profileRoutes from "./routes/profile.js"; 
 import groupRoutes from "./routes/group.js"; 
 import marketRoutes from "./routes/market.js"; 
 import adminRoutes from "./routes/admin.js";     
@@ -42,7 +42,7 @@ cloudinary.config({
 const app = express();
 const server = http.createServer(app);
 
-// ৩. CORS কনফিগারেশন (একদম সঠিক ফরম্যাট)
+// ৩. CORS কনফিগারেশন
 const allowedOrigins = [
     "http://localhost:5173", 
     "https://onyx-drift-app-final.onrender.com",
@@ -76,6 +76,7 @@ app.use(express.urlencoded({ limit: "100mb", extended: true }));
 const updateNeuralPulse = async (req, res, next) => {
     if (req.auth?.payload?.sub) {
         try {
+            // ফিক্স: Auth0 ID ব্যবহার করে পালস আপডেট
             await User.findOneAndUpdate(
                 { auth0Id: req.auth.payload.sub },
                 { "deathSwitch.lastPulseTimestamp": new Date() }
@@ -107,11 +108,7 @@ const redis = process.env.REDIS_URL ? new Redis(process.env.REDIS_URL, {
     }
 }) : null;
 
-if (redis) {
-    redis.on("error", (err) => console.error("📡 Redis Sync Error:", err));
-}
-
-// ৭. এপিআই রাউটস (Pulse Update Middleware সহ)
+// ৭. এপিআই রাউটস
 app.use("/api/user", updateNeuralPulse, userRoutes);      
 app.use("/api/posts", updateNeuralPulse, postRoutes);  
 app.use("/api/profile", updateNeuralPulse, profileRoutes); 
@@ -119,35 +116,25 @@ app.use("/api/stories", updateNeuralPulse, storyRoute);
 app.use("/api/reels", updateNeuralPulse, reelRoutes); 
 app.use("/api/market", updateNeuralPulse, marketRoutes); 
 app.use("/api/admin", updateNeuralPulse, adminRoutes); 
-
-// সুরক্ষিত রাউটস
 app.use("/api/messages", checkJwt, updateNeuralPulse, messageRoutes); 
 app.use("/api/groups", checkJwt, updateNeuralPulse, groupRoutes); 
 
 app.get("/", (req, res) => res.status(200).send("🚀 OnyxDrift Neural Core is Online!"));
 
 /* ==========================================================
-    💀 DEATH-SWITCH CRON JOB (Runs every 24 hours at Midnight)
+    💀 DEATH-SWITCH CRON JOB
 ========================================================== */
 cron.schedule('0 0 * * *', async () => {
-    console.log("🔍 Running Neural Death-Switch Pulse Check...");
     try {
-        const users = await User.find({ 
-            "deathSwitch.isActive": true, 
-            "deathSwitch.isTriggered": false 
-        });
-
+        const users = await User.find({ "deathSwitch.isActive": true, "deathSwitch.isTriggered": false });
         const now = new Date();
         for (let user of users) {
             const thresholdDate = new Date(user.deathSwitch.lastPulseTimestamp);
             thresholdDate.setMonth(thresholdDate.getMonth() + user.deathSwitch.inactivityThresholdMonths);
-
             if (now > thresholdDate) {
                 user.deathSwitch.isTriggered = true;
                 user.legacyProtocol.vaultStatus = 'RELEASED';
-                user.legacyProtocol.inheritanceDate = now;
                 await user.save();
-                console.log(`⚠️ Vault released for: ${user.name} (Signal Lost)`);
             }
         }
     } catch (err) {
@@ -156,27 +143,31 @@ cron.schedule('0 0 * * *', async () => {
 });
 
 /* ==========================================================
-    📡 REAL-TIME ENGINE (Socket.io)
+    📡 REAL-TIME ENGINE (Socket.io) - FIXED
 ========================================================== */
 io.on("connection", (socket) => {
     console.log(`⚡ New Neural Link: ${socket.id}`);
 
-    socket.on("addNewUser", async (userId) => {
-        if (!userId) return;
-        socket.userId = userId; 
-        socket.join(userId); 
+    socket.on("addNewUser", async (auth0Id) => { 
+        if (!auth0Id) return;
+        socket.userId = auth0Id; 
+        socket.join(auth0Id); 
         
         if (redis) {
-            await redis.hset("online_users", userId, socket.id);
+            await redis.hset("online_users", auth0Id, socket.id);
             const allUsers = await redis.hgetall("online_users");
             io.emit("getOnlineUsers", Object.keys(allUsers).map(id => ({ userId: id })));
         }
 
         try {
-            // সকেট কানেকশনকেও Pulse হিসেবে গণ্য করা
-            await User.findByIdAndUpdate(userId, { "deathSwitch.lastPulseTimestamp": new Date() });
+            // ফিক্স ১: findByIdAndUpdate এর বদলে findOneAndUpdate ব্যবহার করুন
+            // কারণ আপনার আইডিটি একটি স্ট্রিং (google-oauth2|...), standard ObjectId নয়।
+            await User.findOneAndUpdate(
+                { auth0Id: auth0Id }, 
+                { "deathSwitch.lastPulseTimestamp": new Date() }
+            );
         } catch (e) {
-            console.error("Socket Pulse Update Error:", e);
+            console.error("Socket Pulse Update Error:", e.message);
         }
     });
 
@@ -189,20 +180,7 @@ io.on("connection", (socket) => {
         }
     });
 
-    socket.on("sendNotification", (data) => {
-        const { receiverId, message, type } = data;
-        if (receiverId) {
-            io.to(receiverId).emit("getNotification", {
-                senderName: data.senderName,
-                type: type,
-                message: message,
-                image: data.image
-            });
-        }
-    });
-
     socket.on("disconnect", async () => {
-        console.log(`🔌 Link Severed: ${socket.id}`);
         if (redis && socket.userId) {
             await redis.hdel("online_users", socket.userId);
             const updated = await redis.hgetall("online_users");
@@ -211,14 +189,7 @@ io.on("connection", (socket) => {
     });
 });
 
-// ৮. সার্ভার স্টার্ট (Render এর জন্য '0.0.0.0' গুরুত্বপূর্ণ)
 const PORT = process.env.PORT || 10000;
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`
-    =========================================
-    🚀 ONYX CORE: ACTIVE
-    📡 PORT: ${PORT}
-    💀 DEATH-SWITCH ENGINE: STANDBY
-    =========================================
-    `);
+    console.log(`🚀 ONYX CORE ACTIVE ON PORT: ${PORT}`);
 });
