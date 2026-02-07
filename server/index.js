@@ -6,24 +6,24 @@ import dotenv from "dotenv";
 import Redis from "ioredis"; 
 import { v2 as cloudinary } from 'cloudinary';
 import { auth } from 'express-oauth2-jwt-bearer';
-import cron from 'node-cron'; // Death-Switch এর জন্য যোগ করা হয়েছে
+import cron from 'node-cron';
 
 // ১. কনফিগারেশন ও ডাটাবেস কানেকশন
 dotenv.config();
 import connectDB from "./config/db.js"; 
-import User from "./models/User.js"; // ইউজার মডেল ইম্পোর্ট
+import User from "./models/User.js"; 
 connectDB();
 
-// রাউট ইম্পোর্ট
+// রাউট ইম্পোর্ট (নিশ্চিত করুন এই ফাইলগুলো routes ফোল্ডারে আছে)
 import userRoutes from './routes/user.js'; 
 import postRoutes from "./routes/posts.js";
 import messageRoutes from "./routes/messages.js";
 import storyRoute from "./routes/stories.js";
 import reelRoutes from "./routes/reels.js"; 
-import profileRoutes from "./src/routes/profile.js";
+import profileRoutes from "./routes/profile.js"; // পাথ ঠিক করা হয়েছে
 import groupRoutes from "./routes/group.js"; 
 import marketRoutes from "./routes/market.js"; 
-import adminRoutes from "./routes/admin.js";    
+import adminRoutes from "./routes/admin.js";     
 
 // 🛡️ Auth0 JWT ভেরিফিকেশন মিডলওয়্যার
 const checkJwt = auth({
@@ -42,7 +42,7 @@ cloudinary.config({
 const app = express();
 const server = http.createServer(app);
 
-// ৩. CORS কনফিগারেশন
+// ৩. CORS কনফিগারেশন (একদম সঠিক ফরম্যাট)
 const allowedOrigins = [
     "http://localhost:5173", 
     "https://onyx-drift-app-final.onrender.com",
@@ -53,7 +53,7 @@ const allowedOrigins = [
 
 const corsOptions = {
     origin: function (origin, callback) {
-        if (!origin || allowedOrigins.includes(origin)) {
+        if (!origin || allowedOrigins.indexOf(origin) !== -1) {
             callback(null, true);
         } else {
             callback(new Error('Signal Blocked: CORS Security Policy'));
@@ -72,10 +72,8 @@ app.use(express.urlencoded({ limit: "100mb", extended: true }));
 
 /* ==========================================================
     🧠 NEURAL PULSE UPDATE MIDDLEWARE
-    ইউজার যখনই কোনো API হিট করবে, তার Pulse আপডেট হবে।
 ========================================================== */
 const updateNeuralPulse = async (req, res, next) => {
-    // Auth0 থেকে প্রাপ্ত ইউজার আইডি ব্যবহার করে Pulse আপডেট
     if (req.auth?.payload?.sub) {
         try {
             await User.findOneAndUpdate(
@@ -129,8 +127,7 @@ app.use("/api/groups", checkJwt, updateNeuralPulse, groupRoutes);
 app.get("/", (req, res) => res.status(200).send("🚀 OnyxDrift Neural Core is Online!"));
 
 /* ==========================================================
-    💀 DEATH-SWITCH CRON JOB (Runs every 24 hours)
-    এটি প্রতিদিন চেক করবে কার পালস বন্ধ হয়ে গেছে।
+    💀 DEATH-SWITCH CRON JOB (Runs every 24 hours at Midnight)
 ========================================================== */
 cron.schedule('0 0 * * *', async () => {
     console.log("🔍 Running Neural Death-Switch Pulse Check...");
@@ -175,8 +172,12 @@ io.on("connection", (socket) => {
             io.emit("getOnlineUsers", Object.keys(allUsers).map(id => ({ userId: id })));
         }
 
-        // সকেট কানেকশনকেও Pulse হিসেবে গণ্য করা
-        await User.findByIdAndUpdate(userId, { "deathSwitch.lastPulseTimestamp": new Date() });
+        try {
+            // সকেট কানেকশনকেও Pulse হিসেবে গণ্য করা
+            await User.findByIdAndUpdate(userId, { "deathSwitch.lastPulseTimestamp": new Date() });
+        } catch (e) {
+            console.error("Socket Pulse Update Error:", e);
+        }
     });
 
     socket.on("sendMessage", (data) => {
@@ -210,7 +211,7 @@ io.on("connection", (socket) => {
     });
 });
 
-// ৮. সার্ভার স্টার্ট
+// ৮. সার্ভার স্টার্ট (Render এর জন্য '0.0.0.0' গুরুত্বপূর্ণ)
 const PORT = process.env.PORT || 10000;
 server.listen(PORT, '0.0.0.0', () => {
     console.log(`
