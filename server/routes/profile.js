@@ -1,64 +1,69 @@
 import express from 'express';
 import User from '../models/User.js'; 
-import auth from '../middleware/auth.js'; 
-import upload from '../middleware/multer.js'; 
 import Post from '../models/Post.js'; 
+import upload from '../middleware/multer.js'; 
 
 const router = express.Router();
 
 /* ==========================================================
     1️⃣ GET CURRENT LOGGED-IN USER PROFILE
-    (নিজের প্রোফাইল ফেচ করার জন্য - এটি ফ্রন্টএন্ডের জন্য জরুরি)
+    এন্ডপয়েন্ট: GET /api/profile
 ========================================================== */
-router.get("/", auth, async (req, res) => {
+router.get("/", async (req, res) => {
   try {
-    const myId = req.user.sub || req.user.id;
+    // Auth0 payload থেকে আইডি নেওয়া (server.js এ checkJwt মিডলওয়্যার এটি সেট করে)
+    const myId = req.auth?.payload?.sub;
+
+    if (!myId) {
+      return res.status(401).json({ msg: "Neural Identity missing" });
+    }
+
     let user = await User.findOne({ auth0Id: myId }).select("-__v").lean();
 
-    // যদি ডাটাবেসে ইউজার না থাকে, তবে নতুন তৈরি করবে (Sync)
+    // যদি ডাটাবেসে ইউজার না থাকে, তবে অটো-ক্রিয়েট (First time sync)
     if (!user) {
       const newUser = new User({
         auth0Id: myId,
-        name: req.user.name || "Drifter",
-        nickname: req.user.nickname || req.user.name?.split(' ')[0].toLowerCase() || "drifter",
-        avatar: req.user.picture || "",
-        email: req.user.email || ""
+        name: req.auth.payload.name || "Drifter",
+        nickname: req.auth.payload.nickname || req.auth.payload.name?.split(' ')[0].toLowerCase() || "drifter",
+        avatar: req.auth.payload.picture || "",
+        email: req.auth.payload.email || ""
       });
       const savedUser = await newUser.save();
       user = savedUser.toObject();
+      console.log("🆕 Neural Identity Created for:", myId);
     }
+    
     res.json(user);
   } catch (err) {
-    console.error("📡 Self Profile Error:", err);
-    res.status(500).json({ msg: "Neural link interrupted" });
+    console.error("📡 Self Profile Fetch Error:", err);
+    res.status(500).json({ msg: "Neural link interrupted", error: err.message });
   }
 });
 
 /* ==========================================================
     2️⃣ GET PROFILE BY ID
-    (অন্যান্য ইউজারের প্রোফাইল দেখার জন্য)
+    এন্ডপয়েন্ট: GET /api/profile/:id
 ========================================================== */
-router.get(['/profile/:id', '/:id'], auth, async (req, res) => {
+router.get(['/profile/:id', '/:id'], async (req, res) => {
   try {
     const targetId = decodeURIComponent(req.params.id);
-    const myId = req.user.sub || req.user.id;
+    const myId = req.auth?.payload?.sub;
     
     let user = await User.findOne({ auth0Id: targetId }).select("-__v").lean();
     
     if (!user) {
-      // যদি নিজের আইডি হয় কিন্তু ডাটাবেসে না থাকে
+      // যদি নিজের আইডি হয় কিন্তু ডাটাবেসে না থাকে (Fallback)
       if (targetId === myId) {
         const newUser = new User({
           auth0Id: myId,
-          name: req.user.name || "Drifter",
-          nickname: req.user.nickname || req.user.name?.split(' ')[0].toLowerCase() || "drifter",
-          avatar: req.user.picture || "",
-          email: req.user.email || ""
+          name: req.auth.payload.name || "Drifter",
+          nickname: "drifter_" + myId.slice(-4),
+          avatar: req.auth.payload.picture || ""
         });
         const savedUser = await newUser.save();
         user = savedUser.toObject();
       } else {
-        // অন্য ইউজার না থাকলে ডিফল্ট ডাটা
         return res.json({
           auth0Id: targetId,
           name: "Unknown Drifter",
@@ -74,21 +79,22 @@ router.get(['/profile/:id', '/:id'], auth, async (req, res) => {
     
     res.json(user);
   } catch (err) {
-    console.error("📡 Profile Fetch Error:", err);
+    console.error("📡 Target Profile Fetch Error:", err);
     res.status(500).json({ msg: "Neural link interrupted" });
   }
 });
 
 /* ==========================================================
     3️⃣ UPDATE PROFILE (Unified)
+    এন্ডপয়েন্ট: PUT /api/profile/update-profile
 ========================================================== */
-router.put("/update-profile", auth, upload.fields([
+router.put("/update-profile", upload.fields([
   { name: 'avatar', maxCount: 1 },
   { name: 'cover', maxCount: 1 }
 ]), async (req, res) => {
   try {
+    const myId = req.auth?.payload?.sub;
     const { nickname, name, bio, location, workplace, avatar: bodyAvatar } = req.body;
-    const myId = req.user.sub || req.user.id;
 
     let updateFields = {};
     if (name) updateFields.name = name;
@@ -119,9 +125,9 @@ router.put("/update-profile", auth, upload.fields([
 /* ==========================================================
     🚀 4️⃣ NEURAL RANK UPDATE
 ========================================================== */
-router.patch("/update-rank", auth, async (req, res) => {
+router.patch("/update-rank", async (req, res) => {
   try {
-    const myId = req.user.sub || req.user.id;
+    const myId = req.auth?.payload?.sub;
     const { points } = req.body;
 
     const updatedUser = await User.findOneAndUpdate(
@@ -146,9 +152,9 @@ router.patch("/update-rank", auth, async (req, res) => {
 /* ==========================================================
     🔗 5️⃣ ESTABLISH LINK SYSTEM (Follow/Unfollow)
 ========================================================== */
-router.post("/establish-link/:targetId", auth, async (req, res) => {
+router.post("/establish-link/:targetId", async (req, res) => {
   try {
-    const myId = req.user.sub || req.user.id; 
+    const myId = req.auth?.payload?.sub; 
     const targetId = decodeURIComponent(req.params.targetId);
 
     if (myId === targetId) {
@@ -184,10 +190,10 @@ router.post("/establish-link/:targetId", auth, async (req, res) => {
 /* ==========================================================
     🔎 6️⃣ SEARCH DRIFTERS
 ========================================================== */
-router.get("/search", auth, async (req, res) => {
+router.get("/search", async (req, res) => {
   try {
     const { query } = req.query;
-    const myId = req.user.sub || req.user.id;
+    const myId = req.auth?.payload?.sub;
     
     let filter = { auth0Id: { $ne: myId } };
 
@@ -215,9 +221,9 @@ router.get("/search", auth, async (req, res) => {
 /* ==========================================================
     🌍 7️⃣ DISCOVERY (Active Nodes)
 ========================================================== */
-router.get("/all", auth, async (req, res) => {
+router.get("/all", async (req, res) => {
   try {
-    const myId = req.user.sub || req.user.id;
+    const myId = req.auth?.payload?.sub;
     const users = await User.find({ auth0Id: { $ne: myId } })
       .select("name nickname avatar auth0Id bio isVerified neuralRank drifterLevel")
       .sort({ createdAt: -1 })
@@ -233,7 +239,7 @@ router.get("/all", auth, async (req, res) => {
 /* ==========================================================
     🛰️ 8️⃣ GET USER SIGNALS (Posts)
 ========================================================== */
-router.get("/posts/user/:userId", auth, async (req, res) => {
+router.get("/posts/user/:userId", async (req, res) => {
   try {
     const targetUserId = decodeURIComponent(req.params.userId);
     
