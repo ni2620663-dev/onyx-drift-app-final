@@ -7,19 +7,46 @@ import Post from '../models/Post.js';
 const router = express.Router();
 
 /* ==========================================================
-    1️⃣ GET PROFILE BY ID
-    (নিউরাল আইডি দিয়ে প্রোফাইল খুঁজে বের করা)
+    1️⃣ GET CURRENT LOGGED-IN USER PROFILE
+    (নিজের প্রোফাইল ফেচ করার জন্য - এটি ফ্রন্টএন্ডের জন্য জরুরি)
+========================================================== */
+router.get("/", auth, async (req, res) => {
+  try {
+    const myId = req.user.sub || req.user.id;
+    let user = await User.findOne({ auth0Id: myId }).select("-__v").lean();
+
+    // যদি ডাটাবেসে ইউজার না থাকে, তবে নতুন তৈরি করবে (Sync)
+    if (!user) {
+      const newUser = new User({
+        auth0Id: myId,
+        name: req.user.name || "Drifter",
+        nickname: req.user.nickname || req.user.name?.split(' ')[0].toLowerCase() || "drifter",
+        avatar: req.user.picture || "",
+        email: req.user.email || ""
+      });
+      const savedUser = await newUser.save();
+      user = savedUser.toObject();
+    }
+    res.json(user);
+  } catch (err) {
+    console.error("📡 Self Profile Error:", err);
+    res.status(500).json({ msg: "Neural link interrupted" });
+  }
+});
+
+/* ==========================================================
+    2️⃣ GET PROFILE BY ID
+    (অন্যান্য ইউজারের প্রোফাইল দেখার জন্য)
 ========================================================== */
 router.get(['/profile/:id', '/:id'], auth, async (req, res) => {
   try {
     const targetId = decodeURIComponent(req.params.id);
     const myId = req.user.sub || req.user.id;
     
-    let user = await User.findOne({ auth0Id: targetId })
-      .select("-__v")
-      .lean();
+    let user = await User.findOne({ auth0Id: targetId }).select("-__v").lean();
     
     if (!user) {
+      // যদি নিজের আইডি হয় কিন্তু ডাটাবেসে না থাকে
       if (targetId === myId) {
         const newUser = new User({
           auth0Id: myId,
@@ -30,8 +57,8 @@ router.get(['/profile/:id', '/:id'], auth, async (req, res) => {
         });
         const savedUser = await newUser.save();
         user = savedUser.toObject();
-        console.log("🆕 Neural Identity Created:", targetId);
       } else {
+        // অন্য ইউজার না থাকলে ডিফল্ট ডাটা
         return res.json({
           auth0Id: targetId,
           name: "Unknown Drifter",
@@ -53,7 +80,7 @@ router.get(['/profile/:id', '/:id'], auth, async (req, res) => {
 });
 
 /* ==========================================================
-    2️⃣ UPDATE PROFILE (Unified)
+    3️⃣ UPDATE PROFILE (Unified)
 ========================================================== */
 router.put("/update-profile", auth, upload.fields([
   { name: 'avatar', maxCount: 1 },
@@ -90,8 +117,7 @@ router.put("/update-profile", auth, upload.fields([
 });
 
 /* ==========================================================
-    🚀 3️⃣ NEURAL RANK UPDATE
-    (প্রতি ১০০ মেসেজে ১ পয়েন্ট বাড়াতে এই এপিআই কাজ করবে)
+    🚀 4️⃣ NEURAL RANK UPDATE
 ========================================================== */
 router.patch("/update-rank", auth, async (req, res) => {
   try {
@@ -118,7 +144,7 @@ router.patch("/update-rank", auth, async (req, res) => {
 });
 
 /* ==========================================================
-    🔗 4️⃣ ESTABLISH LINK SYSTEM (Unique Follow/Unfollow)
+    🔗 5️⃣ ESTABLISH LINK SYSTEM (Follow/Unfollow)
 ========================================================== */
 router.post("/establish-link/:targetId", auth, async (req, res) => {
   try {
@@ -137,14 +163,12 @@ router.post("/establish-link/:targetId", auth, async (req, res) => {
     const isLinked = targetUser.followers && targetUser.followers.includes(myId);
 
     if (isLinked) {
-      // Sever Link (Unfollow)
       await Promise.all([
         User.findOneAndUpdate({ auth0Id: myId }, { $pull: { following: targetId } }),
         User.findOneAndUpdate({ auth0Id: targetId }, { $pull: { followers: myId } })
       ]);
       return res.json({ linked: false, msg: "Neural Link Severed! 🛑" });
     } else {
-      // Establish Link (Follow)
       await Promise.all([
         User.findOneAndUpdate({ auth0Id: myId }, { $addToSet: { following: targetId } }),
         User.findOneAndUpdate({ auth0Id: targetId }, { $addToSet: { followers: myId } })
@@ -158,7 +182,7 @@ router.post("/establish-link/:targetId", auth, async (req, res) => {
 });
 
 /* ==========================================================
-    🔎 5️⃣ SEARCH DRIFTERS
+    🔎 6️⃣ SEARCH DRIFTERS
 ========================================================== */
 router.get("/search", auth, async (req, res) => {
   try {
@@ -189,7 +213,7 @@ router.get("/search", auth, async (req, res) => {
 });
 
 /* ==========================================================
-    🌍 6️⃣ DISCOVERY (Active Nodes)
+    🌍 7️⃣ DISCOVERY (Active Nodes)
 ========================================================== */
 router.get("/all", auth, async (req, res) => {
   try {
@@ -207,7 +231,7 @@ router.get("/all", auth, async (req, res) => {
 });
 
 /* ==========================================================
-    🛰️ 7️⃣ GET USER SIGNALS (Posts)
+    🛰️ 8️⃣ GET USER SIGNALS (Posts)
 ========================================================== */
 router.get("/posts/user/:userId", auth, async (req, res) => {
   try {

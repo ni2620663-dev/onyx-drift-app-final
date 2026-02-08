@@ -72,10 +72,8 @@ app.use(express.urlencoded({ limit: "100mb", extended: true }));
 
 /* ==========================================================
     🧠 NEURAL PULSE UPDATE MIDDLEWARE
-    ইউজার যখনই কোনো এপিআই রিকোয়েস্ট করবে, তার Pulse আপডেট হবে।
 ========================================================== */
 const updateNeuralPulse = async (req, res, next) => {
-    // Auth0 payload চেক করা হচ্ছে (checkJwt মিডলওয়্যার থেকে আসে)
     const auth0Id = req.auth?.payload?.sub; 
     if (auth0Id) {
         try {
@@ -111,12 +109,14 @@ const redis = process.env.REDIS_URL ? new Redis(process.env.REDIS_URL, {
 }) : null;
 
 /* ==========================================================
-    📡 এপিআই রাউটস (ইন্টিগ্রেটেড মিডলওয়্যার সহ)
+    📡 এপিআই রাউটস (ইন্টিগ্রেটেড মিডলওয়্যার সহ)
 ========================================================== */
-// এখানে checkJwt এবং updateNeuralPulse ব্যবহার করা হয়েছে সিকিউরিটির জন্য
+
+// প্রোফাইল রাউট (আমরা মিডলওয়্যারগুলো এখানেই দিয়ে দিচ্ছি যাতে profile.js এ ঝামেলা না হয়)
+app.use("/api/profile", checkJwt, updateNeuralPulse, profileRoutes); 
+
 app.use("/api/user", checkJwt, updateNeuralPulse, userRoutes);      
 app.use("/api/posts", checkJwt, updateNeuralPulse, postRoutes);  
-app.use("/api/profile", checkJwt, updateNeuralPulse, profileRoutes); 
 app.use("/api/stories", checkJwt, updateNeuralPulse, storyRoute);
 app.use("/api/reels", checkJwt, updateNeuralPulse, reelRoutes); 
 app.use("/api/market", checkJwt, updateNeuralPulse, marketRoutes); 
@@ -169,7 +169,6 @@ io.on("connection", (socket) => {
         }
 
         try {
-            // সকেট কানেক্ট হলেও পালস আপডেট হবে
             await User.findOneAndUpdate(
                 { auth0Id: auth0Id }, 
                 { "deathSwitch.lastPulseTimestamp": new Date() }
@@ -201,11 +200,5 @@ io.on("connection", (socket) => {
 // ৮. সার্ভার লিসেনিং
 const PORT = process.env.PORT || 10000;
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`
-    =========================================
-    🚀 ONYX CORE ACTIVE ON PORT: ${PORT}
-    🌐 ENVIRONMENT: ${process.env.NODE_ENV || 'development'}
-    🧠 NEURAL LINK: READY
-    =========================================
-    `);
+    console.log(`🚀 ONYX CORE ACTIVE ON PORT: ${PORT}`);
 });
