@@ -17,7 +17,93 @@ import Notification from "./Notifications";
 import Settings from "./Settings";
 import LegacySetup from '../components/LegacySetup';
 
-// --- ১. NEURAL TOAST COMPONENT ---
+// --- ১. NEURAL INPUT COMPONENT (The Generator with Glitch Effect) ---
+const NeuralInput = ({ onPostSuccess }) => {
+  const { user, getAccessTokenSilently } = useAuth0();
+  const [text, setText] = useState("");
+  const [status, setStatus] = useState("IDLE"); // IDLE, SYNCING, SUCCESS
+
+  const handleGenerate = async () => {
+    if (!text.trim()) return;
+    setStatus("SYNCING");
+    try {
+      const token = await getAccessTokenSilently();
+      const res = await axios.post('https://onyx-drift-app-final-u29m.onrender.com/api/posts/neural-generate', {
+        text,
+        auth0Id: user?.sub,
+        mood: "creative"
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      if (res.data.success) {
+        setStatus("SUCCESS");
+        setTimeout(() => {
+            setStatus("IDLE");
+            setText("");
+            if (onPostSuccess) onPostSuccess();
+        }, 2000);
+      }
+    } catch (err) {
+      console.error("Neural Sync Failed", err);
+      setStatus("IDLE");
+    }
+  };
+
+  return (
+    <motion.div 
+      // গ্লিচ ইফেক্ট এনিমেশন: যখন সিঙ্ক হবে তখন হালকা কাঁপবে
+      animate={status === "SYNCING" ? {
+        x: [0, -2, 2, -1, 1, 0],
+        filter: ["hue-rotate(0deg)", "hue-rotate(90deg)", "hue-rotate(0deg)"]
+      } : {}}
+      transition={{ repeat: Infinity, duration: 0.2 }}
+      className="bg-[#080808] border border-cyan-500/20 p-5 rounded-[24px] mb-6 shadow-[0_0_20px_rgba(0,0,0,0.5)] group relative overflow-hidden"
+    >
+      {/* ব্যাকগ্রাউন্ড স্ক্যানলাইন ইফেক্ট */}
+      <div className="absolute inset-0 pointer-events-none opacity-5 bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.25)_50%),linear-gradient(90deg,rgba(255,0,0,0.06),rgba(0,255,0,0.02),rgba(0,0,255,0.06))] bg-[length:100%_2px,3px_100%]" />
+
+      <div className="flex items-center gap-2 mb-3 relative z-10">
+         <div className="w-1.5 h-1.5 bg-cyan-500 rounded-full animate-ping" />
+         <h3 className="text-cyan-500 font-mono text-[9px] uppercase tracking-[0.3em] flex items-center gap-2">
+            <FaBrain className={status === "SYNCING" ? "animate-spin" : ""} />
+            Neural_Input_Core_v2
+         </h3>
+      </div>
+
+      <textarea 
+        className="w-full bg-transparent border-none outline-none text-gray-200 font-mono text-sm placeholder-zinc-700 resize-none min-h-[80px] relative z-10"
+        placeholder="Type a thought to synthesize... (e.g. Neon rain in Tokyo)"
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+      />
+      
+      <div className="flex justify-between items-center mt-3 border-t border-white/5 pt-3 relative z-10">
+        <span className="text-[8px] text-zinc-600 font-mono uppercase tracking-widest">
+            {status === "SYNCING" ? ">> SYNTHESIZING_MEDIA..." : ">> AWAITING_TRANSMISSION"}
+        </span>
+        
+        <button 
+          onClick={handleGenerate}
+          disabled={status === "SYNCING" || !text.trim()}
+          className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border relative overflow-hidden ${
+            status === "SYNCING" 
+            ? 'border-zinc-800 text-zinc-700' 
+            : 'border-cyan-500/50 text-cyan-500 hover:bg-cyan-500 hover:text-black shadow-[0_0_20px_rgba(6,182,212,0.3)]'
+          }`}
+        >
+          {status === "SYNCING" ? (
+            <span className="flex items-center gap-2">
+               <FaSyncAlt className="animate-spin" /> SYNCING
+            </span>
+          ) : "Execute"}
+        </button>
+      </div>
+    </motion.div>
+  );
+};
+
+// --- ২. NEURAL TOAST COMPONENT ---
 const NeuralToast = ({ isVisible, message }) => (
   <AnimatePresence>
     {isVisible && (
@@ -45,7 +131,7 @@ const NeuralToast = ({ isVisible, message }) => (
   </AnimatePresence>
 );
 
-// --- ২. ভিডিও কম্পোনেন্ট ---
+// --- ৩. ভিডিও কম্পোনেন্ট ---
 const CompactVideo = ({ src }) => {
   const videoRef = useRef(null);
   const [isMuted, setIsMuted] = useState(true);
@@ -119,7 +205,7 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
   const fetchUserProfile = async () => {
     try {
       const token = await getAccessTokenSilently();
-      const res = await axios.get(`${API_URL}/api/users/profile`, {
+      const res = await axios.get(`${API_URL}/api/user/profile`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setUserProfile(res.data);
@@ -256,7 +342,7 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
                    { icon: <FaHome />, label: 'Neural Feed', tab: 'home' }, 
                    { icon: <FaStore />, label: 'Marketplace', tab: 'market' }, 
                    { icon: <FaBrain />, label: 'AI Twin Sync', path: `/ai-twin` }, 
-                   { icon: <FaFingerprint />, label: 'Digital Legacy', tab: 'legacy' }, // লিগ্যাসি ট্যাব যোগ
+                   { icon: <FaFingerprint />, label: 'Digital Legacy', tab: 'legacy' },
                    { icon: <FaCog />, label: 'Settings', tab: 'settings' }
                  ].map((item, i) => (
                    <div key={i} onClick={() => { if(item.tab) setActiveTab(item.tab); if(item.path) navigate(item.path); setIsSideMenuOpen(false); }} className={`flex items-center gap-4 p-3 rounded-xl transition-all font-bold text-[10px] uppercase tracking-widest cursor-pointer group ${activeTab === item.tab ? 'text-cyan-400 bg-cyan-500/10 border border-cyan-500/20' : 'text-zinc-500 hover:text-white hover:bg-white/5'}`}>
@@ -289,6 +375,11 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
               ))}
             </div>
 
+            {/* NEURAL INPUT SECTION */}
+            <div className="px-5 pt-6">
+                <NeuralInput onPostSuccess={fetchPosts} />
+            </div>
+
             {loading ? (
                 <div className="flex flex-col items-center py-20 gap-4">
                    <div className="w-10 h-10 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin" />
@@ -298,7 +389,7 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
                 <div className="divide-y divide-white/5">
                   {filteredPosts.map((post) => (
                     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} key={post._id} className={`p-5 transition-all group ${post.isAiGenerated ? 'bg-purple-500/[0.04] border-l-2 border-purple-500' : 'hover:bg-white/[0.01]'}`}>
-                      <div className="flex gap-3">
+                      <div className="flex gap-3 text-left">
                         <div className="relative">
                           <img src={post.authorAvatar || `https://ui-avatars.com/api/?name=${post.authorName}`} className={`w-11 h-11 rounded-2xl border object-cover transition-transform group-hover:scale-105 ${post.isAiGenerated ? 'border-purple-500/50' : 'border-white/10'}`} alt="avatar" />
                           {post.isAiGenerated && (
@@ -307,7 +398,7 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
                             </div>
                           )}
                         </div>
-                        <div className="flex-1 text-left">
+                        <div className="flex-1">
                           <div className="flex items-center justify-between mb-1">
                             <div className="flex items-center gap-2">
                               <span className={`font-black text-[11px] tracking-wide uppercase ${post.isAiGenerated ? 'text-purple-400' : 'text-gray-200'}`}>
@@ -367,7 +458,6 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
         {activeTab === "notify" && <Notification />}
         {activeTab === "settings" && <Settings />}
         
-        {/* --- ৩. DIGITAL LEGACY TAB --- */}
         {activeTab === "legacy" && (
           <div className="p-6">
              <div className="mb-8 text-center">

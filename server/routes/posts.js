@@ -7,6 +7,7 @@ import { v2 as cloudinary } from "cloudinary";
 import { CloudinaryStorage } from "multer-storage-cloudinary";
 import dotenv from "dotenv";
 import { processNeuralIdentity } from "../controllers/aiController.js";
+import { processNeuralInput } from "../controllers/aiPostController.js"; // নতুন কন্ট্রোলার ইম্পোর্ট
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import mongoose from "mongoose";
 
@@ -25,9 +26,8 @@ cloudinary.config({
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 /* ==========================================================
-    🧠 0. NEURAL FEED (Fixes 404 Error)
+    🧠 0. NEURAL FEED
 ========================================================== */
-// এই রাউটটি সবার উপরে রাখা হয়েছে যাতে অন্য ডাইনামিক রাউটের সাথে কনফ্লিক্ট না করে
 router.get("/neural-feed", async (req, res) => {
   try {
     const posts = await Post.find()
@@ -35,7 +35,6 @@ router.get("/neural-feed", async (req, res) => {
       .limit(50)
       .lean();
 
-    // ফ্রন্টএন্ডের জন্য ডেটা স্ট্রাকচার সেফ করা
     const optimizedPosts = posts.map(post => ({
       ...post,
       resonanceScore: (post.likes?.length || 0) * 2 + (post.comments?.length || 0) * 5,
@@ -88,6 +87,12 @@ const upload = multer({
 });
 
 /* ==========================================================
+    ⚡ NEW: NEURAL CONTENT GENERATOR (The Heart of Automation)
+========================================================== */
+// এই রাউটটি টেক্সট কমান্ডকে রিলস বা পোস্টে রূপান্তর করবে
+router.post("/neural-generate", auth, processNeuralInput);
+
+/* ==========================================================
     🌍 1. GET ALL POSTS
 ========================================================== */
 router.get("/", async (req, res) => {
@@ -113,7 +118,7 @@ router.get("/", async (req, res) => {
 });
 
 /* ==========================================================
-    🚀 2. CREATE POST
+    🚀 2. CREATE POST (Manual)
 ========================================================== */
 router.post("/", auth, upload.single("media"), async (req, res) => {
   try {
@@ -122,8 +127,6 @@ router.post("/", auth, upload.single("media"), async (req, res) => {
     }
 
     const currentUserId = req.user?.sub || req.user?.id;
-    if (!currentUserId) return res.status(401).json({ msg: "User identification failed." });
-
     const userProfile = await User.findOne({ auth0Id: currentUserId }).lean();
 
     let mediaUrl = req.file ? req.file.path : "";
@@ -165,7 +168,7 @@ router.post("/", auth, upload.single("media"), async (req, res) => {
 });
 
 /* ==========================================================
-    ❤️ 3. LIKE SYSTEM (Stabilized)
+    ❤️ 3. LIKE SYSTEM
 ========================================================== */
 router.post("/:id/like", auth, async (req, res) => {
   try {
@@ -176,8 +179,6 @@ router.post("/:id/like", auth, async (req, res) => {
 
     const post = await Post.findById(req.params.id);
     if (!post) return res.status(404).json({ msg: "Post missing." });
-
-    if (!Array.isArray(post.likes)) post.likes = [];
 
     const isLiked = post.likes.includes(userId);
     const update = isLiked 
@@ -262,37 +263,6 @@ router.post("/:id/comment", auth, async (req, res) => {
       res.status(500).json({ msg: "Comment Failure" });
     }
 });
-/* ==========================================================
-    🧬 NEURAL IDENTITY ENGINE (The Heart of your Living System)
-========================================================== */
-
-const trainAITwin = async (userId, postText, authorName) => {
-  try {
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-    
-    // AI-কে নির্দেশ দেওয়া হচ্ছে ইউজারের পার্সোনালিটি ডিকোড করতে
-    const prompt = `Analyze this transmission from "${authorName}": "${postText}". 
-    Extract: 1. Core Emotion 2. Vocabulary Style 3. Philosophical Leanings.
-    Return only a JSON object like: 
-    {"emotion": "string", "style": "string", "traits": ["list"], "syncLevel": number}`;
-
-    const result = await model.generateContent(prompt);
-    const analysis = JSON.parse(result.response.text());
-
-    // ইউজার মডেলে এই 'Neural Snapshot' সেভ করা
-    await User.findOneAndUpdate(
-      { auth0Id: userId },
-      { 
-        $push: { neuralHistory: { ...analysis, timestamp: new Date() } },
-        $inc: { neuralSyncScore: 1 } // ইউজার যত পোস্ট করবে, AI তত বেশি তাকে চিনবে
-      }
-    );
-    
-    console.log(`🧬 Neural Link Updated for ${authorName}: Sync at ${analysis.syncLevel}%`);
-  } catch (error) {
-    console.error("Neural Training Interrupted:", error);
-  }
-};
 
 /* ==========================================================
     🗑️ 6. DELETE POST
@@ -312,28 +282,9 @@ router.delete("/:id", auth, async (req, res) => {
     res.status(500).json({ msg: "Deletion failed" });
   }
 });
-// AI Twin এর স্ট্যাটাস চেক করার রাউট
-router.get("/ai-twin/status", async (req, res) => {
-  try {
-    const user = await User.findOne({ auth0Id: req.user.sub });
-    
-    // সিমুলেটেড নিউরাল ক্যালকুলেশন
-    const syncPercentage = Math.min((user.postsCount || 0) * 2, 100); 
-    const traits = ["Analytical", "Cyberpunk-enthusiast", "Direct"]; // এগুলো Gemini থেকে আসবে
-    
-    res.json({
-      syncLevel: syncPercentage,
-      activeNodes: user.postsCount || 0,
-      personalityTraits: traits,
-      lastSync: new Date()
-    });
-  } catch (err) {
-    res.status(500).json({ error: "Neural link failed" });
-  }
-});
 
 /* ==========================================================
-    ✅ 7. GET POSTS BY USER ID
+    ✅ 7. USER SPECIFIC POSTS
 ========================================================== */
 router.get("/user/:userId", async (req, res) => {
   try {

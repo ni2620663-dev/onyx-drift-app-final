@@ -14,7 +14,7 @@ import connectDB from "./config/db.js";
 import User from "./models/User.js"; 
 connectDB();
 
-// রাউট ইম্পোর্ট
+// ২. রাউট ইম্পোর্ট
 import userRoutes from './routes/user.js'; 
 import postRoutes from "./routes/posts.js";
 import messageRoutes from "./routes/messages.js";
@@ -23,7 +23,7 @@ import reelRoutes from "./routes/reels.js";
 import profileRoutes from "./routes/profile.js"; 
 import groupRoutes from "./routes/group.js"; 
 import marketRoutes from "./routes/market.js"; 
-import adminRoutes from "./routes/admin.js";     
+import adminRoutes from "./routes/admin.js";      
 
 // 🛡️ Auth0 JWT ভেরিফিকেশন মিডলওয়্যার
 const checkJwt = auth({
@@ -72,17 +72,19 @@ app.use(express.urlencoded({ limit: "100mb", extended: true }));
 
 /* ==========================================================
     🧠 NEURAL PULSE UPDATE MIDDLEWARE
+    ইউজার যখনই কোনো এপিআই রিকোয়েস্ট করবে, তার Pulse আপডেট হবে।
 ========================================================== */
 const updateNeuralPulse = async (req, res, next) => {
-    if (req.auth?.payload?.sub) {
+    // Auth0 payload চেক করা হচ্ছে (checkJwt মিডলওয়্যার থেকে আসে)
+    const auth0Id = req.auth?.payload?.sub; 
+    if (auth0Id) {
         try {
-            // ফিক্স: Auth0 ID ব্যবহার করে পালস আপডেট
             await User.findOneAndUpdate(
-                { auth0Id: req.auth.payload.sub },
+                { auth0Id: auth0Id },
                 { "deathSwitch.lastPulseTimestamp": new Date() }
             );
         } catch (err) {
-            console.error("Pulse Update Failed:", err);
+            console.error("Pulse Update Failed:", err.message);
         }
     }
     next();
@@ -108,14 +110,17 @@ const redis = process.env.REDIS_URL ? new Redis(process.env.REDIS_URL, {
     }
 }) : null;
 
-// ৭. এপিআই রাউটস
-app.use("/api/user", updateNeuralPulse, userRoutes);      
-app.use("/api/posts", updateNeuralPulse, postRoutes);  
-app.use("/api/profile", updateNeuralPulse, profileRoutes); 
-app.use("/api/stories", updateNeuralPulse, storyRoute);
-app.use("/api/reels", updateNeuralPulse, reelRoutes); 
-app.use("/api/market", updateNeuralPulse, marketRoutes); 
-app.use("/api/admin", updateNeuralPulse, adminRoutes); 
+/* ==========================================================
+    📡 এপিআই রাউটস (ইন্টিগ্রেটেড মিডলওয়্যার সহ)
+========================================================== */
+// এখানে checkJwt এবং updateNeuralPulse ব্যবহার করা হয়েছে সিকিউরিটির জন্য
+app.use("/api/user", checkJwt, updateNeuralPulse, userRoutes);      
+app.use("/api/posts", checkJwt, updateNeuralPulse, postRoutes);  
+app.use("/api/profile", checkJwt, updateNeuralPulse, profileRoutes); 
+app.use("/api/stories", checkJwt, updateNeuralPulse, storyRoute);
+app.use("/api/reels", checkJwt, updateNeuralPulse, reelRoutes); 
+app.use("/api/market", checkJwt, updateNeuralPulse, marketRoutes); 
+app.use("/api/admin", checkJwt, updateNeuralPulse, adminRoutes); 
 app.use("/api/messages", checkJwt, updateNeuralPulse, messageRoutes); 
 app.use("/api/groups", checkJwt, updateNeuralPulse, groupRoutes); 
 
@@ -129,12 +134,16 @@ cron.schedule('0 0 * * *', async () => {
         const users = await User.find({ "deathSwitch.isActive": true, "deathSwitch.isTriggered": false });
         const now = new Date();
         for (let user of users) {
+            if (!user.deathSwitch.lastPulseTimestamp) continue;
+            
             const thresholdDate = new Date(user.deathSwitch.lastPulseTimestamp);
             thresholdDate.setMonth(thresholdDate.getMonth() + user.deathSwitch.inactivityThresholdMonths);
+            
             if (now > thresholdDate) {
                 user.deathSwitch.isTriggered = true;
                 user.legacyProtocol.vaultStatus = 'RELEASED';
                 await user.save();
+                console.log(`💀 Vault Released for user: ${user.auth0Id}`);
             }
         }
     } catch (err) {
@@ -143,7 +152,7 @@ cron.schedule('0 0 * * *', async () => {
 });
 
 /* ==========================================================
-    📡 REAL-TIME ENGINE (Socket.io) - FIXED
+    📡 REAL-TIME ENGINE (Socket.io)
 ========================================================== */
 io.on("connection", (socket) => {
     console.log(`⚡ New Neural Link: ${socket.id}`);
@@ -160,8 +169,7 @@ io.on("connection", (socket) => {
         }
 
         try {
-            // ফিক্স ১: findByIdAndUpdate এর বদলে findOneAndUpdate ব্যবহার করুন
-            // কারণ আপনার আইডিটি একটি স্ট্রিং (google-oauth2|...), standard ObjectId নয়।
+            // সকেট কানেক্ট হলেও পালস আপডেট হবে
             await User.findOneAndUpdate(
                 { auth0Id: auth0Id }, 
                 { "deathSwitch.lastPulseTimestamp": new Date() }
@@ -186,10 +194,18 @@ io.on("connection", (socket) => {
             const updated = await redis.hgetall("online_users");
             io.emit("getOnlineUsers", Object.keys(updated).map(id => ({ userId: id })));
         }
+        console.log(`🔌 Link Severed: ${socket.id}`);
     });
 });
 
+// ৮. সার্ভার লিসেনিং
 const PORT = process.env.PORT || 10000;
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 ONYX CORE ACTIVE ON PORT: ${PORT}`);
+    console.log(`
+    =========================================
+    🚀 ONYX CORE ACTIVE ON PORT: ${PORT}
+    🌐 ENVIRONMENT: ${process.env.NODE_ENV || 'development'}
+    🧠 NEURAL LINK: READY
+    =========================================
+    `);
 });
