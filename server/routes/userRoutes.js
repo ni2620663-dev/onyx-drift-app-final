@@ -21,114 +21,48 @@ const upload = multer({
 ========================================================== */
 
 /**
- * ১. ইউজার ডাটা সিঙ্ক (এটিই ডাটাবেসে ইউজার সেভ করবে)
- * Neural Stats (mood, impact, memory) ডিফল্ট ভ্যালুসহ অ্যাড করা হয়েছে
+ * ১. লজড-ইন ইউজারের প্রোফাইল ডাটা পাওয়া
+ * GET: api/user/profile
+ * ফ্রন্টএন্ড থেকে প্রোফাইল পেজে যাওয়ার সময় এটি কল হয়
  */
-// ইউজারের কেনাকাটা প্রসেস করার এপিআই
-router.post("/purchase-item", auth, async (req, res) => {
+router.get('/profile', auth, async (req, res) => {
   try {
-    const { itemId, cost, isPointsPayment } = req.body;
     const auth0Id = req.user.sub || req.user.id;
-
-    const user = await User.findOne({ auth0Id });
-    if (!user) return res.status(404).json({ msg: "User not found" });
-
-    // যদি পয়েন্ট দিয়ে কিনতে চায়
-    if (isPointsPayment) {
-      if (user.neuralImpact < cost) {
-        return res.status(400).json({ msg: "Insufficient Impact Points" });
-      }
-
-      // ডাটাবেস আপডেট: পয়েন্ট কমানো এবং আইটেম লিস্টে অ্যাড করা
-      const updatedUser = await User.findOneAndUpdate(
-        { auth0Id },
-        { 
-          $inc: { neuralImpact: -cost },
-          $addToSet: { unlockedAssets: itemId } // ডুপ্লিকেট আইটেম রোধ করবে
-        },
-        { new: true }
-      );
-
-      console.log(`🎁 Asset Unlocked: ${itemId} for ${user.name}`);
-      return res.status(200).json({ success: true, balance: updatedUser.neuralImpact });
-    }
-
-    // যদি টাকা দিয়ে কেনা হয় (পেমেন্ট গেটওয়ে সাকসেস হওয়ার পর এটি কল হবে)
-    await User.updateOne(
-      { auth0Id },
-      { $addToSet: { unlockedAssets: itemId } }
-    );
-
-    res.status(200).json({ success: true });
-  } catch (err) {
-    console.error("Purchase Error:", err);
-    res.status(500).json({ msg: "Transaction failed" });
-  }
-});
-// একটি নির্দিষ্ট অ্যাসেট একটিভ করার রাউট
-router.post("/equip-asset", auth, async (req, res) => {
-  try {
-    const { assetId, category } = req.body; // category হতে পারে 'aura', 'badge', 'mode'
-    const auth0Id = req.user.sub || req.user.id;
-
-    // ইউজারের প্রোফাইলে একটিভ সেটিংস আপডেট করা
-    const updateField = {};
-    if (category === 'aura') updateField['profileSettings.activeAura'] = assetId;
-    if (category === 'badge') updateField['profileSettings.activeBadge'] = assetId;
-
-    await User.findOneAndUpdate({ auth0Id }, { $set: updateField });
-
-    res.status(200).json({ success: true, message: "Profile synchronized with new asset." });
-  } catch (err) {
-    res.status(500).json({ msg: "Neural Link Error" });
-  }
-});
-// PUT: api/user/equip-asset
-router.put("/equip-asset", auth, async (req, res) => {
-  const { assetId, type } = req.body; // type: 'aura' | 'badge'
-  
-  try {
-    const update = type === 'aura' 
-      ? { "profileSettings.activeAura": assetId } 
-      : { "profileSettings.activeBadge": assetId };
-
-    const user = await User.findOneAndUpdate(
-      { auth0Id: req.user.sub },
-      { $set: update },
-      { new: true }
-    );
+    const user = await User.findOne({ auth0Id }).lean();
     
-    res.json({ success: true, settings: user.profileSettings });
-  } catch (err) {
-    res.status(500).send("Sync Error");
-  }
-});
-router.post("/purchase", auth, async (req, res) => {
-  try {
-    const { itemId, cost } = req.body;
-    const auth0Id = req.user.sub || req.user.id;
-
-    const user = await User.findOne({ auth0Id });
-
-    if (user.neuralImpact < cost) {
-      return res.status(400).json({ msg: "Insufficient points" });
+    if (!user) {
+      return res.status(404).json({ message: "Profile not found." });
     }
+    
+    // ইউজারের পোস্টগুলোও একসাথে পাঠানো হচ্ছে
+    const posts = await Post.find({ 
+      $or: [{ author: auth0Id }, { authorAuth0Id: auth0Id }] 
+    }).sort({ createdAt: -1 });
 
-    // ১. পয়েন্ট কমানো
-    // ২. আনলকড আইটেম লিস্টে অ্যাড করা (যদি ডাটাবেসে array থাকে)
-    await User.updateOne(
-      { auth0Id },
-      { 
-        $inc: { neuralImpact: -cost },
-        $addToSet: { unlockedAssets: itemId } // ইউজারের মডেলে 'unlockedAssets' ফিল্ড লাগবে
-      }
-    );
-
-    res.status(200).json({ success: true });
+    res.status(200).json({ user, posts });
   } catch (err) {
-    res.status(500).json({ msg: "Transaction Error" });
+    res.status(500).json({ message: "Neural Link Error", error: err.message });
   }
 });
+
+/**
+ * ২. রিলস ডাটা পাওয়া (Bad Request 400 এরর ফিক্স)
+ * GET: api/user/reels/all (অথবা আপনার ফ্রন্টএন্ড অনুযায়ী পাথ সেট করুন)
+ */
+router.get('/reels/all', async (req, res) => {
+    try {
+        const reels = await Post.find({ mediaType: 'reel' })
+            .sort({ createdAt: -1 })
+            .lean();
+        res.status(200).json(reels);
+    } catch (err) {
+        res.status(400).json({ message: "Failed to fetch reels", error: err.message });
+    }
+});
+
+/**
+ * ৩. ইউজার ডাটা সিঙ্ক (Auth0 থেকে আসার পর)
+ */
 router.post('/sync', auth, async (req, res) => {
   try {
     const { auth0Id, name, email, picture, username } = req.body;
@@ -142,7 +76,6 @@ router.post('/sync', auth, async (req, res) => {
           avatar: picture,
           nickname: username?.replace(/\s+/g, '').toLowerCase() || `drifter_${Math.floor(Math.random() * 1000)}`
         },
-        // নতুন ইউজার হলে এই ডিফল্ট ভ্যালুগুলো সেট হবে
         $setOnInsert: {
           neuralImpact: 0,
           neuralRank: "Novice Drifter",
@@ -162,32 +95,8 @@ router.post('/sync', auth, async (req, res) => {
 });
 
 /**
- * ২. ড্রিপ্টার সার্চ
+ * ৪. ড্রিপ্টার সার্চ
  */
-// ১. গ্লোবাল লিডারবোর্ড ডাটা (Top 10 Drifters)
-router.get("/leaderboard", async (req, res) => {
-  try {
-    const topDrifters = await User.find({})
-      .sort({ neuralImpact: -1 }) // পয়েন্ট অনুযায়ী সাজানো
-      .limit(10)
-      .select("name avatar neuralImpact neuralRank unlockedAssets");
-    res.json(topDrifters);
-  } catch (err) {
-    res.status(500).send("Sync Error");
-  }
-});
-
-// ২. প্রিমিয়াম ফিড (যেখানে ব্যাজওয়ালা ইউজারদের পোস্ট হাইলাইট হবে)
-router.get("/global-feed", async (req, res) => {
-  try {
-    const posts = await Post.find({})
-      .populate("author", "name avatar unlockedAssets profileSettings")
-      .sort({ createdAt: -1 });
-    res.json(posts);
-  } catch (err) {
-    res.status(500).send("Neural Link Broken");
-  }
-});
 router.get('/search', auth, async (req, res) => {
   try {
     const { query } = req.query;
@@ -203,82 +112,35 @@ router.get('/search', auth, async (req, res) => {
         { nickname: { $regex: searchRegex } }
       ]
     })
-    .select("name nickname avatar auth0Id bio isVerified followers following neuralImpact neuralRank")
+    .select("name nickname avatar auth0Id bio neuralImpact neuralRank")
     .limit(12)
     .lean();
     
     res.status(200).json(users);
   } catch (err) {
-    console.error("Search Error:", err);
     res.status(500).json({ message: "Search signal lost" });
   }
 });
 
 /**
- * ৩. প্রোফাইল আপডেট
- */
-router.put("/update-profile", auth, upload.fields([
-  { name: 'avatar', maxCount: 1 },
-  { name: 'cover', maxCount: 1 }
-]), async (req, res) => {
-  try {
-    const { nickname, name, bio, location, workplace } = req.body;
-    const targetAuth0Id = req.user.sub || req.user.id;
-    let updateFields = {};
-    
-    if (name) updateFields.name = name;
-    if (nickname) updateFields.nickname = nickname.replace(/\s+/g, '').toLowerCase();
-    if (bio) updateFields.bio = bio;
-    if (location) updateFields.location = location;
-    if (workplace) updateFields.workplace = workplace;
-
-    if (req.files) {
-      if (req.files.avatar) updateFields.avatar = req.files.avatar[0].path;
-      if (req.files.cover) updateFields.coverImg = req.files.cover[0].path;
-    }
-
-    const updatedUser = await User.findOneAndUpdate(
-      { auth0Id: targetAuth0Id }, 
-      { $set: updateFields },
-      { new: true, upsert: true, lean: true }
-    );
-    res.json(updatedUser);
-  } catch (err) {
-    res.status(500).json({ msg: 'Identity Sync Failed' });
-  }
-});
-
-/**
- * ৪. প্রোফাইল এবং পোস্ট একসাথে পাওয়া (Neural Stats সহ)
+ * ৫. নির্দিষ্ট ইউজারের প্রোফাইল দেখা (Public Profile)
  */
 router.get(['/profile/:userId', '/:userId'], auth, async (req, res, next) => {
   try {
     const rawUserId = req.params.userId;
-    if (!rawUserId || ['search', 'all', 'undefined'].includes(rawUserId)) {
+    if (!rawUserId || ['search', 'all', 'undefined', 'profile'].includes(rawUserId)) {
         return next();
     }
 
     const targetId = decodeURIComponent(rawUserId);
-
     const user = await User.findOne({ auth0Id: targetId }).lean();
     
     const posts = await Post.find({ 
-      $or: [
-        { authorAuth0Id: targetId },
-        { authorId: targetId },
-        { userId: targetId }
-      ]
+        $or: [{ author: targetId }, { authorAuth0Id: targetId }] 
     }).sort({ createdAt: -1 }).lean();
 
     res.status(200).json({
-      user: user || { 
-        auth0Id: targetId, 
-        name: "Unknown Drifter", 
-        avatar: "", 
-        bio: "Neural profile not found.",
-        neuralImpact: 0,
-        moodStats: { motivated: 0, creative: 0, calm: 0 }
-      },
+      user: user || { name: "Unknown Drifter", neuralImpact: 0 },
       posts: posts || []
     });
   } catch (err) {
@@ -287,18 +149,59 @@ router.get(['/profile/:userId', '/:userId'], auth, async (req, res, next) => {
 });
 
 /**
- * ৫. নতুন পোস্ট তৈরি
+ * ৬. পোস্ট তৈরি
  */
 router.post('/create', auth, upload.single('file'), createPost);
 
 /**
- * ৬. ফলো সিস্টেম (ইমপ্যাক্ট পয়েন্ট আপডেট লজিকসহ)
+ * ৭. কেনাকাটা এবং এসেট ইকুইপ সিস্টেম
+ */
+router.post("/purchase-item", auth, async (req, res) => {
+  try {
+    const { itemId, cost, isPointsPayment } = req.body;
+    const auth0Id = req.user.sub || req.user.id;
+
+    const user = await User.findOne({ auth0Id });
+    if (!user) return res.status(404).json({ msg: "User not found" });
+
+    if (isPointsPayment) {
+      if (user.neuralImpact < cost) return res.status(400).json({ msg: "Insufficient Points" });
+
+      const updatedUser = await User.findOneAndUpdate(
+        { auth0Id },
+        { $inc: { neuralImpact: -cost }, $addToSet: { unlockedAssets: itemId } },
+        { new: true }
+      );
+      return res.status(200).json({ success: true, balance: updatedUser.neuralImpact });
+    }
+    res.status(200).json({ success: true });
+  } catch (err) {
+    res.status(500).json({ msg: "Transaction failed" });
+  }
+});
+
+router.post("/equip-asset", auth, async (req, res) => {
+  try {
+    const { assetId, category } = req.body;
+    const auth0Id = req.user.sub || req.user.id;
+    const updateField = {};
+    if (category === 'aura') updateField['profileSettings.activeAura'] = assetId;
+    if (category === 'badge') updateField['profileSettings.activeBadge'] = assetId;
+
+    await User.findOneAndUpdate({ auth0Id }, { $set: updateField });
+    res.status(200).json({ success: true, message: "Profile synchronized." });
+  } catch (err) {
+    res.status(500).json({ msg: "Neural Link Error" });
+  }
+});
+
+/**
+ * ৮. ফলো সিস্টেম
  */
 router.post("/follow/:targetId", auth, async (req, res) => {
   try {
     const myId = req.user.sub || req.user.id;
     const targetId = decodeURIComponent(req.params.targetId);
-
     if (myId === targetId) return res.status(400).json({ msg: "Self-link forbidden" });
 
     const [targetUser, currentUser] = await Promise.all([
@@ -306,51 +209,25 @@ router.post("/follow/:targetId", auth, async (req, res) => {
         User.findOne({ auth0Id: myId })
     ]);
 
-    if (!targetUser || !currentUser) return res.status(404).json({ msg: "User connection failed" });
+    if (!targetUser || !currentUser) return res.status(404).json({ msg: "User not found" });
 
-    const isFollowing = currentUser.following && currentUser.following.includes(targetId);
+    const isFollowing = currentUser.following?.includes(targetId);
 
     if (isFollowing) {
       await Promise.all([
         User.updateOne({ auth0Id: myId }, { $pull: { following: targetId } }),
-        User.updateOne({ auth0Id: targetId }, { $pull: { followers: myId }, $inc: { neuralImpact: -5 } }) // আনফলো করলে ইমপ্যাক্ট কমবে
+        User.updateOne({ auth0Id: targetId }, { $pull: { followers: myId }, $inc: { neuralImpact: -5 } })
       ]);
       res.json({ followed: false });
     } else {
       await Promise.all([
         User.updateOne({ auth0Id: myId }, { $addToSet: { following: targetId } }),
-        User.updateOne({ auth0Id: targetId }, { $addToSet: { followers: myId }, $inc: { neuralImpact: 10 } }) // ফলো করলে ইমপ্যাক্ট বাড়বে
+        User.updateOne({ auth0Id: targetId }, { $addToSet: { followers: myId }, $inc: { neuralImpact: 10 } })
       ]);
       res.json({ followed: true });
     }
   } catch (err) {
     res.status(500).json({ msg: "Connection failed" });
-  }
-});
-router.put('/toggle-autopilot', auth, toggleAutopilot);
-router.put('/update-ai-tone', auth, updateAiTone);
-router.put('/toggle-ghost', auth, toggleGhostMode);
-/**
- * ৭. (NEW) Neural Stats Update - ইমপ্যাক্ট ও মুড আপডেট করার জন্য
- */
-router.put("/sync-neural-stats", auth, async (req, res) => {
-  try {
-    const myId = req.user.sub || req.user.id;
-    const { impactGain, newMood } = req.body;
-
-    const updateData = {};
-    if (impactGain) updateData.$inc = { neuralImpact: impactGain };
-    if (newMood) updateData.$set = { moodStats: newMood };
-
-    const updatedUser = await User.findOneAndUpdate(
-      { auth0Id: myId },
-      updateData,
-      { new: true, lean: true }
-    );
-
-    res.json(updatedUser);
-  } catch (err) {
-    res.status(500).json({ msg: "Stats sync failed" });
   }
 });
 
