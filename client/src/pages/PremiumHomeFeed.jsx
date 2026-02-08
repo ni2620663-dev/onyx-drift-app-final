@@ -17,8 +17,6 @@ import Notification from "./Notifications";
 import Settings from "./Settings";
 import LegacySetup from '../components/LegacySetup';
 
-const API_URL = "https://onyx-drift-app-final-u29m.onrender.com";
-
 // --- ১. NEURAL INPUT COMPONENT (The Generator with Glitch Effect) ---
 const NeuralInput = ({ onPostSuccess }) => {
   const { user, getAccessTokenSilently } = useAuth0();
@@ -26,13 +24,13 @@ const NeuralInput = ({ onPostSuccess }) => {
   const [status, setStatus] = useState("IDLE"); // IDLE, SYNCING, SUCCESS
 
   const handleGenerate = async () => {
-    if (!text.trim() || !user) return;
+    if (!text.trim()) return;
     setStatus("SYNCING");
     try {
       const token = await getAccessTokenSilently();
-      const res = await axios.post(`${API_URL}/api/posts/neural-generate`, {
+      const res = await axios.post('https://onyx-drift-app-final-u29m.onrender.com/api/posts/neural-generate', {
         text,
-        auth0Id: user.sub,
+        auth0Id: user?.sub,
         mood: "creative"
       }, {
         headers: { Authorization: `Bearer ${token}` }
@@ -45,18 +43,16 @@ const NeuralInput = ({ onPostSuccess }) => {
             setText("");
             if (onPostSuccess) onPostSuccess();
         }, 2000);
-      } else {
-        throw new Error("Generation failed on server");
       }
     } catch (err) {
-      console.error("Neural Sync Failed:", err.response?.data || err.message);
+      console.error("Neural Sync Failed", err);
       setStatus("IDLE");
-      alert("Neural Sync Failed: Internal Server Error (500). Please check backend logs.");
     }
   };
 
   return (
     <motion.div 
+      // গ্লিচ ইফেক্ট এনিমেশন: যখন সিঙ্ক হবে তখন হালকা কাঁপবে
       animate={status === "SYNCING" ? {
         x: [0, -2, 2, -1, 1, 0],
         filter: ["hue-rotate(0deg)", "hue-rotate(90deg)", "hue-rotate(0deg)"]
@@ -64,6 +60,7 @@ const NeuralInput = ({ onPostSuccess }) => {
       transition={{ repeat: Infinity, duration: 0.2 }}
       className="bg-[#080808] border border-cyan-500/20 p-5 rounded-[24px] mb-6 shadow-[0_0_20px_rgba(0,0,0,0.5)] group relative overflow-hidden"
     >
+      {/* ব্যাকগ্রাউন্ড স্ক্যানলাইন ইফেক্ট */}
       <div className="absolute inset-0 pointer-events-none opacity-5 bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.25)_50%),linear-gradient(90deg,rgba(255,0,0,0.06),rgba(0,255,0,0.02),rgba(0,0,255,0.06))] bg-[length:100%_2px,3px_100%]" />
 
       <div className="flex items-center gap-2 mb-3 relative z-10">
@@ -164,7 +161,7 @@ const CompactVideo = ({ src }) => {
   );
 };
 
-const PremiumHomeFeed = () => {
+const PremiumHomeFeed = ({ searchQuery = "" }) => {
   const { user, getAccessTokenSilently } = useAuth0();
   const navigate = useNavigate();
   
@@ -183,8 +180,10 @@ const PremiumHomeFeed = () => {
   const [userProfile, setUserProfile] = useState(null);
   const [toast, setToast] = useState({ show: false, message: "" });
 
+  const API_URL = "https://onyx-drift-app-final-u29m.onrender.com";
   const postMediaRef = useRef(null);
 
+  // --- ডাটা ফেচিং ---
   const fetchPosts = async () => {
     try {
       setLoading(true);
@@ -194,35 +193,28 @@ const PremiumHomeFeed = () => {
       });
       setPosts(response.data);
     } catch (err) { 
-        console.error("Neural feed fetch failed, trying global feed...");
-        try {
-          const fallback = await axios.get(`${API_URL}/api/posts`);
-          setPosts(fallback.data);
-        } catch (finalErr) {
-          console.error("Critical: Network Failure");
-        }
+      try {
+        const fallback = await axios.get(`${API_URL}/api/posts`);
+        setPosts(fallback.data);
+      } catch (finalErr) {
+        console.error("Critical: Network Failure");
+      }
     } finally { setLoading(false); }
   };
 
-  // পরিবর্তন: এন্ডপয়েন্ট /api/user/profile থেকে শুধু /api/profile করা হয়েছে
   const fetchUserProfile = async () => {
-    if (!user) return;
     try {
       const token = await getAccessTokenSilently();
-      const res = await axios.get(`${API_URL}/api/profile`, {
+      const res = await axios.get(`${API_URL}/api/user/profile`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setUserProfile(res.data);
-    } catch (err) { 
-      console.log("User Profile not found or not yet created."); 
-    }
+    } catch (err) { console.log("User Profile not found."); }
   };
 
   useEffect(() => {
-    if (user) {
-      fetchPosts();
-      fetchUserProfile();
-    }
+    fetchPosts();
+    fetchUserProfile();
     
     const aiMessages = [
       "AI Twin learning your vocabulary patterns...",
@@ -238,7 +230,7 @@ const PremiumHomeFeed = () => {
       }
     }, 45000);
     return () => clearInterval(interval);
-  }, [user]);
+  }, []);
 
   const filteredPosts = useMemo(() => {
     let list = [...posts];
@@ -250,22 +242,16 @@ const PremiumHomeFeed = () => {
   const handleLike = async (postId) => {
     const userId = user?.sub;
     if (!userId) return;
-    
-    // Optimistic Update
     setPosts(prev => prev.map(p => p._id === postId ? { 
         ...p, 
         likes: p.likes?.includes(userId) ? p.likes.filter(id => id !== userId) : [...(p.likes || []), userId] 
     } : p));
-
     try {
       const token = await getAccessTokenSilently();
       await axios.post(`${API_URL}/api/posts/${postId}/like`, {}, { 
         headers: { Authorization: `Bearer ${token}` } 
       });
-    } catch (err) { 
-        console.error("Like sync failed");
-        fetchPosts(); 
-    }
+    } catch (err) { fetchPosts(); }
   };
 
   const handlePostSubmit = async () => {
@@ -288,7 +274,7 @@ const PremiumHomeFeed = () => {
       setPostText(""); setMediaFile(null); setIsPostModalOpen(false);
       setToast({ show: true, message: "Transmission Successful. Neural training initiated." });
     } catch (err) { 
-        alert("Transmission Failed. Check Backend Connection."); 
+        alert("Transmission Failed. Check Connection."); 
     } finally { setIsSubmitting(false); }
   };
 
@@ -364,6 +350,12 @@ const PremiumHomeFeed = () => {
                    </div>
                  ))}
                </nav>
+               <div className="absolute bottom-10 left-6 right-6 p-4 rounded-2xl bg-gradient-to-br from-purple-500/10 to-transparent border border-purple-500/20">
+                 <p className="text-[8px] text-purple-400 font-black uppercase tracking-[0.2em] mb-2">System Stability</p>
+                 <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
+                    <motion.div initial={{ width: 0 }} animate={{ width: "94%" }} className="h-full bg-purple-500 shadow-[0_0_10px_#a855f7]" />
+                 </div>
+               </div>
             </motion.div>
           </>
         )}
@@ -383,6 +375,7 @@ const PremiumHomeFeed = () => {
               ))}
             </div>
 
+            {/* NEURAL INPUT SECTION */}
             <div className="px-5 pt-6">
                 <NeuralInput onPostSuccess={fetchPosts} />
             </div>
@@ -423,12 +416,40 @@ const PremiumHomeFeed = () => {
                           {post.media && (
                             <div className="mt-3 relative rounded-2xl overflow-hidden border border-white/5">
                               {post.media.match(/\.(mp4|webm|mov)$/i) ? <CompactVideo src={post.media} /> : <img src={post.media} className="w-full max-h-[450px] object-cover" alt="post media" />}
+                              <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
                             </div>
                           )}
+                          <div className="flex items-center justify-between mt-5 px-1 text-zinc-500">
+                              <div className="flex gap-6">
+                                <button onClick={() => handleLike(post._id)} className={`flex items-center gap-2 transition-all group/btn ${post.likes?.includes(user?.sub) ? 'text-rose-500' : 'hover:text-rose-500'}`}>
+                                  <div className={`p-2 rounded-lg ${post.likes?.includes(user?.sub) ? 'bg-rose-500/10' : 'bg-white/5'}`}>
+                                    {post.likes?.includes(user?.sub) ? <FaHeart size={14} /> : <FaRegHeart size={14} />}
+                                  </div>
+                                  <span className="text-[10px] font-black">{post.likes?.length || 0}</span>
+                                </button>
+                                <button onClick={() => setActiveCommentPost(post)} className="hover:text-cyan-400 flex items-center gap-2 transition-colors group/btn">
+                                  <div className="p-2 bg-white/5 rounded-lg group-hover/btn:bg-cyan-500/10 transition-colors">
+                                    <FaRegComment size={14} />
+                                  </div>
+                                  <span className="text-[10px] font-black">{post.comments?.length || 0}</span>
+                                </button>
+                              </div>
+                              <div className="flex gap-2">
+                                <button onClick={() => navigate(`/ai-analyze/${post._id}`)} className="p-2 bg-white/5 rounded-lg hover:text-purple-400 transition-colors shadow-sm"><FaBrain size={12} /></button>
+                                <button onClick={() => navigator.share?.({url: window.location.href, title: 'OnyxDrift Sync'})} className="p-2 bg-white/5 rounded-lg hover:text-cyan-400 transition-colors"><FaShareAlt size={12} /></button>
+                              </div>
+                          </div>
                         </div>
                       </div>
                     </motion.div>
                   ))}
+                </div>
+            )}
+            
+            {!loading && filteredPosts.length === 0 && (
+                <div className="py-20 flex flex-col items-center opacity-30">
+                   <FaSatellite size={40} className="mb-4 animate-bounce" />
+                   <p className="text-[10px] font-black uppercase tracking-[0.3em]">No Neural Signals Detected</p>
                 </div>
             )}
           </>
@@ -436,8 +457,115 @@ const PremiumHomeFeed = () => {
         {activeTab === "market" && <Marketplace />}
         {activeTab === "notify" && <Notification />}
         {activeTab === "settings" && <Settings />}
-        {activeTab === "legacy" && <div className="p-6"><LegacySetup /></div>}
+        
+        {activeTab === "legacy" && (
+          <div className="p-6">
+             <div className="mb-8 text-center">
+                <h3 className="text-cyan-500 font-black text-[12px] uppercase tracking-[0.4em] mb-2">Neural Infrastructure</h3>
+                <p className="text-[9px] text-zinc-500 uppercase tracking-widest font-mono">Quantum-Resistant Digital Afterlife</p>
+             </div>
+             <LegacySetup />
+          </div>
+        )}
       </main>
+
+      {/* --- CREATE POST MODAL --- */}
+      <AnimatePresence>
+        {isPostModalOpen && (
+          <div className="fixed inset-0 z-[5000] flex items-center justify-center p-4">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsPostModalOpen(false)} className="absolute inset-0 bg-black/95 backdrop-blur-2xl" />
+            <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 20 }} className="relative w-full max-w-lg bg-[#080808] border border-cyan-500/20 rounded-[32px] p-8 shadow-[0_0_50px_rgba(6,182,212,0.1)]">
+              <div className={`absolute top-0 left-0 w-full h-1.5 transition-all rounded-t-full ${isEncrypted ? 'bg-cyan-500 shadow-[0_0_15px_#06b6d4]' : 'bg-zinc-800'}`} />
+              <div className="flex justify-between items-center mb-6">
+                <div className="flex items-center gap-3">
+                   <div className={`w-2 h-2 rounded-full ${isEncrypted ? 'bg-cyan-500 animate-ping' : 'bg-zinc-600'}`} />
+                   <h3 className="text-cyan-500 font-black text-[10px] uppercase tracking-widest font-mono">
+                     {isEncrypted ? "SECURED NODE LINK" : "GLOBAL NEURAL BROADCAST"}
+                   </h3>
+                </div>
+                <button onClick={() => setIsPostModalOpen(false)} className="text-zinc-500 hover:text-rose-500 transition-colors bg-white/5 p-2 rounded-xl"><FaTimes /></button>
+              </div>
+              <textarea 
+                placeholder={isEncrypted ? "Neural encryption active. Type your shadow message..." : "Broadcast your thoughts to the drift..."} 
+                value={postText} 
+                onChange={(e) => setPostText(e.target.value)} 
+                className="w-full bg-transparent outline-none text-lg text-white resize-none min-h-[180px] placeholder-zinc-800 font-mono tracking-tight" 
+              />
+              {mediaFile && (
+                <div className="relative mb-6 rounded-2xl overflow-hidden border border-white/10 group">
+                    <img src={URL.createObjectURL(mediaFile)} className="w-full h-44 object-cover" alt="preview" />
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                       <button onClick={() => setMediaFile(null)} className="bg-rose-500 text-white p-3 rounded-2xl shadow-xl"><FaTimes /></button>
+                    </div>
+                </div>
+              )}
+              <div className="flex items-center justify-between pt-6 border-t border-white/5">
+                <div className="flex gap-4">
+                  <input type="file" hidden ref={postMediaRef} onChange={(e) => setMediaFile(e.target.files[0])} accept="image/*,video/*" />
+                  <button onClick={() => postMediaRef.current.click()} className="text-zinc-500 hover:text-cyan-500 transition-colors p-3 bg-white/5 rounded-2xl"><FaImage size={20} /></button>
+                  <button onClick={() => setIsEncrypted(!isEncrypted)} className={`flex items-center gap-3 px-4 py-2 rounded-2xl border text-[9px] font-black uppercase transition-all ${isEncrypted ? 'border-cyan-500/50 bg-cyan-500/10 text-cyan-400' : 'border-white/5 bg-white/5 text-zinc-600'}`}>
+                    {isEncrypted ? <FaFingerprint size={14}/> : <FaUnlock size={12}/>} 
+                    {isEncrypted ? "Locked" : "Open Feed"}
+                  </button>
+                </div>
+                <button 
+                  disabled={isSubmitting || (!postText && !mediaFile)} 
+                  onClick={handlePostSubmit} 
+                  className={`px-10 py-3 rounded-2xl font-black text-[11px] uppercase tracking-[0.2em] transition-all ${isSubmitting || (!postText && !mediaFile) ? 'bg-zinc-800 text-zinc-600' : 'bg-cyan-500 text-black shadow-[0_0_30px_rgba(6,182,212,0.4)] hover:scale-105 active:scale-95'}`}
+                >
+                  {isSubmitting ? "SYNCING..." : "TRANSMIT"}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* --- COMMENT MODAL --- */}
+      <AnimatePresence>
+        {activeCommentPost && (
+          <div className="fixed inset-0 z-[3000] flex items-end justify-center">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setActiveCommentPost(null)} className="absolute inset-0 bg-black/85 backdrop-blur-xl" />
+            <motion.div initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }} transition={{ type: 'spring', damping: 25, stiffness: 200 }} className="relative w-full max-w-[550px] bg-[#0A0A0A] rounded-t-[40px] border-t border-white/10 h-[85vh] flex flex-col p-8 shadow-2xl">
+              <div className="w-12 h-1.5 bg-white/10 rounded-full mx-auto mb-8" />
+              <div className="flex justify-between items-center mb-8">
+                <div>
+                   <h3 className="text-cyan-500 font-black text-[10px] uppercase tracking-[0.3em]">Resonance Strings</h3>
+                   <p className="text-[8px] text-zinc-600 uppercase mt-1 font-mono">Syncing thoughts in real-time</p>
+                </div>
+                <button onClick={() => setActiveCommentPost(null)} className="text-zinc-600 hover:text-white transition-colors bg-white/5 p-2 rounded-xl"><FaTimes /></button>
+              </div>
+              <div className="flex-1 overflow-y-auto space-y-5 no-scrollbar text-left pr-2">
+                {activeCommentPost.comments?.map((c, i) => (
+                  <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.1 }} key={i} className="flex gap-4 group">
+                    <img src={c.userAvatar || `https://ui-avatars.com/api/?name=${c.userName}`} className="w-9 h-9 rounded-2xl border border-white/5 object-cover" alt="user avatar" />
+                    <div className="bg-white/[0.03] p-4 rounded-3xl flex-1 border border-white/5 group-hover:bg-white/[0.05] transition-colors">
+                      <div className="flex justify-between items-center mb-1">
+                         <p className="text-cyan-500 font-black text-[10px] uppercase tracking-wide">{c.userName}</p>
+                         <span className="text-[8px] text-zinc-700 font-mono italic">#{i+1}</span>
+                      </div>
+                      <p className="text-[13px] text-gray-300 leading-relaxed">{c.text}</p>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+              <div className="mt-6 flex gap-3 bg-zinc-900/40 p-3 rounded-3xl border border-white/10 focus-within:border-cyan-500/50 transition-all shadow-inner">
+                <input 
+                  value={commentText} 
+                  onChange={(e) => setCommentText(e.target.value)} 
+                  onKeyPress={(e) => e.key === 'Enter' && handleCommentSubmit()} 
+                  placeholder="Inject your resonance..." 
+                  className="flex-1 bg-transparent outline-none text-[13px] text-gray-200 px-3 font-mono" 
+                />
+                <button onClick={handleCommentSubmit} className="bg-cyan-500 text-black p-3.5 rounded-2xl shadow-lg shadow-cyan-500/20 hover:scale-105 active:scale-95 transition-transform">
+                   <FaPaperPlane size={14}/>
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+      
 
       {/* FAB - NEURAL UPLINK */}
       <motion.button 
@@ -446,7 +574,10 @@ const PremiumHomeFeed = () => {
         onClick={() => setIsPostModalOpen(true)} 
         className="fixed bottom-24 right-6 w-16 h-16 bg-cyan-500 text-black rounded-3xl flex items-center justify-center shadow-[0_0_40px_rgba(6,182,212,0.4)] z-[100] border-t-4 border-cyan-400"
       >
-        <FaBolt size={24} />
+        <div className="relative">
+          <FaBolt size={24} />
+          <div className="absolute inset-0 bg-white/40 blur-lg animate-pulse" />
+        </div>
       </motion.button>
       
     </div>
