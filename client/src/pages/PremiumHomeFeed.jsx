@@ -204,11 +204,12 @@ const PremiumHomeFeed = () => {
     } finally { setLoading(false); }
   };
 
+  // পরিবর্তন: এন্ডপয়েন্ট /api/user/profile থেকে শুধু /api/profile করা হয়েছে
   const fetchUserProfile = async () => {
     if (!user) return;
     try {
       const token = await getAccessTokenSilently();
-      const res = await axios.get(`${API_URL}/api/user/profile`, {
+      const res = await axios.get(`${API_URL}/api/profile`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setUserProfile(res.data);
