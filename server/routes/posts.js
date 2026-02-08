@@ -1,5 +1,4 @@
 import express from "express";
-import auth from "../middleware/auth.js";
 import Post from "../models/Post.js";
 import User from "../models/User.js";
 import multer from "multer";
@@ -7,7 +6,7 @@ import { v2 as cloudinary } from "cloudinary";
 import { CloudinaryStorage } from "multer-storage-cloudinary";
 import dotenv from "dotenv";
 import { processNeuralIdentity } from "../controllers/aiController.js";
-import { processNeuralInput } from "../controllers/aiPostController.js"; // নতুন কন্ট্রোলার ইম্পোর্ট
+import { processNeuralInput } from "../controllers/aiPostController.js"; 
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import mongoose from "mongoose";
 
@@ -87,10 +86,10 @@ const upload = multer({
 });
 
 /* ==========================================================
-    ⚡ NEW: NEURAL CONTENT GENERATOR (The Heart of Automation)
+    ⚡ NEURAL CONTENT GENERATOR (The Heart of Automation)
 ========================================================== */
-// এই রাউটটি টেক্সট কমান্ডকে রিলস বা পোস্টে রূপান্তর করবে
-router.post("/neural-generate", auth, processNeuralInput);
+// এখানে processNeuralInput কন্ট্রোলারটি অবশ্যই req.auth.payload.sub হ্যান্ডেল করতে হবে
+router.post("/neural-generate", processNeuralInput);
 
 /* ==========================================================
     🌍 1. GET ALL POSTS
@@ -120,13 +119,19 @@ router.get("/", async (req, res) => {
 /* ==========================================================
     🚀 2. CREATE POST (Manual)
 ========================================================== */
-router.post("/", auth, upload.single("media"), async (req, res) => {
+router.post("/", upload.single("media"), async (req, res) => {
   try {
     if (!req.body.text && !req.file) {
       return res.status(400).json({ msg: "Empty transmission blocked." });
     }
 
-    const currentUserId = req.user?.sub || req.user?.id;
+    // গুরুত্বপূর্ণ পরিবর্তন: req.user এর বদলে req.auth.payload.sub ব্যবহার
+    const currentUserId = req.auth?.payload?.sub;
+    
+    if (!currentUserId) {
+      return res.status(401).json({ msg: "Identity not verified." });
+    }
+
     const userProfile = await User.findOne({ auth0Id: currentUserId }).lean();
 
     let mediaUrl = req.file ? req.file.path : "";
@@ -142,9 +147,9 @@ router.post("/", auth, upload.single("media"), async (req, res) => {
 
     const postData = {
       author: currentUserId,
-      authorAuth0Id: currentUserId,
-      authorName: userProfile?.name || req.user?.name || "Drifter",
-      authorAvatar: userProfile?.avatar || req.user?.picture || "",
+      authorAuth0Id: currentUserId, // এটি আপনার Schema অনুযায়ী Required, তাই নিশ্চিত করলাম
+      authorName: userProfile?.name || req.auth?.payload?.name || "Drifter",
+      authorAvatar: userProfile?.avatar || req.auth?.payload?.picture || "",
       text: req.body.text || "",
       media: mediaUrl, 
       mediaType: detectedType,
@@ -162,17 +167,17 @@ router.post("/", auth, upload.single("media"), async (req, res) => {
 
     res.status(201).json(post);
   } catch (err) {
-    console.error("UPLOAD_ERROR:", err);
-    res.status(500).json({ msg: "Internal Neural Breakdown" });
+    console.error("POST_CREATE_ERROR:", err.message);
+    res.status(500).json({ msg: "Internal Neural Breakdown", error: err.message });
   }
 });
 
 /* ==========================================================
     ❤️ 3. LIKE SYSTEM
 ========================================================== */
-router.post("/:id/like", auth, async (req, res) => {
+router.post("/:id/like", async (req, res) => {
   try {
-    const userId = req.user?.sub || req.user?.id;
+    const userId = req.auth?.payload?.sub;
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
       return res.status(400).json({ msg: "Invalid Post ID" });
     }
@@ -195,9 +200,9 @@ router.post("/:id/like", auth, async (req, res) => {
 /* ==========================================================
     ⚡ 4. RANK UP
 ========================================================== */
-router.post("/:id/rank-up", auth, async (req, res) => {
+router.post("/:id/rank-up", async (req, res) => {
   try {
-    const userId = req.user?.sub || req.user?.id;
+    const userId = req.auth?.payload?.sub;
     const post = await Post.findById(req.params.id);
     if (!post) return res.status(404).json({ msg: "Post not found" });
 
@@ -236,19 +241,19 @@ router.post("/:id/rank-up", auth, async (req, res) => {
 /* ==========================================================
     💬 5. ADD COMMENT
 ========================================================== */
-router.post("/:id/comment", auth, async (req, res) => {
+router.post("/:id/comment", async (req, res) => {
     try {
       const { text } = req.body;
       if (!text) return res.status(400).json({ msg: "Message empty." });
   
-      const userId = req.user?.sub || req.user?.id;
+      const userId = req.auth?.payload?.sub;
       const userProfile = await User.findOne({ auth0Id: userId }).lean();
   
       const comment = {
         text,
         userId: userId,
-        userName: userProfile?.name || req.user?.name || "Drifter",
-        userAvatar: userProfile?.avatar || req.user?.picture || "",
+        userName: userProfile?.name || req.auth?.payload?.name || "Drifter",
+        userAvatar: userProfile?.avatar || req.auth?.payload?.picture || "",
         createdAt: new Date()
       };
   
@@ -267,12 +272,12 @@ router.post("/:id/comment", auth, async (req, res) => {
 /* ==========================================================
     🗑️ 6. DELETE POST
 ========================================================== */
-router.delete("/:id", auth, async (req, res) => {
+router.delete("/:id", async (req, res) => {
   try {
     const post = await Post.findById(req.params.id);
     if (!post) return res.status(404).json({ msg: "Post not found" });
 
-    const userId = req.user?.sub || req.user?.id;
+    const userId = req.auth?.payload?.sub;
     if (post.authorAuth0Id !== userId && post.author !== userId)
       return res.status(401).json({ msg: "Access Denied." });
 

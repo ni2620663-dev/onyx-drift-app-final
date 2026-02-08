@@ -74,9 +74,11 @@ app.use(express.urlencoded({ limit: "100mb", extended: true }));
     🧠 NEURAL PULSE UPDATE MIDDLEWARE
 ========================================================== */
 const updateNeuralPulse = async (req, res, next) => {
+    // Auth0 payload থেকে সাব আইডি নেওয়া
     const auth0Id = req.auth?.payload?.sub; 
     if (auth0Id) {
         try {
+            // ইউজারের শেষ অ্যাক্টিভিটি টাইমস্ট্যাম্প আপডেট করা
             await User.findOneAndUpdate(
                 { auth0Id: auth0Id },
                 { "deathSwitch.lastPulseTimestamp": new Date() }
@@ -112,9 +114,11 @@ const redis = process.env.REDIS_URL ? new Redis(process.env.REDIS_URL, {
     📡 এপিআই রাউটস (ইন্টিগ্রেটেড মিডলওয়্যার সহ)
 ========================================================== */
 
-// প্রোফাইল রাউট (আমরা মিডলওয়্যারগুলো এখানেই দিয়ে দিচ্ছি যাতে profile.js এ ঝামেলা না হয়)
-app.use("/api/profile", checkJwt, updateNeuralPulse, profileRoutes); 
+// পাবলিক রাউট (কোনো টোকেন লাগবে না)
+app.get("/", (req, res) => res.status(200).send("🚀 OnyxDrift Neural Core is Online!"));
 
+// প্রোটেক্টেড রাউটস (checkJwt এবং updateNeuralPulse গ্লোবালি হ্যান্ডেল করা হয়েছে)
+app.use("/api/profile", checkJwt, updateNeuralPulse, profileRoutes); 
 app.use("/api/user", checkJwt, updateNeuralPulse, userRoutes);      
 app.use("/api/posts", checkJwt, updateNeuralPulse, postRoutes);  
 app.use("/api/stories", checkJwt, updateNeuralPulse, storyRoute);
@@ -123,8 +127,6 @@ app.use("/api/market", checkJwt, updateNeuralPulse, marketRoutes);
 app.use("/api/admin", checkJwt, updateNeuralPulse, adminRoutes); 
 app.use("/api/messages", checkJwt, updateNeuralPulse, messageRoutes); 
 app.use("/api/groups", checkJwt, updateNeuralPulse, groupRoutes); 
-
-app.get("/", (req, res) => res.status(200).send("🚀 OnyxDrift Neural Core is Online!"));
 
 /* ==========================================================
     💀 DEATH-SWITCH CRON JOB
