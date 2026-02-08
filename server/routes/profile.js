@@ -22,21 +22,28 @@ router.get("/", async (req, res) => {
 
     // যদি ডাটাবেসে ইউজার না থাকে, তবে অটো-ক্রিয়েট (First time sync)
     if (!user) {
+      console.log("🆕 Initializing New Neural Drifter Identity:", myId);
+      
       const newUser = new User({
         auth0Id: myId,
-        name: req.auth.payload.name || "Drifter",
-        nickname: req.auth.payload.nickname || req.auth.payload.name?.split(' ')[0].toLowerCase() || "drifter",
-        avatar: req.auth.payload.picture || "",
-        email: req.auth.payload.email || ""
+        // Schema তে name রিকোয়ারড, তাই এটি নিশ্চিত করছি
+        name: req.auth.payload.name || req.auth.payload.nickname || "Drifter_" + myId.slice(-4),
+        nickname: req.auth.payload.nickname || "drifter_" + Math.floor(Math.random() * 10000),
+        avatar: req.auth.payload.picture || `https://ui-avatars.com/api/?name=Drifter`,
+        email: req.auth.payload.email || "",
+        // Schema অনুযায়ী ডিফল্ট ভ্যালুগুলো অটোমেটিক বসবে
+        neuralRank: 1, 
+        drifterLevel: "Novice Drifter",
+        isVerified: false
       });
+
       const savedUser = await newUser.save();
       user = savedUser.toObject();
-      console.log("🆕 Neural Identity Created for:", myId);
     }
     
     res.json(user);
   } catch (err) {
-    console.error("📡 Self Profile Fetch Error:", err);
+    console.error("🔥 SERVER ERROR IN /api/profile:", err.message);
     res.status(500).json({ msg: "Neural link interrupted", error: err.message });
   }
 });
@@ -53,7 +60,7 @@ router.get(['/profile/:id', '/:id'], async (req, res) => {
     let user = await User.findOne({ auth0Id: targetId }).select("-__v").lean();
     
     if (!user) {
-      // যদি নিজের আইডি হয় কিন্তু ডাটাবেসে না থাকে (Fallback)
+      // যদি নিজের আইডি হয় কিন্তু ডাটাবেসে না থাকে
       if (targetId === myId) {
         const newUser = new User({
           auth0Id: myId,
@@ -64,6 +71,7 @@ router.get(['/profile/:id', '/:id'], async (req, res) => {
         const savedUser = await newUser.save();
         user = savedUser.toObject();
       } else {
+        // অন্য ইউজার না থাকলে একটি ভার্চুয়াল অবজেক্ট রিটার্ন
         return res.json({
           auth0Id: targetId,
           name: "Unknown Drifter",
@@ -72,7 +80,9 @@ router.get(['/profile/:id', '/:id'], async (req, res) => {
           bio: "Neural profile not yet synced.",
           isVerified: false,
           followers: [],
-          following: []
+          following: [],
+          neuralRank: 1,
+          drifterLevel: "Novice Drifter"
         });
       }
     }
