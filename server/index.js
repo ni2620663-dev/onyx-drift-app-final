@@ -74,11 +74,9 @@ app.use(express.urlencoded({ limit: "100mb", extended: true }));
     🧠 NEURAL PULSE UPDATE MIDDLEWARE
 ========================================================== */
 const updateNeuralPulse = async (req, res, next) => {
-    // Auth0 payload থেকে সাব আইডি নেওয়া
     const auth0Id = req.auth?.payload?.sub; 
     if (auth0Id) {
         try {
-            // ইউজারের শেষ অ্যাক্টিভিটি টাইমস্ট্যাম্প আপডেট করা
             await User.findOneAndUpdate(
                 { auth0Id: auth0Id },
                 { "deathSwitch.lastPulseTimestamp": new Date() }
@@ -111,18 +109,28 @@ const redis = process.env.REDIS_URL ? new Redis(process.env.REDIS_URL, {
 }) : null;
 
 /* ==========================================================
-    📡 এপিআই রাউটস (ইন্টিগ্রেটেড মিডলওয়্যার সহ)
+    📡 এপিআই রাউটস (রুট ম্যাপিং ফিক্স করা হয়েছে)
 ========================================================== */
 
-// পাবলিক রাউট (কোনো টোকেন লাগবে না)
+// পাবলিক রাউট
 app.get("/", (req, res) => res.status(200).send("🚀 OnyxDrift Neural Core is Online!"));
 
-// প্রোটেক্টেড রাউটস (checkJwt এবং updateNeuralPulse গ্লোবালি হ্যান্ডেল করা হয়েছে)
+/** * 🛠️ ফিক্স: ফ্রন্টএন্ড /api/user/profile কল করছে, তাই profileRoutes-কে 
+ * /api/profile এবং /api/user/profile দুটিতেই ম্যাপ করা হলো।
+ */
 app.use("/api/profile", checkJwt, updateNeuralPulse, profileRoutes); 
+app.use("/api/user/profile", checkJwt, updateNeuralPulse, profileRoutes); 
+
+/** * 🛠️ ফিক্স: ফ্রন্টএন্ড /api/posts/reels/all কল করছে, তাই reelRoutes-কে 
+ * সঠিক জায়গায় ম্যাপ করা হলো।
+ */
+app.use("/api/reels", checkJwt, updateNeuralPulse, reelRoutes); 
+app.use("/api/posts/reels", checkJwt, updateNeuralPulse, reelRoutes); 
+
+// অন্যান্য রাউটস
 app.use("/api/user", checkJwt, updateNeuralPulse, userRoutes);      
 app.use("/api/posts", checkJwt, updateNeuralPulse, postRoutes);  
 app.use("/api/stories", checkJwt, updateNeuralPulse, storyRoute);
-app.use("/api/reels", checkJwt, updateNeuralPulse, reelRoutes); 
 app.use("/api/market", checkJwt, updateNeuralPulse, marketRoutes); 
 app.use("/api/admin", checkJwt, updateNeuralPulse, adminRoutes); 
 app.use("/api/messages", checkJwt, updateNeuralPulse, messageRoutes); 
