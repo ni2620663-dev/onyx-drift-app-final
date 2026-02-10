@@ -52,7 +52,6 @@ const NeuralInput = ({ onPostSuccess }) => {
 
   return (
     <motion.div 
-      // গ্লিচ ইফেক্ট এনিমেশন: যখন সিঙ্ক হবে তখন হালকা কাঁপবে
       animate={status === "SYNCING" ? {
         x: [0, -2, 2, -1, 1, 0],
         filter: ["hue-rotate(0deg)", "hue-rotate(90deg)", "hue-rotate(0deg)"]
@@ -60,7 +59,6 @@ const NeuralInput = ({ onPostSuccess }) => {
       transition={{ repeat: Infinity, duration: 0.2 }}
       className="bg-[#080808] border border-cyan-500/20 p-5 rounded-[24px] mb-6 shadow-[0_0_20px_rgba(0,0,0,0.5)] group relative overflow-hidden"
     >
-      {/* ব্যাকগ্রাউন্ড স্ক্যানলাইন ইফেক্ট */}
       <div className="absolute inset-0 pointer-events-none opacity-5 bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.25)_50%),linear-gradient(90deg,rgba(255,0,0,0.06),rgba(0,255,0,0.02),rgba(0,0,255,0.06))] bg-[length:100%_2px,3px_100%]" />
 
       <div className="flex items-center gap-2 mb-3 relative z-10">
@@ -188,6 +186,7 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
     try {
       setLoading(true);
       const token = await getAccessTokenSilently();
+      // রিলস এবং ফিড লোড করার জন্য সঠিক পাথ
       const response = await axios.get(`${API_URL}/api/posts/neural-feed`, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -202,14 +201,27 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
     } finally { setLoading(false); }
   };
 
+  /**
+   * 🛠️ ফিক্স: এখানে পাথটি /api/user/profile থেকে /api/profile এ পরিবর্তন করা হয়েছে
+   * যাতে আপনার ব্যাকএন্ডের সাথে এটি মিলে যায় এবং ৪০৪ এরর না আসে।
+   */
   const fetchUserProfile = async () => {
     try {
       const token = await getAccessTokenSilently();
-      const res = await axios.get(`${API_URL}/api/user/profile`, {
+      const res = await axios.get(`${API_URL}/api/profile`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setUserProfile(res.data);
-    } catch (err) { console.log("User Profile not found."); }
+    } catch (err) { 
+        console.log("User Profile sync failed via primary route, trying secondary..."); 
+        try {
+            const token = await getAccessTokenSilently();
+            const res = await axios.get(`${API_URL}/api/user/profile`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            setUserProfile(res.data);
+        } catch(e) { console.log("Profile not found."); }
+    }
   };
 
   useEffect(() => {
@@ -375,7 +387,6 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
               ))}
             </div>
 
-            {/* NEURAL INPUT SECTION */}
             <div className="px-5 pt-6">
                 <NeuralInput onPostSuccess={fetchPosts} />
             </div>

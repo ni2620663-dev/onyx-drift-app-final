@@ -109,26 +109,27 @@ const redis = process.env.REDIS_URL ? new Redis(process.env.REDIS_URL, {
 }) : null;
 
 /* ==========================================================
-    📡 এপিআই রাউটস (রুট ম্যাপিং ফিক্স করা হয়েছে)
+    📡 এপিআই রাউটস (রুট ম্যাপিং ফিক্স এবং ডুপ্লিকেট পাথ হ্যান্ডেলিং)
 ========================================================== */
 
 // পাবলিক রাউট
 app.get("/", (req, res) => res.status(200).send("🚀 OnyxDrift Neural Core is Online!"));
 
-/** * 🛠️ ফিক্স: ফ্রন্টএন্ড /api/user/profile কল করছে, তাই profileRoutes-কে 
- * /api/profile এবং /api/user/profile দুটিতেই ম্যাপ করা হলো।
+/** * 🛠️ ফিক্স: 404 Error - /api/users/profile কল করছে ফ্রন্টএন্ড
+ * আমরা profileRoutes এবং userRoutes ব্যবহার করে সব সম্ভাব্য পাথ কভার করছি।
  */
 app.use("/api/profile", checkJwt, updateNeuralPulse, profileRoutes); 
 app.use("/api/user/profile", checkJwt, updateNeuralPulse, profileRoutes); 
+app.use("/api/users/profile", checkJwt, updateNeuralPulse, profileRoutes); // Added 'users' plural support
 
-/** * 🛠️ ফিক্স: ফ্রন্টএন্ড /api/posts/reels/all কল করছে, তাই reelRoutes-কে 
- * সঠিক জায়গায় ম্যাপ করা হলো।
+/** * 🛠️ ফিক্স: 400 Error - /api/posts/reels/all কল করছে ফ্রন্টএন্ড
  */
 app.use("/api/reels", checkJwt, updateNeuralPulse, reelRoutes); 
 app.use("/api/posts/reels", checkJwt, updateNeuralPulse, reelRoutes); 
 
-// অন্যান্য রাউটস
+// অন্যান্য মূল রাউটস
 app.use("/api/user", checkJwt, updateNeuralPulse, userRoutes);      
+app.use("/api/users", checkJwt, updateNeuralPulse, userRoutes); // Plural mapping
 app.use("/api/posts", checkJwt, updateNeuralPulse, postRoutes);  
 app.use("/api/stories", checkJwt, updateNeuralPulse, storyRoute);
 app.use("/api/market", checkJwt, updateNeuralPulse, marketRoutes); 
