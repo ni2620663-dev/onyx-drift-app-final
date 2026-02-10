@@ -26,7 +26,7 @@ const ShareSheet = ({ reel, onClose }) => {
 
   const handleDownload = async () => {
     try {
-      const response = await fetch(reel.media);
+      const response = await fetch(reel.mediaUrl || reel.media);
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -43,24 +43,25 @@ const ShareSheet = ({ reel, onClose }) => {
   return (
     <motion.div 
       initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
-      className="fixed bottom-0 left-0 right-0 bg-zinc-900/98 backdrop-blur-2xl p-6 rounded-t-[2rem] z-[3000] flex flex-col gap-6 pb-10"
+      className="fixed bottom-0 left-0 right-0 bg-zinc-900/98 backdrop-blur-2xl p-6 rounded-t-[2rem] z-[3000] flex flex-col gap-6 pb-10 shadow-2xl border-t border-white/10"
     >
+      <div className="w-12 h-1 bg-white/20 rounded-full mx-auto mb-2" />
       <div className="flex justify-between items-center border-b border-white/5 pb-4">
-        <h3 className="text-white font-bold text-sm">Share Reel</h3>
+        <h3 className="text-white font-bold text-sm tracking-widest uppercase">Share Neural Reel</h3>
         <X size={20} onClick={onClose} className="text-white/40 cursor-pointer" />
       </div>
       <div className="flex justify-around items-center py-4">
         <button onClick={() => window.open(`fb-messenger://share/?link=${encodeURIComponent(window.location.href)}`)} className="flex flex-col items-center gap-2">
-          <div className="w-14 h-14 bg-blue-600 rounded-full flex items-center justify-center text-white"><MessageSquare size={24} /></div>
-          <span className="text-[10px] text-white/70">Messenger</span>
+          <div className="w-14 h-14 bg-blue-600 rounded-full flex items-center justify-center text-white shadow-lg"><MessageSquare size={24} /></div>
+          <span className="text-[10px] text-white/70 font-bold uppercase">Chat</span>
         </button>
         <button onClick={handleCopyLink} className="flex flex-col items-center gap-2">
-          <div className="w-14 h-14 bg-zinc-700 rounded-full flex items-center justify-center text-white"><Copy size={24} /></div>
-          <span className="text-[10px] text-white/70">Copy Link</span>
+          <div className="w-14 h-14 bg-zinc-700 rounded-full flex items-center justify-center text-white shadow-lg"><Copy size={24} /></div>
+          <span className="text-[10px] text-white/70 font-bold uppercase">Link</span>
         </button>
         <button onClick={handleDownload} className="flex flex-col items-center gap-2">
-          <div className="w-14 h-14 bg-zinc-700 rounded-full flex items-center justify-center text-white"><Download size={24} /></div>
-          <span className="text-[10px] text-white/70">Download</span>
+          <div className="w-14 h-14 bg-cyan-600 rounded-full flex items-center justify-center text-white shadow-lg"><Download size={24} /></div>
+          <span className="text-[10px] text-white/70 font-bold uppercase">Save</span>
         </button>
       </div>
     </motion.div>
@@ -87,32 +88,33 @@ const CommentSheet = ({ reel, onClose, API_URL }) => {
       const res = await axios.post(`${API_URL}/api/posts/${reel._id}/comment`, { text: newComment }, { headers: { Authorization: `Bearer ${token}` } });
       setComments(res.data.comments);
       setNewComment("");
-    } catch (err) { console.error("Comment failed"); }
+    } catch (err) { toast.error("Transmission failed"); }
   };
 
   return (
     <motion.div 
       initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
-      className="fixed bottom-0 left-0 right-0 bg-zinc-900/95 backdrop-blur-xl h-[70vh] rounded-t-[2rem] z-[3000] flex flex-col shadow-2xl"
+      className="fixed bottom-0 left-0 right-0 bg-zinc-900/95 backdrop-blur-xl h-[70vh] rounded-t-[2rem] z-[3000] flex flex-col shadow-2xl border-t border-white/10"
     >
+      <div className="w-12 h-1 bg-white/20 rounded-full mx-auto mt-3 mb-1" />
       <div className="p-4 border-b border-white/5 flex justify-between items-center">
         <span className="text-[10px] font-black uppercase tracking-widest text-cyan-400">Feedback ({comments.length})</span>
         <X size={20} onClick={onClose} className="text-white/40 cursor-pointer" />
       </div>
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 pb-24">
         {comments.map((c, i) => (
           <div key={i} className="flex gap-3 items-start">
             <img src={c.userAvatar || `https://ui-avatars.com/api/?name=${c.userName}`} className="w-8 h-8 rounded-full border border-white/10" alt="" />
-            <div className="bg-white/5 p-3 rounded-2xl rounded-tl-none flex-1">
+            <div className="bg-white/5 p-3 rounded-2xl rounded-tl-none flex-1 border border-white/5">
               <p className="text-[10px] font-bold text-cyan-400">@{c.userName}</p>
               <p className="text-sm text-white/90 leading-tight mt-1">{c.text}</p>
             </div>
           </div>
         ))}
       </div>
-      <div className="p-4 flex gap-2 mb-8 bg-zinc-900">
-        <input value={newComment} onChange={(e) => setNewComment(e.target.value)} placeholder="Signal your feedback..." className="flex-1 bg-white/5 border border-white/10 rounded-full px-5 py-3 text-white text-sm outline-none focus:border-cyan-500/50" />
-        <button onClick={handleSendComment} className="p-4 bg-cyan-500 rounded-full text-black hover:scale-105 transition-transform"><Send size={18} /></button>
+      <div className="absolute bottom-0 left-0 right-0 p-4 bg-zinc-900 border-t border-white/5 flex gap-2">
+        <input value={newComment} onChange={(e) => setNewComment(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && handleSendComment()} placeholder="Signal your feedback..." className="flex-1 bg-white/5 border border-white/10 rounded-full px-5 py-3 text-white text-sm outline-none focus:border-cyan-500/50" />
+        <button onClick={handleSendComment} className="p-4 bg-cyan-500 rounded-full text-black hover:scale-105 active:scale-95 transition-transform shadow-lg shadow-cyan-500/20"><Send size={18} /></button>
       </div>
     </motion.div>
   );
@@ -128,36 +130,48 @@ const ReelsFeed = () => {
   useEffect(() => {
     const fetchReels = async () => {
       try {
-        const response = await axios.get(`${API_URL}/api/posts/reels/all`); 
-        setReels(response.data);
+        // ফিক্সড এপিআই পাথ (reels/all এর পরিবর্তে posts/reels বা আপনার ব্যাকএন্ড অনুযায়ী)
+        const response = await axios.get(`${API_URL}/api/posts/neural-feed`); 
+        const reelsOnly = response.data.filter(post => post.media && post.media.match(/\.(mp4|webm|mov)$/i));
+        setReels(reelsOnly);
       } catch (err) { 
-        console.error(err); 
-        toast.error("Failed to load reels");
-      } finally { 
-        setLoading(false); 
-      }
+        console.error("Fetch Error:", err); 
+        // ফলব্যাক হিসেবে সাধারণ ফিড ট্রাই করা
+        try {
+           const fallback = await axios.get(`${API_URL}/api/posts`);
+           setReels(fallback.data.filter(p => p.media?.includes('video') || p.media?.match(/\.mp4/)));
+        } catch(e) { toast.error("System Offline"); }
+      } finally { setLoading(false); }
     };
     fetchReels();
   }, []);
 
   return (
-    <div className="fixed inset-0 bg-black z-[100] overflow-y-scroll snap-y snap-mandatory hide-scrollbar">
+    <div className="fixed inset-0 bg-black z-[2000] overflow-y-scroll snap-y snap-mandatory hide-scrollbar">
       <button 
-        onClick={() => navigate('/feed')} 
-        className="fixed top-6 left-4 z-[110] p-3 bg-black/40 backdrop-blur-md rounded-full text-white border border-white/10 hover:bg-white/10 transition-all active:scale-90"
+        onClick={() => navigate(-1)} 
+        className="fixed top-6 left-4 z-[2110] p-3 bg-black/40 backdrop-blur-md rounded-full text-white border border-white/10 hover:bg-white/10 transition-all active:scale-90"
       >
         <ArrowLeft size={20} />
       </button>
       
       {loading ? (
         <div className="h-[100dvh] flex items-center justify-center bg-black">
-          <div className="w-10 h-10 border-4 border-t-cyan-500 border-white/10 rounded-full animate-spin"></div>
+          <div className="relative">
+             <div className="w-12 h-12 border-4 border-cyan-500/20 rounded-full" />
+             <div className="w-12 h-12 border-4 border-t-cyan-500 rounded-full animate-spin absolute top-0" />
+          </div>
         </div>
       ) : (
         reels.length > 0 ? (
           reels.map((reel) => <ReelItem key={reel._id} reel={reel} API_URL={API_URL} />)
         ) : (
-          <div className="h-[100dvh] flex items-center justify-center text-white/50 font-bold tracking-widest uppercase text-xs">No Neural Reels Signal.</div>
+          <div className="h-[100dvh] flex flex-col items-center justify-center text-white/50 space-y-4">
+            <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center border border-white/10">
+               <Music className="text-zinc-600" />
+            </div>
+            <p className="font-black tracking-widest uppercase text-[10px]">No Neural Signals Found</p>
+          </div>
         )
       )}
       
@@ -190,7 +204,7 @@ const ReelItem = ({ reel, API_URL }) => {
       setIsLiked(reel.likes.includes(myId));
       setHasRankedUp(reel.rankClicks?.includes(myId));
     }
-  }, [currentUser, reel.likes, reel.rankClicks]);
+  }, [currentUser, reel]);
 
   useEffect(() => {
     const observer = new IntersectionObserver((entries) => {
@@ -199,29 +213,33 @@ const ReelItem = ({ reel, API_URL }) => {
             videoRef.current?.play().catch(() => {});
         } else {
             videoRef.current?.pause();
+            if (videoRef.current) videoRef.current.currentTime = 0;
         }
       });
-    }, { threshold: 0.8 });
+    }, { threshold: 0.6 });
     
     if (videoRef.current) observer.observe(videoRef.current);
     return () => observer.disconnect();
   }, []);
 
-  const handleLike = async () => {
+  const handleLike = async (e) => {
+    if(e) e.stopPropagation();
     try {
       const token = await getAccessTokenSilently();
-      setIsLiked(!isLiked);
-      setLikesCount(prev => isLiked ? prev - 1 : prev + 1);
+      const newStatus = !isLiked;
+      setIsLiked(newStatus);
+      setLikesCount(prev => newStatus ? prev + 1 : prev - 1);
       await axios.post(`${API_URL}/api/posts/${reel._id}/like`, {}, { 
         headers: { Authorization: `Bearer ${token}` } 
       });
     } catch (err) { 
-        setIsLiked(isLiked);
+        setIsLiked(!isLiked);
         setLikesCount(reel.likes?.length || 0);
     }
   };
 
-  const handleRankClick = async () => {
+  const handleRankClick = async (e) => {
+    e.stopPropagation();
     if (hasRankedUp) return;
     try {
       const token = await getAccessTokenSilently();
@@ -231,15 +249,9 @@ const ReelItem = ({ reel, API_URL }) => {
       if (res.data.success) {
         setRankClicks(res.data.clicks);
         setHasRankedUp(true);
-        if (res.data.rankUp) {
-          toast.success("Milestone! Creator Rank Boosted! ⚡", {
-            style: { background: '#00f2ff', color: '#000', fontWeight: 'bold' }
-          });
-        }
+        toast.success("Rank Boosted! ⚡", { style: { background: '#00f2ff', color: '#000' } });
       }
-    } catch (err) {
-      toast.error("Signal weak. Try again.");
-    }
+    } catch (err) { toast.error("Low Signal"); }
   };
 
   const handleDoubleTap = () => {
@@ -262,102 +274,71 @@ const ReelItem = ({ reel, API_URL }) => {
 
       <AnimatePresence>
         {showHeart && (
-          <motion.div 
-            initial={{ scale: 0, opacity: 0 }} 
-            animate={{ scale: 1.5, opacity: 1 }} 
-            exit={{ scale: 2, opacity: 0 }} 
-            className="absolute z-[1010] pointer-events-none"
-          >
-            <Heart fill="#ff0050" className="text-[#ff0050]" size={100} />
+          <motion.div initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1.5, opacity: 1 }} exit={{ scale: 2, opacity: 0 }} className="absolute z-[1010] pointer-events-none">
+            <Heart fill="#ff0050" className="text-[#ff0050] drop-shadow-[0_0_20px_rgba(255,0,80,0.8)]" size={100} />
           </motion.div>
         )}
       </AnimatePresence>
 
-      <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-black/90 z-[1005] pointer-events-none">
-        {/* কন্টেন্ট বক্স - মোবাইলে ক্লিপিং এড়াতে প্যারিং এবং ফ্লেক্স অ্যাডজাস্ট করা হয়েছে */}
-        <div className="absolute bottom-0 left-0 right-0 p-4 pb-12 md:pb-20 flex items-end justify-between pointer-events-auto">
-          
-          <div className="flex-1 text-white pr-10">
-            <div 
-              className="flex items-center gap-3 mb-3 cursor-pointer group" 
-              onClick={() => navigate(`/profile/${drifter.id}`)}
-            >
-              <div className="relative">
-                <img 
-                  src={drifter.avatar} 
-                  className="w-10 h-10 rounded-full border-2 border-cyan-500 shadow-[0_0_15px_rgba(6,182,212,0.5)] object-cover" 
-                  alt="" 
-                />
-                <div className="absolute -bottom-1 -right-1 bg-cyan-500 rounded-full p-0.5 border-2 border-black">
-                  <div className="w-1 h-1 bg-white rounded-full animate-pulse" />
-                </div>
+      <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-black/80 z-[1005] pointer-events-none">
+        <div className="absolute bottom-0 left-0 right-0 p-5 pb-16 flex items-end justify-between pointer-events-auto">
+          <div className="flex-1 text-white pr-12">
+            <div className="flex items-center gap-3 mb-4 cursor-pointer" onClick={() => navigate(`/profile/${drifter.id}`)}>
+               <div className="relative group">
+                <img src={drifter.avatar} className="w-11 h-11 rounded-full border-2 border-cyan-500 object-cover shadow-[0_0_15px_rgba(6,182,212,0.4)]" alt="" />
+                <div className="absolute -bottom-1 -right-1 bg-cyan-500 rounded-full p-1 border-2 border-black animate-pulse" />
               </div>
-              <div className="flex flex-col">
-                <h4 className="font-black text-[13px] tracking-tight text-white group-hover:text-cyan-400 transition-colors italic uppercase">
-                  {drifter.name}
-                </h4>
-                <p className="text-[8px] text-cyan-400/60 font-black tracking-widest uppercase">NODE: {drifter.id?.slice(-8)}</p>
+              <div>
+                <h4 className="font-black text-sm tracking-tighter uppercase italic">{drifter.name}</h4>
+                <p className="text-[8px] text-cyan-400 font-bold tracking-widest">DRFT_ID: {drifter.id?.slice(-6)}</p>
               </div>
             </div>
             
-            <p className="text-[12px] leading-snug mb-4 line-clamp-2 font-medium text-gray-200 drop-shadow-lg">
-              {reel.text || reel.content || "Neural transmission active..."}
+            <p className="text-[13px] leading-snug mb-5 font-medium text-gray-100 drop-shadow-md line-clamp-2">
+              {reel.text || "Synchronizing neural waves..."}
             </p>
             
-            <div className="flex items-center gap-2 bg-black/40 backdrop-blur-md px-3 py-1.5 rounded-full w-fit border border-white/10">
-              <Music size={10} className="animate-pulse text-cyan-400" />
-              <marquee className="text-[9px] text-cyan-500 font-black uppercase w-20">Neural Sync: {drifter.name}</marquee>
+            <div className="flex items-center gap-2 bg-white/10 backdrop-blur-xl px-4 py-2 rounded-full w-fit border border-white/10">
+              <Music size={12} className="animate-spin-slow text-cyan-400" />
+              <marquee className="text-[10px] text-cyan-400 font-black uppercase w-24">Original Audio - {drifter.name}</marquee>
             </div>
           </div>
 
-          {/* সাইড অ্যাকশন বাটনগুলো - একটু উপরে উঠানো হয়েছে যাতে নেভিগেশন বারে সমস্যা না হয় */}
-          <div className="flex flex-col gap-5 items-center mb-2">
-            
-            <div className="flex flex-col items-center gap-1 cursor-pointer" onClick={handleRankClick}>
-              <motion.div 
-                whileTap={{ scale: 0.8 }}
-                className={`p-2 rounded-full border-2 transition-all duration-500 ${
-                  hasRankedUp 
-                  ? "border-purple-500 bg-purple-500/20 text-purple-400 shadow-[0_0_15px_purple]" 
-                  : "border-cyan-500/50 bg-black/40 text-cyan-400"
-                }`}
-              >
-                <Award size={24} className={!hasRankedUp ? "animate-pulse" : ""} />
+          <div className="flex flex-col gap-6 items-center">
+            {/* Rank Up Button */}
+            <div className="flex flex-col items-center gap-1" onClick={handleRankClick}>
+              <motion.div whileTap={{ scale: 0.8 }} className={`p-2.5 rounded-full border-2 transition-all ${hasRankedUp ? "border-purple-500 bg-purple-500/20 text-purple-400 shadow-[0_0_15px_purple]" : "border-white/20 bg-black/40 text-white"}`}>
+                <Award size={26} />
               </motion.div>
-              <div className="w-8 h-1 bg-white/10 rounded-full overflow-hidden">
-                <motion.div 
-                  className="h-full bg-cyan-400" 
-                  initial={{ width: 0 }}
-                  animate={{ width: `${(rankClicks % 10) * 10}%` }}
-                />
-              </div>
+              <span className="text-[10px] font-black text-white/70 tracking-tighter">{rankClicks}</span>
             </div>
 
-            <div className="flex flex-col items-center gap-1 cursor-pointer group" onClick={handleLike}>
-              <div className="p-2 rounded-full bg-black/20 backdrop-blur-md active:scale-125 transition-transform">
-                <Heart fill={isLiked ? "#ff0050" : "none"} className={isLiked ? "text-[#ff0050]" : "text-white"} size={28} />
+            {/* Like Button */}
+            <div className="flex flex-col items-center gap-1" onClick={handleLike}>
+              <div className="p-2.5 rounded-full bg-black/30 backdrop-blur-md active:scale-150 transition-transform">
+                <Heart fill={isLiked ? "#ff0050" : "none"} className={isLiked ? "text-[#ff0050] scale-110" : "text-white"} size={30} />
               </div>
-              <span className="text-[10px] font-black text-white drop-shadow-md">{likesCount}</span>
+              <span className="text-[11px] font-black text-white shadow-sm">{likesCount}</span>
             </div>
             
-            <div className="flex flex-col items-center gap-1 cursor-pointer group" onClick={() => setIsCommentOpen(true)}>
-              <div className="p-2 rounded-full bg-black/20 backdrop-blur-md">
-                <MessageCircle size={28} className="text-white" />
+            {/* Comment Button */}
+            <div className="flex flex-col items-center gap-1" onClick={() => setIsCommentOpen(true)}>
+              <div className="p-2.5 rounded-full bg-black/30 backdrop-blur-md">
+                <MessageCircle size={30} className="text-white" />
               </div>
-              <span className="text-[10px] font-black text-white drop-shadow-md">{reel.comments?.length || 0}</span>
+              <span className="text-[11px] font-black text-white">{reel.comments?.length || 0}</span>
             </div>
             
-            <div className="flex flex-col items-center gap-1 cursor-pointer group" onClick={() => setIsShareOpen(true)}>
-              <div className="p-2 rounded-full bg-black/20 backdrop-blur-md">
-                <Share2 size={28} className="text-white" />
+            {/* Share Button */}
+            <div className="flex flex-col items-center gap-1" onClick={() => setIsShareOpen(true)}>
+              <div className="p-2.5 rounded-full bg-black/30 backdrop-blur-md">
+                <Share2 size={30} className="text-white" />
               </div>
-              <span className="text-[8px] font-black uppercase text-white/70">Share</span>
+              <span className="text-[9px] font-black uppercase text-white/60">Share</span>
             </div>
-            
-            <div className="mt-1 relative">
-               <div className="w-10 h-10 rounded-full border-2 border-dashed border-cyan-500/50 p-0.5 animate-spin-slow">
-                  <img src={drifter.avatar} className="w-full h-full rounded-full object-cover" alt="" />
-               </div>
+
+            <div className="w-11 h-11 rounded-full border-2 border-dashed border-cyan-500/40 p-0.5 animate-spin-slow">
+               <img src={drifter.avatar} className="w-full h-full rounded-full object-cover grayscale hover:grayscale-0 transition-all" alt="" />
             </div>
           </div>
         </div>
@@ -369,7 +350,7 @@ const ReelItem = ({ reel, API_URL }) => {
       </AnimatePresence>
 
       <style>{`
-        .animate-spin-slow { animation: spin 8s linear infinite; }
+        .animate-spin-slow { animation: spin 10s linear infinite; }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
       `}</style>
     </div>
