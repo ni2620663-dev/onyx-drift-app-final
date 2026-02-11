@@ -18,18 +18,25 @@ import Settings from "./Settings";
 import LegacySetup from '../components/LegacySetup';
 import Profile from "./Profile"; // ✅ Profile component import kora hoyeche
 
-// --- ১. NEURAL INPUT COMPONENT (The Generator with Glitch Effect) ---
+// কনফিগারেশন
+const API_URL = "https://onyx-drift-app-final-u29m.onrender.com";
+const AUTH_AUDIENCE = "https://onyx-drift-api.com";
+
+// --- ১. NEURAL INPUT COMPONENT ---
 const NeuralInput = ({ onPostSuccess }) => {
   const { user, getAccessTokenSilently } = useAuth0();
   const [text, setText] = useState("");
-  const [status, setStatus] = useState("IDLE"); // IDLE, SYNCING, SUCCESS
+  const [status, setStatus] = useState("IDLE"); 
 
   const handleGenerate = async () => {
     if (!text.trim()) return;
     setStatus("SYNCING");
     try {
-      const token = await getAccessTokenSilently();
-      const res = await axios.post('https://onyx-drift-app-final-u29m.onrender.com/api/posts/neural-generate', {
+      const token = await getAccessTokenSilently({
+        authorizationParams: { audience: AUTH_AUDIENCE }
+      });
+      
+      const res = await axios.post(`${API_URL}/api/posts/neural-generate`, {
         text,
         auth0Id: user?.sub,
         mood: "creative"
@@ -37,7 +44,7 @@ const NeuralInput = ({ onPostSuccess }) => {
         headers: { Authorization: `Bearer ${token}` }
       });
       
-      if (res.data.success) {
+      if (res.data) {
         setStatus("SUCCESS");
         setTimeout(() => {
             setStatus("IDLE");
@@ -60,8 +67,6 @@ const NeuralInput = ({ onPostSuccess }) => {
       transition={{ repeat: Infinity, duration: 0.2 }}
       className="bg-[#080808] border border-cyan-500/20 p-5 rounded-[24px] mb-6 shadow-[0_0_20px_rgba(0,0,0,0.5)] group relative overflow-hidden"
     >
-      <div className="absolute inset-0 pointer-events-none opacity-5 bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.25)_50%),linear-gradient(90deg,rgba(255,0,0,0.06),rgba(0,255,0,0.02),rgba(0,0,255,0.06))] bg-[length:100%_2px,3px_100%]" />
-
       <div className="flex items-center gap-2 mb-3 relative z-10">
          <div className="w-1.5 h-1.5 bg-cyan-500 rounded-full animate-ping" />
          <h3 className="text-cyan-500 font-mono text-[9px] uppercase tracking-[0.3em] flex items-center gap-2">
@@ -69,90 +74,39 @@ const NeuralInput = ({ onPostSuccess }) => {
             Neural_Input_Core_v2
          </h3>
       </div>
-
       <textarea 
         className="w-full bg-transparent border-none outline-none text-gray-200 font-mono text-sm placeholder-zinc-700 resize-none min-h-[80px] relative z-10"
-        placeholder="Type a thought to synthesize... (e.g. Neon rain in Tokyo)"
+        placeholder="Type a thought to synthesize..."
         value={text}
         onChange={(e) => setText(e.target.value)}
       />
-      
       <div className="flex justify-between items-center mt-3 border-t border-white/5 pt-3 relative z-10">
         <span className="text-[8px] text-zinc-600 font-mono uppercase tracking-widest">
-            {status === "SYNCING" ? ">> SYNTHESIZING_MEDIA..." : ">> AWAITING_TRANSMISSION"}
+            {status === "SYNCING" ? ">> SYNTHESIZING..." : ">> AWAITING_TRANSMISSION"}
         </span>
-        
         <button 
           onClick={handleGenerate}
           disabled={status === "SYNCING" || !text.trim()}
-          className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border relative overflow-hidden ${
-            status === "SYNCING" 
-            ? 'border-zinc-800 text-zinc-700' 
-            : 'border-cyan-500/50 text-cyan-500 hover:bg-cyan-500 hover:text-black shadow-[0_0_20px_rgba(6,182,212,0.3)]'
-          }`}
+          className="px-6 py-2 rounded-xl text-[10px] font-black border border-cyan-500/50 text-cyan-500 hover:bg-cyan-500 hover:text-black transition-all"
         >
-          {status === "SYNCING" ? (
-            <span className="flex items-center gap-2">
-               <FaSyncAlt className="animate-spin" /> SYNCING
-            </span>
-          ) : "Execute"}
+          {status === "SYNCING" ? "SYNCING..." : "Execute"}
         </button>
       </div>
     </motion.div>
   );
 };
 
-// --- ২. NEURAL TOAST COMPONENT ---
-const NeuralToast = ({ isVisible, message }) => (
-  <AnimatePresence>
-    {isVisible && (
-      <motion.div
-        initial={{ opacity: 0, x: 50, scale: 0.9 }}
-        animate={{ opacity: 1, x: 0, scale: 1 }}
-        exit={{ opacity: 0, x: 20, scale: 0.9 }}
-        className="fixed top-20 right-4 z-[9999] pointer-events-none"
-      >
-        <div className="bg-black/90 backdrop-blur-2xl border border-purple-500/40 p-4 rounded-2xl shadow-[0_0_20px_rgba(168,85,247,0.3)] flex items-center gap-4 min-w-[260px]">
-          <div className="relative">
-            <div className="p-2 bg-purple-500/20 rounded-xl text-purple-400">
-              <FaBrain className="animate-pulse" />
-            </div>
-            <div className="absolute -top-1 -right-1 w-2 h-2 bg-cyan-400 rounded-full animate-ping" />
-          </div>
-          <div>
-            <h4 className="text-[9px] font-black text-purple-500 uppercase tracking-[0.2em] mb-0.5">Neural Shadow Sync</h4>
-            <p className="text-[11px] text-gray-300 font-mono italic">{message}</p>
-          </div>
-          <FaBolt className="ml-auto text-yellow-500 text-[10px] animate-bounce" />
-        </div>
-      </motion.div>
-    )}
-  </AnimatePresence>
-);
-
-// --- ৩. ভিডিও কম্পোনেন্ট ---
+// --- ২. ভিডিও কম্পোনেন্ট ---
 const CompactVideo = ({ src }) => {
   const videoRef = useRef(null);
   const [isMuted, setIsMuted] = useState(true);
 
-  useEffect(() => {
-    const currentVideo = videoRef.current;
-    const observer = new IntersectionObserver(([entry]) => {
-      if (currentVideo) {
-        if (entry.isIntersecting) currentVideo.play().catch(() => {});
-        else currentVideo.pause();
-      }
-    }, { threshold: 0.6 });
-    if (currentVideo) observer.observe(currentVideo);
-    return () => { if (currentVideo) observer.unobserve(currentVideo); };
-  }, [src]);
-
   return (
-    <div className="relative mt-3 rounded-2xl overflow-hidden border border-white/10 bg-black max-w-[400px] group">
-      <video ref={videoRef} src={src} muted={isMuted} loop playsInline className="w-full h-72 object-cover" />
+    <div className="relative mt-3 rounded-2xl overflow-hidden border border-white/10 bg-black max-w-[400px]">
+      <video ref={videoRef} src={src} autoPlay muted={isMuted} loop playsInline className="w-full h-72 object-cover" />
       <button 
-        onClick={(e) => { e.preventDefault(); e.stopPropagation(); setIsMuted(!isMuted); }} 
-        className="absolute bottom-3 right-3 p-2 bg-black/60 backdrop-blur-md rounded-full text-white border border-white/20 z-10"
+        onClick={() => setIsMuted(!isMuted)} 
+        className="absolute bottom-3 right-3 p-2 bg-black/60 rounded-full text-white z-10"
       >
         {isMuted ? <FaVolumeMute size={14} /> : <FaVolumeUp size={14} className="text-cyan-400" />}
       </button>
@@ -160,6 +114,7 @@ const CompactVideo = ({ src }) => {
   );
 };
 
+// --- ৩. মেইন ফিড কম্পোনেন্ট ---
 const PremiumHomeFeed = ({ searchQuery = "" }) => {
   const { user, getAccessTokenSilently } = useAuth0();
   const navigate = useNavigate();
@@ -167,112 +122,72 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isPostModalOpen, setIsPostModalOpen] = useState(false);
-  const [isSideMenuOpen, setIsSideMenuOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("home"); 
-  const [activeFilter, setActiveFilter] = useState("Global"); 
   const [activeCommentPost, setActiveCommentPost] = useState(null);
   const [commentText, setCommentText] = useState("");
   const [postText, setPostText] = useState("");
   const [mediaFile, setMediaFile] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isEncrypted, setIsEncrypted] = useState(false); 
   const [userProfile, setUserProfile] = useState(null);
   const [toast, setToast] = useState({ show: false, message: "" });
 
-  const API_URL = "https://onyx-drift-app-final-u29m.onrender.com";
-  const postMediaRef = useRef(null);
-
-  // --- ডাটা ফেচিং ---
   const fetchPosts = async () => {
     try {
       setLoading(true);
-      const token = await getAccessTokenSilently();
+      const token = await getAccessTokenSilently({
+        authorizationParams: { audience: AUTH_AUDIENCE }
+      });
       const response = await axios.get(`${API_URL}/api/posts/neural-feed`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setPosts(response.data);
     } catch (err) { 
-      try {
-        const fallback = await axios.get(`${API_URL}/api/posts`);
-        setPosts(fallback.data);
-      } catch (finalErr) {
-        console.error("Critical: Network Failure");
-      }
+      console.error("Feed Fetch Error", err);
     } finally { setLoading(false); }
   };
 
   const fetchUserProfile = async () => {
     try {
-      const token = await getAccessTokenSilently();
+      const token = await getAccessTokenSilently({
+        authorizationParams: { audience: AUTH_AUDIENCE }
+      });
       const res = await axios.get(`${API_URL}/api/profile`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setUserProfile(res.data);
     } catch (err) { 
-        console.log("User Profile sync failed via primary route, trying secondary..."); 
-        try {
-            const token = await getAccessTokenSilently();
-            const res = await axios.get(`${API_URL}/api/user/profile`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            setUserProfile(res.data);
-        } catch(e) { 
-            console.log("Profile not found.");
-            setUserProfile({}); // ✅ null thakle object set kore deya holo error bondho korar jonne
-        }
+        setUserProfile({});
     }
   };
 
   useEffect(() => {
     fetchPosts();
     fetchUserProfile();
-    
-    const aiMessages = [
-      "AI Twin learning your vocabulary patterns...",
-      "Resonance Milestone: +0.42 Neural Sync",
-      "Shadow Identity active in background node.",
-      "Legacy Vault status: OPTIMIZED"
-    ];
-
-    const interval = setInterval(() => {
-      if (Math.random() > 0.6) {
-        setToast({ show: true, message: aiMessages[Math.floor(Math.random() * aiMessages.length)] });
-        setTimeout(() => setToast({ show: false, message: "" }), 4000);
-      }
-    }, 45000);
-    return () => clearInterval(interval);
   }, []);
-
-  const filteredPosts = useMemo(() => {
-    let list = [...posts];
-    if (activeFilter === "Resonance") return list.sort((a, b) => (b.resonanceScore || 0) - (a.resonanceScore || 0));
-    if (activeFilter === "Encrypted") return list.filter(p => p.isEncrypted);
-    return list;
-  }, [posts, activeFilter]);
 
   const handleLike = async (postId) => {
     const userId = user?.sub;
     if (!userId) return;
-    setPosts(prev => prev.map(p => p._id === postId ? { 
-        ...p, 
-        likes: p.likes?.includes(userId) ? p.likes.filter(id => id !== userId) : [...(p.likes || []), userId] 
-    } : p));
     try {
-      const token = await getAccessTokenSilently();
-      await axios.post(`${API_URL}/api/posts/${postId}/like`, {}, { 
+      const token = await getAccessTokenSilently({
+        authorizationParams: { audience: AUTH_AUDIENCE }
+      });
+      const res = await axios.post(`${API_URL}/api/posts/${postId}/like`, {}, { 
         headers: { Authorization: `Bearer ${token}` } 
       });
-    } catch (err) { fetchPosts(); }
+      setPosts(prev => prev.map(p => p._id === postId ? res.data : p));
+    } catch (err) { console.error("Like Sync Error"); }
   };
 
   const handlePostSubmit = async () => {
     if (!postText.trim() && !mediaFile) return;
     setIsSubmitting(true);
     try {
-      const token = await getAccessTokenSilently();
+      const token = await getAccessTokenSilently({
+        authorizationParams: { audience: AUTH_AUDIENCE }
+      });
       const formData = new FormData();
       formData.append("text", postText);
-      formData.append("isEncrypted", isEncrypted);
       if (mediaFile) formData.append("media", mediaFile);
       
       const response = await axios.post(`${API_URL}/api/posts`, formData, { 
@@ -283,24 +198,24 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
       });
       setPosts(prev => [response.data, ...prev]);
       setPostText(""); setMediaFile(null); setIsPostModalOpen(false);
-      setToast({ show: true, message: "Transmission Successful. Neural training initiated." });
     } catch (err) { 
-        alert("Transmission Failed. Check Connection."); 
+        alert("Transmission Failed."); 
     } finally { setIsSubmitting(false); }
   };
 
   const handleCommentSubmit = async () => {
     if(!commentText.trim() || !activeCommentPost) return;
     try {
-      const token = await getAccessTokenSilently();
+      const token = await getAccessTokenSilently({
+        authorizationParams: { audience: AUTH_AUDIENCE }
+      });
       const res = await axios.post(`${API_URL}/api/posts/${activeCommentPost._id}/comment`, { 
         text: commentText 
       }, { headers: { Authorization: `Bearer ${token}` } });
       setPosts(prev => prev.map(p => p._id === activeCommentPost._id ? res.data : p));
-      setActiveCommentPost(res.data); setCommentText("");
+      setCommentText("");
     } catch (err) { console.error("Comment Sync Error"); }
   };
-
   return (
     <div className="w-full min-h-screen bg-black text-white pb-32 font-sans overflow-x-hidden selection:bg-cyan-500/30">
       <NeuralToast isVisible={toast.show} message={toast.message} />

@@ -25,7 +25,7 @@ cloudinary.config({
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 /* ==========================================================
-    🧠 0. NEURAL FEED (Sobar Upore - Priority)
+    🧠 0. NEURAL FEED (Priority Route)
 ========================================================== */
 router.get("/neural-feed", async (req, res) => {
   try {
@@ -36,6 +36,7 @@ router.get("/neural-feed", async (req, res) => {
 
     const optimizedPosts = posts.map(post => ({
       ...post,
+      // Resonance Score: Likes = 2 points, Comments = 5 points
       resonanceScore: (post.likes?.length || 0) * 2 + (post.comments?.length || 0) * 5,
       neuralSync: true
     }));
@@ -58,7 +59,7 @@ router.post("/ai-analyze", async (req, res) => {
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
     const prompt = `You are a Cyberpunk AI analyst for "Onyx Drift" social network. 
     Analyze this post by "${authorName || 'Drifter'}": "${text}". 
-    Short reaction (max 20 words), witty, futuristic. Stay in character.`;
+    Short reaction (max 20 words), witty, futuristic, use cyberpunk slang. Stay in character.`;
 
     const result = await model.generateContent(prompt);
     res.json({ analysis: result.response.text() });
@@ -82,7 +83,7 @@ const storage = new CloudinaryStorage({
 
 const upload = multer({ 
   storage,
-  limits: { fileSize: 100 * 1024 * 1024 } 
+  limits: { fileSize: 100 * 1024 * 1024 } // 100MB limit
 });
 
 /* ==========================================================
@@ -91,7 +92,7 @@ const upload = multer({
 router.post("/neural-generate", processNeuralInput);
 
 /* ==========================================================
-    🌍 1. GET ALL POSTS
+    🌍 1. GET ALL POSTS (Global Stream)
 ========================================================== */
 router.get("/", async (req, res) => {
   try {
@@ -103,7 +104,7 @@ router.get("/", async (req, res) => {
     const safePosts = posts.map(post => ({
       ...post,
       authorName: post.authorName || "Unknown Drifter",
-      authorAvatar: post.authorAvatar || `https://ui-avatars.com/api/?name=${post.authorName || 'D'}`,
+      authorAvatar: post.authorAvatar || `https://ui-avatars.com/api/?name=${post.authorName || 'D'}&background=random`,
       likes: post.likes || [],
       comments: post.comments || [],
       rankClicks: post.rankClicks || []
@@ -124,7 +125,8 @@ router.post("/", upload.single("media"), async (req, res) => {
       return res.status(400).json({ msg: "Empty transmission blocked." });
     }
 
-    const currentUserId = req.auth?.payload?.sub;
+    // ID extraction from Auth0
+    const currentUserId = req.auth?.payload?.sub || req.user?.sub;
     
     if (!currentUserId) {
       return res.status(401).json({ msg: "Identity not verified." });
@@ -139,6 +141,7 @@ router.post("/", upload.single("media"), async (req, res) => {
       const isVideo = req.file.mimetype.startsWith("video");
       detectedType = isVideo ? "video" : "image";
       
+      // Manual overrides from body
       if (req.body.type === "story" || req.body.isStory === "true") detectedType = "story";
       else if ((req.body.type === "reel" || req.body.isReel === "true") && isVideo) detectedType = "reel";
     }
@@ -151,7 +154,7 @@ router.post("/", upload.single("media"), async (req, res) => {
       text: req.body.text || "",
       media: mediaUrl, 
       mediaType: detectedType,
-      isEncrypted: req.body.isEncrypted === "true",
+      isEncrypted: req.body.isEncrypted === "true" || req.body.isEncrypted === true,
       likes: [],
       comments: [],
       rankClicks: [], 
@@ -159,6 +162,7 @@ router.post("/", upload.single("media"), async (req, res) => {
 
     const post = await Post.create(postData);
 
+    // AI processing in background
     if (post.text) {
       processNeuralIdentity(currentUserId, post.text).catch(() => {});
     }
@@ -175,7 +179,7 @@ router.post("/", upload.single("media"), async (req, res) => {
 ========================================================== */
 router.post("/:id/like", async (req, res) => {
   try {
-    const userId = req.auth?.payload?.sub;
+    const userId = req.auth?.payload?.sub || req.user?.sub;
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
       return res.status(400).json({ msg: "Invalid Post ID" });
     }
@@ -196,11 +200,11 @@ router.post("/:id/like", async (req, res) => {
 });
 
 /* ==========================================================
-    ⚡ 4. RANK UP
+    ⚡ 4. RANK UP SYSTEM
 ========================================================== */
 router.post("/:id/rank-up", async (req, res) => {
   try {
-    const userId = req.auth?.payload?.sub;
+    const userId = req.auth?.payload?.sub || req.user?.sub;
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
         return res.status(400).json({ msg: "Invalid Post ID" });
     }
@@ -221,6 +225,7 @@ router.post("/:id/rank-up", async (req, res) => {
     let rankIncreased = false;
     const clickCount = updatedPost.rankClicks?.length || 0;
 
+    // logic: Every 10 rank clicks increases the author's neural rank
     if (clickCount > 0 && clickCount % 10 === 0) {
       await User.findOneAndUpdate(
         { auth0Id: updatedPost.authorAuth0Id },
@@ -233,7 +238,7 @@ router.post("/:id/rank-up", async (req, res) => {
       success: true, 
       clicks: clickCount, 
       rankUp: rankIncreased,
-      msg: rankIncreased ? "Milestone Reached! Rank Increased! ⚡" : "Pulse Synced"
+      msg: rankIncreased ? "Milestone Reached! Neural Rank Increased! ⚡" : "Pulse Synced"
     });
   } catch (err) {
     res.status(500).json({ error: "Rank sync failure." });
@@ -252,7 +257,7 @@ router.post("/:id/comment", async (req, res) => {
       const { text } = req.body;
       if (!text) return res.status(400).json({ msg: "Message empty." });
   
-      const userId = req.auth?.payload?.sub;
+      const userId = req.auth?.payload?.sub || req.user?.sub;
       const userProfile = await User.findOne({ auth0Id: userId }).lean();
   
       const comment = {
@@ -287,9 +292,12 @@ router.delete("/:id", async (req, res) => {
     const post = await Post.findById(req.params.id);
     if (!post) return res.status(404).json({ msg: "Post not found" });
 
-    const userId = req.auth?.payload?.sub;
-    if (post.authorAuth0Id !== userId && post.author !== userId)
-      return res.status(401).json({ msg: "Access Denied." });
+    const userId = req.auth?.payload?.sub || req.user?.sub;
+    
+    // Security check: Only author can delete
+    if (post.authorAuth0Id !== userId && post.author !== userId) {
+      return res.status(401).json({ msg: "Access Denied. Identity mismatch." });
+    }
 
     await post.deleteOne();
     res.json({ msg: "Post terminated", postId: req.params.id });
@@ -299,13 +307,17 @@ router.delete("/:id", async (req, res) => {
 });
 
 /* ==========================================================
-    ✅ 7. USER SPECIFIC POSTS (Niche thakbe jate conflict na hoy)
+    ✅ 7. USER SPECIFIC POSTS (Profile Feed)
 ========================================================== */
 router.get("/user/:userId", async (req, res) => {
   try {
     const targetId = decodeURIComponent(req.params.userId);
     const userPosts = await Post.find({
-      $or: [{ authorAuth0Id: targetId }, { author: targetId }]
+      $or: [
+        { authorAuth0Id: targetId }, 
+        { author: targetId },
+        { authorId: targetId }
+      ]
     }).sort({ createdAt: -1 }).lean();
 
     res.json(userPosts || []);
