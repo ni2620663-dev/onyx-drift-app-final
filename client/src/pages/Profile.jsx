@@ -109,7 +109,7 @@ const GlobalLeaderboard = ({ apiUrl }) => {
     const fetchLeaders = async () => {
       try {
         const res = await axios.get(`${apiUrl}/api/user/leaderboard`);
-        setLeaders(res.data);
+        setLeaders(Array.isArray(res.data) ? res.data : []);
       } catch (err) {
         console.error("Leaderboard Sync Error");
       } finally {
@@ -132,10 +132,10 @@ const GlobalLeaderboard = ({ apiUrl }) => {
         <div key={leader._id} className={`flex items-center justify-between p-4 rounded-2xl border transition-all ${index === 0 ? 'bg-yellow-400/10 border-yellow-400/30' : 'bg-white/5 border-white/10'}`}>
           <div className="flex items-center gap-4">
             <span className={`text-lg font-black w-6 ${index === 0 ? 'text-yellow-400' : index === 1 ? 'text-zinc-400' : 'text-orange-400'}`}>#{index + 1}</span>
-            <img src={leader.avatar} className="w-10 h-10 rounded-full border border-white/20 object-cover" alt="leader" />
+            <img src={leader.avatar || "https://via.placeholder.com/150"} className="w-10 h-10 rounded-full border border-white/20 object-cover" alt="leader" />
             <div>
               <p className="text-sm font-black uppercase text-white leading-none">{leader.name || leader.nickname}</p>
-              <p className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest mt-1">Impact: {leader.neuralImpact}</p>
+              <p className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest mt-1">Impact: {leader.neuralImpact || 0}</p>
             </div>
           </div>
           {index < 3 && <FaMedal className={index === 0 ? 'text-yellow-400' : index === 1 ? 'text-zinc-300' : 'text-orange-500'} />}
@@ -218,6 +218,7 @@ const Profile = () => {
   const hasVerifiedBadge = userProfile?.isVerified;
 
   const fetchProfileData = async () => {
+    if (!isAuthenticated) return;
     try {
       setLoading(true);
       const token = await getAccessTokenSilently();
@@ -227,17 +228,19 @@ const Profile = () => {
         headers: { Authorization: `Bearer ${token}` } 
       });
 
-      setUserProfile(res.data.user);
-      setEditData({ 
-        nickname: res.data.user.nickname || '', 
-        bio: res.data.user.bio || '' 
-      });
-      const posts = Array.isArray(res.data.posts) ? res.data.posts : [];
-      setUserPosts(posts.filter(p => p.postType !== 'reels'));
-      setUserReels(posts.filter(p => p.postType === 'reels'));
+      if (res.data.user) {
+        setUserProfile(res.data.user);
+        setEditData({ 
+          nickname: res.data.user.nickname || '', 
+          bio: res.data.user.bio || '' 
+        });
+        const posts = Array.isArray(res.data.posts) ? res.data.posts : [];
+        setUserPosts(posts.filter(p => p.postType !== 'reels' && p.mediaType !== 'video'));
+        setUserReels(posts.filter(p => p.postType === 'reels' || p.mediaType === 'video'));
+      }
     } catch (err) {
       console.error("Profile Sync Error:", err);
-      toast.error("Neural Link Unstable");
+      // toast.error("Neural Link Unstable");
     } finally {
       setLoading(false);
     }
@@ -257,7 +260,9 @@ const Profile = () => {
     }
   };
 
-  useEffect(() => { if (isAuthenticated) fetchProfileData(); }, [userId, isAuthenticated]);
+  useEffect(() => { 
+    fetchProfileData(); 
+  }, [userId, isAuthenticated, getAccessTokenSilently]);
 
   if (loading) return (
     <div className="h-screen flex items-center justify-center bg-[#020617] text-cyan-400 font-black italic uppercase tracking-widest animate-pulse">
@@ -304,7 +309,7 @@ const Profile = () => {
             <div className="flex-1 text-center md:text-left">
               <div className="flex items-center justify-center md:justify-start gap-3">
                 <h1 className="text-3xl md:text-5xl font-black text-white italic tracking-tighter uppercase leading-none">
-                  {userProfile?.name || userProfile?.nickname}
+                  {userProfile?.name || userProfile?.nickname || "Drifter"}
                 </h1>
                 {hasVerifiedBadge && <FaCheckCircle className="text-cyan-400" size={24} />}
               </div>
@@ -436,7 +441,14 @@ const Profile = () => {
               <motion.div key="reels" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} className="grid grid-cols-2 md:grid-cols-3 gap-4">
                 {userReels.map((reel) => (
                   <div key={reel._id} className="relative aspect-[9/16] bg-zinc-900 rounded-[2.5rem] overflow-hidden group border border-white/5">
-                    <video src={reel.media} className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all" muted onMouseOver={e => e.target.play()} onMouseOut={e => e.target.pause()} />
+                    <video 
+                      src={reel.media} 
+                      className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all" 
+                      muted 
+                      onMouseOver={e => e.target.play()} 
+                      onMouseOut={e => e.target.pause()} 
+                      onClick={() => navigate(`/reels`)}
+                    />
                   </div>
                 ))}
                 {userReels.length === 0 && <div className="col-span-full text-center py-20 text-zinc-700 uppercase italic font-black">No Reels Found</div>}
@@ -457,12 +469,12 @@ const Profile = () => {
                   <div className="w-full md:w-64">
                     <div className="flex justify-between text-[8px] font-black text-zinc-500 uppercase mb-2 tracking-widest">
                         <span>Rank Progress</span>
-                        <span>{userProfile?.neuralImpact % 1000} / 1000</span>
+                        <span>{(userProfile?.neuralImpact || 0) % 1000} / 1000</span>
                     </div>
                     <div className="h-1.5 w-full bg-black/40 rounded-full overflow-hidden border border-white/5">
                         <motion.div 
                           initial={{ width: 0 }}
-                          animate={{ width: `${(userProfile?.neuralImpact % 1000) / 10}%` }}
+                          animate={{ width: `${((userProfile?.neuralImpact || 0) % 1000) / 10}%` }}
                           className="h-full bg-cyan-500 shadow-[0_0_15px_#06b6d4]"
                         />
                     </div>

@@ -3,11 +3,19 @@ import multer from "multer";
 import { v2 as cloudinary } from "cloudinary";
 import { CloudinaryStorage } from "multer-storage-cloudinary";
 import Post from "../models/Post.js"; 
-import User from "../models/User.js"; // ইউজার ডাটা চেক করার জন্য
+import User from "../models/User.js";
+import { auth } from 'express-oauth2-jwt-bearer';
 
 const router = express.Router();
 
-// ১. ক্লাউডিনারি স্টোরেজ কনফিগারেশন
+// Auth0 Middleware
+const checkJwt = auth({
+  audience: process.env.AUTH0_AUDIENCE || 'https://onyx-drift-api.com',
+  issuerBaseURL: `https://dev-6d0nxccsaycctfl1.us.auth0.com/`,
+  tokenSigningAlg: 'RS256'
+});
+
+// ক্লাউডিনারি স্টোরেজ
 const storage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: {
@@ -17,87 +25,69 @@ const storage = new CloudinaryStorage({
   },
 });
 
-const upload = multer({ 
-    storage: storage,
-    limits: { fileSize: 100 * 1024 * 1024 } // 100 MB Limit
-});
+const upload = multer({ storage: storage });
 
 /* ==========================================================
-    🚀 REEL UPLOAD (POST /api/reels/upload)
-========================================================== */
-router.post("/upload", upload.single("video"), async (req, res) => {
-  try {
-    // Auth0 ID রিকোয়েস্ট থেকে নেওয়া (server.js এ checkJwt এটি সেট করে)
-    const myId = req.auth?.payload?.sub;
-    const { caption } = req.body;
-
-    if (!myId) return res.status(401).json({ error: "Identity not verified." });
-    if (!req.file) return res.status(400).json({ error: "No video file detected." });
-
-    // ইউজারের প্রোফাইল থেকে লেটেস্ট ডাটা নেওয়া
-    const userProfile = await User.findOne({ auth0Id: myId }).lean();
-
-    // ২. নতুন রিল তৈরি
-    const newReel = new Post({
-      author: myId, 
-      authorAuth0Id: myId, 
-      authorName: userProfile?.name || "Drifter",
-      authorAvatar: userProfile?.avatar || "",
-      
-      text: caption || "",
-      media: req.file.path,      // Cloudinary URL
-      mediaUrl: req.file.path,   // Backup
-      mediaType: "video",        // রিল হিসেবে চেনার জন্য জরুরি
-      
-      likes: [],
-      comments: [],
-      views: 0
-    });
-
-    const savedReel = await newReel.save();
-    console.log(`✅ Reel Synced: ${savedReel._id}`);
-    res.status(201).json(savedReel);
-
-  } catch (err) {
-    console.error("🔥 REEL_UPLOAD_ERROR:", err.message);
-    res.status(500).json({ error: "Neural Breakdown", message: err.message });
-  }
-});
-
-/* ==========================================================
-    📺 GET ALL REELS (GET /api/reels/all)
-    আপনার ফ্রন্টএন্ড /all কল করছে, তাই এটি ফিক্স করা হলো
+    📺 GET ALL REELS - ফিক্সড এরর হ্যান্ডলিং
 ========================================================== */
 router.get("/all", async (req, res) => {
   try {
-    // শুধুমাত্র ভিডিও টাইপ পোস্টগুলো ফেচ করা হচ্ছে
+    // ফ্রন্টএন্ডে অনেক সময় ফিল্টার ঠিকমতো না থাকলে 400 আসে, তাই এখানে ডিফল্ট কোয়েরি রাখা হয়েছে
     const reels = await Post.find({ 
         $or: [
-          { mediaType: "video" }, 
-          { mediaUrl: { $regex: /\.(mp4|mov|webm|quicktime)$/i } } 
+          { postType: "reels" },
+          { mediaType: "video" }
         ] 
     })
     .sort({ createdAt: -1 })
+    .limit(20) // লোডিং স্পিড বাড়ানোর জন্য
     .lean();
     
-    // ফ্রন্টএন্ডের জন্য ডাটা ক্লিনআপ
+    // ডাটা না থাকলে এম্পটি অ্যারে পাঠানো (যাতে ফ্রন্টএন্ড ক্রাশ না করে)
+    if (!reels) return res.status(200).json([]);
+
     const safeReels = reels.map(reel => ({
         ...reel,
-        authorName: reel.authorName || "Unknown Drifter",
-        likes: reel.likes || [],
-        comments: reel.comments || []
+        likes: Array.isArray(reel.likes) ? reel.likes : [],
+        comments: Array.isArray(reel.comments) ? reel.comments : [],
+        authorName: reel.authorName || "Unknown Drifter"
     }));
 
     res.status(200).json(safeReels);
   } catch (err) {
-    console.error("🔥 REELS_FETCH_ERROR:", err);
+    console.error("Fetch Error:", err);
     res.status(500).json({ error: "Failed to fetch reels" });
   }
 });
 
-// ফালব্যাক রাউট (যদি কেউ শুধু /api/reels এ হিট করে)
-router.get("/", async (req, res) => {
-    res.redirect("/api/reels/all");
+/* ==========================================================
+    🚀 REEL UPLOAD - ফিক্সড
+========================================================== */
+router.post("/upload", checkJwt, upload.single("video"), async (req, res) => {
+  try {
+    const myId = req.auth?.payload?.sub;
+    if (!req.file) return res.status(400).json({ error: "ভিডিও ফাইল পাওয়া যায়নি।" });
+
+    const userProfile = await User.findOne({ auth0Id: myId });
+
+    const newReel = new Post({
+      author: myId,
+      authorAuth0Id: myId,
+      authorName: userProfile?.name || "Drifter",
+      authorAvatar: userProfile?.avatar || "",
+      text: req.body.caption || "",
+      media: req.file.path,
+      mediaType: "video",
+      postType: "reels",
+      likes: [],
+      comments: []
+    });
+
+    await newReel.save();
+    res.status(201).json(newReel);
+  } catch (err) {
+    res.status(400).json({ error: "Upload failed", details: err.message });
+  }
 });
 
 export default router;
