@@ -43,7 +43,7 @@ cloudinary.config({
 const app = express();
 const server = http.createServer(app);
 
-// ৩. CORS কনফিগারেশন (উন্নত করা হয়েছে)
+// ৩. CORS কনফিগারেশন
 const allowedOrigins = [
     "http://localhost:5173", 
     "https://onyx-drift-app-final.onrender.com",
@@ -67,67 +67,62 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 
-// ৪. বডি পার্সার লিমিট
+// ৪. বডি পার্সার
 app.use(express.json({ limit: "100mb" }));
 app.use(express.urlencoded({ limit: "100mb", extended: true }));
 
 /* ==========================================================
-    🧠 NEURAL PULSE UPDATE MIDDLEWARE (Fixed & Safer)
+    🧠 NEURAL PULSE & SYNC MIDDLEWARE
 ========================================================== */
 const updateNeuralPulse = async (req, res, next) => {
-    // Auth0 payload sub check
     const auth0Id = req.auth?.payload?.sub; 
     if (auth0Id) {
         try {
-            // ✅ updateOne ব্যবহার করা হয়েছে যাতে ডুপ্লিকেট কি এরর এ প্রোসেস না থামে
+            // ইউজারের শেষ অ্যাক্টিভিটি আপডেট করা
             await User.updateOne(
                 { auth0Id: auth0Id },
                 { $set: { "deathSwitch.lastPulseTimestamp": new Date() } }
-            ).catch(e => console.log("Pulse background update bypassed."));
+            );
         } catch (err) {
-            // লগকে ক্লিন রাখতে এরর সাইলেন্ট রাখা হয়েছে
+            console.log("Pulse background bypass");
         }
     }
     next();
 };
 
-// ৫. সকেট আইও কনফিগারেশন
+// ৫. সকেট আইও
 const io = new Server(server, {
     cors: corsOptions,
     transports: ['websocket', 'polling'],
     path: '/socket.io/'
 });
 
-// ৬. Redis Setup
+// ৬. Redis
 const redis = process.env.REDIS_URL ? new Redis(process.env.REDIS_URL, {
     maxRetriesPerRequest: null,
     enableReadyCheck: false
 }) : null;
 
 /* ==========================================================
-    📡 এপিআই রাউটস
+    📡 এপিআই রাউটস (সিরিয়াল ফিক্সড)
 ========================================================== */
 
-// পাবলিক রাউট
+// পাবলিক বেস রাউট
 app.get("/", (req, res) => res.status(200).send("🚀 OnyxDrift Neural Core is Online!"));
 
-// 🛠️ Neural Feed (Priority)
-// ✅ এরর হ্যান্ডলিং যোগ করা হয়েছে যাতে টোকেন না থাকলেও ক্রাশ না করে
-app.get("/api/posts/neural-feed", (req, res, next) => {
-    checkJwt(req, res, (err) => {
-        if (err) return next(); // টোকেন এরর হলে গেস্ট হিসেবে হ্যান্ডেল করবে
-        updateNeuralPulse(req, res, next);
-    });
-}, getNeuralFeed);
+// 🛠️ Neural Feed - এটাকে একদম প্রথমে রাখুন কনফ্লিক্ট এড়াতে
+app.get("/api/posts/neural-feed", checkJwt, updateNeuralPulse, getNeuralFeed);
 
-// প্রোফাইল ও ইউজার রাউটস
-app.use("/api/profile", checkJwt, updateNeuralPulse, profileRoutes); 
+// 🛠️ Feature Routes (সিরিয়াল অনুযায়ী)
+app.use("/api/users", checkJwt, updateNeuralPulse, userRoutes);
+app.use("/api/profile", checkJwt, updateNeuralPulse, profileRoutes);
 app.use("/api/posts", checkJwt, updateNeuralPulse, postRoutes); 
 app.use("/api/reels", checkJwt, updateNeuralPulse, reelRoutes); 
-app.use("/api/users", checkJwt, updateNeuralPulse, userRoutes);
 app.use("/api/stories", checkJwt, updateNeuralPulse, storyRoute);
 app.use("/api/messages", checkJwt, updateNeuralPulse, messageRoutes); 
 app.use("/api/groups", checkJwt, updateNeuralPulse, groupRoutes); 
+app.use("/api/market", checkJwt, updateNeuralPulse, marketRoutes);
+app.use("/api/admin", checkJwt, updateNeuralPulse, adminRoutes);
 
 /* ==========================================================
     📡 REAL-TIME ENGINE
@@ -152,12 +147,12 @@ io.on("connection", (socket) => {
     });
 });
 
-// ৮. গ্লোবাল এরর হ্যান্ডলার (FIXED)
+// ৮. গ্লোবাল এরর হ্যান্ডলার
 app.use((err, req, res, next) => {
-    console.error("Critical Error:", err.stack);
     if (err.name === 'UnauthorizedError') {
-        return res.status(401).json({ error: 'Invalid Token' });
+        return res.status(401).json({ error: 'Identity Verification Failed', message: "Please Login Again" });
     }
+    console.error("Critical Error:", err.stack);
     res.status(500).json({ 
         error: "Neural Grid Breakdown", 
         message: err.message 

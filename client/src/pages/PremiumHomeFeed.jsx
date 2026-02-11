@@ -11,7 +11,7 @@ import { useAuth0 } from "@auth0/auth0-react";
 import axios from "axios";
 import { useNavigate } from 'react-router-dom';
 
-// কম্পোনেন্ট ইম্পোর্ট (নিশ্চিত করুন এই ফাইলগুলো আপনার প্রজেক্টে আছে)
+// কম্পোনেন্ট ইম্পোর্ট
 import Marketplace from "./Marketplace"; 
 import Notification from "./Notifications";
 import Settings from "./Settings";
@@ -143,14 +143,14 @@ const CompactVideo = ({ src }) => {
 
 // --- ৪. মেইন ফিড কম্পোনেন্ট ---
 const PremiumHomeFeed = ({ searchQuery = "" }) => {
-  const { user, getAccessTokenSilently } = useAuth0();
+  const { user, getAccessTokenSilently, isAuthenticated } = useAuth0();
   const navigate = useNavigate();
   const postMediaRef = useRef(null);
   
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isPostModalOpen, setIsPostModalOpen] = useState(false);
-  const [isSideMenuOpen, setIsSideMenuOpen] = useState(false); // ✅ Added missing state
+  const [isSideMenuOpen, setIsSideMenuOpen] = useState(false); 
   const [activeTab, setActiveTab] = useState("home"); 
   const [activeFilter, setActiveFilter] = useState("Global");
   const [activeCommentPost, setActiveCommentPost] = useState(null);
@@ -158,7 +158,7 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
   const [postText, setPostText] = useState("");
   const [mediaFile, setMediaFile] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isEncrypted, setIsEncrypted] = useState(false); // ✅ Added missing state
+  const [isEncrypted, setIsEncrypted] = useState(false); 
   const [userProfile, setUserProfile] = useState(null);
   const [toast, setToast] = useState({ show: false, message: "" });
 
@@ -191,14 +191,19 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
     }
   };
 
+  // ✅ Fixed: Added proper synchronization logic
   useEffect(() => {
-    fetchPosts();
-    fetchUserProfile();
-  }, []);
+    if (isAuthenticated) {
+        const loadInitialData = async () => {
+            await fetchUserProfile();
+            await fetchPosts();
+        };
+        loadInitialData();
+    }
+  }, [isAuthenticated]);
 
   const handleLike = async (postId) => {
-    const userId = user?.sub;
-    if (!userId) return;
+    if (!user?.sub) return;
     try {
       const token = await getAccessTokenSilently({
         authorizationParams: { audience: AUTH_AUDIENCE }
