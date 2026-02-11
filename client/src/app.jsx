@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, Suspense, lazy } from "react";
 import { Routes, Route, useLocation, Navigate, useNavigate } from "react-router-dom";
 import { useAuth0, withAuthenticationRequired } from "@auth0/auth0-react";
 import { io } from "socket.io-client"; 
@@ -25,11 +25,11 @@ import CustomCursor from "./components/CustomCursor";
 import MobileNav from "./components/MobileNav";
 import AITwinSync from './components/AITwinSync';
 
-// Protected Route Wrapper
+// --- Protected Route Wrapper ---
 const ProtectedRoute = ({ component: Component, ...props }) => {
   const AuthenticatedComponent = withAuthenticationRequired(Component, {
     onRedirecting: () => (
-      <div className="h-screen flex items-center justify-center bg-[#020617] text-cyan-500 font-mono italic uppercase tracking-widest">
+      <div className="h-screen flex items-center justify-center bg-[#020617] text-cyan-500 font-mono italic uppercase tracking-widest animate-pulse">
         Initializing Neural Link...
       </div>
     ),
@@ -46,19 +46,16 @@ export default function App() {
   const [isPostModalOpen, setIsPostModalOpen] = useState(false);
   const [incomingCall, setIncomingCall] = useState(null);
 
-  // ✅ আপনার API Identifier (Audience)
   const API_AUDIENCE = "https://onyx-drift-api.com";
+  const BACKEND_URL = "https://onyx-drift-app-final-u29m.onrender.com";
 
-  /* =================📡 USER DATA SYNC LOGIC (FIXED) ================= */
+  /* =================📡 USER DATA SYNC LOGIC ================= */
   useEffect(() => {
     const syncUserWithDB = async () => {
       if (isAuthenticated && user) {
         try {
-          // 🛠️ FIX: অডিয়েন্সসহ টোকেন নেওয়া হচ্ছে যাতে ব্যাকএন্ড এটি ভেরিফাই করতে পারে
           const token = await getAccessTokenSilently({
-            authorizationParams: {
-              audience: API_AUDIENCE,
-            },
+            authorizationParams: { audience: API_AUDIENCE },
           });
 
           const userData = {
@@ -69,7 +66,7 @@ export default function App() {
             username: user.nickname || user.name?.split(' ')[0].toLowerCase(),
           };
 
-          await axios.post('https://onyx-drift-app-final-u29m.onrender.com/api/users/sync', userData, {
+          await axios.post(`${BACKEND_URL}/api/users/sync`, userData, {
             headers: { 
               Authorization: `Bearer ${token}`,
               'Content-Type': 'application/json'
@@ -87,17 +84,14 @@ export default function App() {
   /* =================📡 SOCKET CONFIGURATION ================= */
   useEffect(() => {
     if (isAuthenticated && user?.sub) {
-      const socketUrl = "https://onyx-drift-app-final-u29m.onrender.com";
-      
       if (!socket.current) {
-        socket.current = io(socketUrl, {
-          transports: ["websocket", "polling"],
+        socket.current = io(BACKEND_URL, {
+          transports: ["websocket"],
           withCredentials: true,
           path: '/socket.io/' 
         });
 
         socket.current.on("connect", () => {
-          console.log("Connected to Onyx Server");
           socket.current.emit("addNewUser", user.sub);
         });
 
@@ -138,7 +132,7 @@ export default function App() {
       <Toaster position="top-center" reverseOrder={false} />
       <CustomCursor />
 
-      {/* --- 📞 GLOBAL INCOMING CALL MODAL --- */}
+      {/* --- 📞 INCOMING CALL MODAL --- */}
       <AnimatePresence>
         {incomingCall && (
           <motion.div 
@@ -158,7 +152,7 @@ export default function App() {
                 </div>
               </div>
               <div className="flex gap-3">
-                <button onClick={() => setIncomingCall(null)} className="w-10 h-10 rounded-full bg-red-500/20 text-red-500 flex items-center justify-center hover:bg-red-500 hover:text-white transition-all">
+                <button onClick={() => setIncomingCall(null)} className="w-10 h-10 rounded-full bg-red-500/20 text-red-500 flex items-center justify-center hover:bg-red-500 transition-all">
                   <HiXMark size={20} />
                 </button>
                 <button onClick={() => { navigate(`/call/${incomingCall.roomId}`); setIncomingCall(null); }} className="w-10 h-10 rounded-full bg-cyan-500 text-black flex items-center justify-center hover:scale-110 transition-all">
@@ -172,7 +166,7 @@ export default function App() {
 
       <div className="flex flex-col w-full">
         {isAuthenticated && !isAuthPage && !isReelsPage && !isFeedPage && !isMessengerPage && (
-          <Navbar user={user} socket={socket.current} setSearchQuery={setSearchQuery} setIsPostModalOpen={setIsPostModalOpen} toggleSidebar={() => {}} />
+          <Navbar user={user} socket={socket.current} setSearchQuery={setSearchQuery} setIsPostModalOpen={setIsPostModalOpen} />
         )}
         
         <div className="flex justify-center w-full transition-all duration-500">
@@ -185,23 +179,26 @@ export default function App() {
             
             <main className={`flex-1 flex justify-center ${isFullWidthPage ? "mt-0 pb-0" : "mt-6 pb-24 lg:pb-10"}`}>
               <div className={`${isFullWidthPage ? "w-full" : "w-full lg:max-w-[650px] max-w-full"}`}>
-                <AnimatePresence mode="wait">
-                  <Routes location={location} key={location.pathname}>
-                    <Route path="/" element={isAuthenticated ? <Navigate to="/feed" /> : <Landing />} />
-                    <Route path="/join" element={<JoinPage />} /> 
-                    <Route path="/feed" element={<ProtectedRoute component={() => <PremiumHomeFeed searchQuery={searchQuery} isPostModalOpen={isPostModalOpen} setIsPostModalOpen={setIsPostModalOpen} />} />} />
-                    <Route path="/reels" element={<ProtectedRoute component={ReelsFeed} />} />
-                    <Route path="/reels-editor" element={<ProtectedRoute component={ReelsEditor} />} />
-                    <Route path="/profile/:userId" element={<ProtectedRoute component={Profile} />} />
-                    <Route path="/following" element={<ProtectedRoute component={FollowingPage} />} />
-                    <Route path="/messages/:userId?" element={<ProtectedRoute component={() => <Messenger socket={socket.current} />} />} />
-                    <Route path="/messenger/:userId?" element={<ProtectedRoute component={() => <Messenger socket={socket.current} />} />} />
-                    <Route path="/settings" element={<ProtectedRoute component={Settings} />} />
-                    <Route path="/call/:roomId" element={<ProtectedRoute component={CallPage} />} />
-                    <Route path="/ai-twin" element={<ProtectedRoute component={AITwinSync} />} />
-                    <Route path="*" element={<Navigate to="/" />} />
-                  </Routes>
-                </AnimatePresence>
+                {/* 🛡️ Suspense added to prevent 'chunk-YSNNQQNS' errors during lazy loads */}
+                <Suspense fallback={<div className="text-cyan-500 text-center mt-20 font-mono">SYNCING NEURAL GRID...</div>}>
+                  <AnimatePresence mode="wait">
+                    <Routes location={location} key={location.pathname}>
+                      <Route path="/" element={isAuthenticated ? <Navigate to="/feed" /> : <Landing />} />
+                      <Route path="/join" element={<JoinPage />} /> 
+                      <Route path="/feed" element={<ProtectedRoute component={() => <PremiumHomeFeed searchQuery={searchQuery} isPostModalOpen={isPostModalOpen} setIsPostModalOpen={setIsPostModalOpen} />} />} />
+                      <Route path="/reels" element={<ProtectedRoute component={ReelsFeed} />} />
+                      <Route path="/reels-editor" element={<ProtectedRoute component={ReelsEditor} />} />
+                      <Route path="/profile/:userId" element={<ProtectedRoute component={Profile} />} />
+                      <Route path="/following" element={<ProtectedRoute component={FollowingPage} />} />
+                      <Route path="/messages/:userId?" element={<ProtectedRoute component={() => <Messenger socket={socket.current} />} />} />
+                      <Route path="/messenger/:userId?" element={<ProtectedRoute component={() => <Messenger socket={socket.current} />} />} />
+                      <Route path="/settings" element={<ProtectedRoute component={Settings} />} />
+                      <Route path="/call/:roomId" element={<ProtectedRoute component={CallPage} />} />
+                      <Route path="/ai-twin" element={<ProtectedRoute component={AITwinSync} />} />
+                      <Route path="*" element={<Navigate to="/" />} />
+                    </Routes>
+                  </AnimatePresence>
+                </Suspense>
               </div>
             </main>
 
@@ -210,7 +207,7 @@ export default function App() {
                 <div className="bg-white/5 border border-white/10 rounded-3xl p-6 h-full backdrop-blur-md">
                    <h3 className="text-xs font-black uppercase tracking-widest text-cyan-500 mb-4">Neural Suggestions</h3>
                    <div className="space-y-4">
-                      <p className="text-gray-500 text-xs italic">Syncing with drift...</p>
+                      <div className="h-20 w-full bg-white/5 rounded-xl animate-pulse" />
                       <div className="h-20 w-full bg-white/5 rounded-xl animate-pulse" />
                    </div>
                 </div>
