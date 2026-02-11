@@ -72,20 +72,17 @@ app.use(express.json({ limit: "100mb" }));
 app.use(express.urlencoded({ limit: "100mb", extended: true }));
 
 /* ==========================================================
-    🧠 NEURAL PULSE & SYNC MIDDLEWARE
+    🧠 NEURAL PULSE & SYNC MIDDLEWARE (FIXED)
 ========================================================== */
 const updateNeuralPulse = async (req, res, next) => {
     const auth0Id = req.auth?.payload?.sub; 
+    
     if (auth0Id) {
-        try {
-            // ইউজারের শেষ অ্যাক্টিভিটি আপডেট করা (Digital Legacy-র জন্য জরুরি)
-            await User.updateOne(
-                { auth0Id: auth0Id },
-                { $set: { "deathSwitch.lastPulseTimestamp": new Date() } }
-            );
-        } catch (err) {
-            console.log("Pulse background bypass");
-        }
+        // নন-ব্লকিং আপডেট: ডাটাবেস আপডেট হতে সময় লাগলেও API রেসপন্স আটকে থাকবে না
+        User.updateOne(
+            { auth0Id: auth0Id },
+            { $set: { "deathSwitch.lastPulseTimestamp": new Date() } }
+        ).catch(err => console.log("Pulse background bypass:", err.message));
     }
     next();
 };
@@ -111,17 +108,15 @@ if (redis) {
 /* ==========================================================
     ⏰ CRON JOBS (Digital Legacy & Maintenance)
 ========================================================== */
-// প্রতি ২৪ ঘণ্টায় একবার রান হবে ইউজারের পালস চেক করতে
+// প্রতি ২৪ ঘণ্টায় একবার রান হবে
 cron.schedule('0 0 * * *', async () => {
     console.log("Running Neural Pulse Audit...");
-    // এখানে আপনার Legacy Logic (যেমন: ৩ মাস ইনঅ্যাক্টিভ থাকলে অটো-পোস্ট বা মেসেজ পাঠানো) লিখতে পারেন।
+    // এখানে Legacy বা Death Switch লজিক যোগ করতে পারেন
 });
 
 /* ==========================================================
-    📡 এপিআই রাউটস
+    📡 এপিআই রাউটস (সিরিয়াল অনুযায়ী)
 ========================================================== */
-
-
 
 // পাবলিক বেস রাউট
 app.get("/", (req, res) => res.status(200).send("🚀 OnyxDrift Neural Core is Online!"));
@@ -160,7 +155,7 @@ io.on("connection", (socket) => {
         if (redis && socket.userId) {
             await redis.hdel("online_users", socket.userId);
             const allUsers = await redis.hgetall("online_users");
-            // ইউজার অফলাইন হলে বাকিদের জানানো
+            // অনলাইন ইউজার লিস্ট আপডেট করে সবাইকে পাঠানো
             io.emit("getOnlineUsers", Object.keys(allUsers).map(id => ({ userId: id })));
         }
     });
@@ -190,6 +185,7 @@ server.listen(PORT, '0.0.0.0', () => {
     🚀 ONYX CORE ACTIVE ON PORT: ${PORT}
     🧠 NEURAL SYNC: ENABLED
     📡 DATABASE: CONNECTED
+    🛡️ SECURITY: JWT/CORS ACTIVE
     =========================================
     `);
 });
