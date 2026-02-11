@@ -52,7 +52,7 @@ router.get(['/profile/:id', '/:id'], auth, async (req, res) => {
 });
 
 /* ==========================================================
-    2️⃣ UPDATE PROFILE (Unified & Optimized)
+    2️⃣ UPDATE PROFILE
 ========================================================== */
 router.put("/update-profile", auth, upload.fields([
   { name: 'avatar', maxCount: 1 },
@@ -87,7 +87,64 @@ router.put("/update-profile", auth, upload.fields([
     res.status(500).json({ msg: 'Identity Sync Failed' });
   }
 });
+/* ==========================================================
+    6️⃣ GET PROFILE AND POSTS BY USER ID
+========================================================== */
+router.get("/profile/:userId", auth, async (req, res) => {
+  try {
+    const targetUserId = decodeURIComponent(req.params.userId);
+    
+    // ১. ইউজার প্রোফাইল খুঁজুন
+    const userProfile = await User.findOne({ auth0Id: targetUserId })
+      .select("-__v")
+      .lean();
 
+    if (!userProfile) {
+      return res.status(404).json({ msg: "Drifter not found" });
+    }
+
+    // ২. ওই ইউজারের সব পোস্ট খুঁজুন (authorAuth0Id অথবা author ফিল্ড চেক করে)
+    const userPosts = await Post.find({
+      $or: [
+        { authorAuth0Id: targetUserId },
+        { author: targetUserId }
+      ]
+    })
+    .sort({ createdAt: -1 })
+    .lean();
+
+    // ৩. অবজেক্ট আকারে ডাটা পাঠান যাতে ফ্রন্টএন্ড সহজে ধরতে পারে
+    res.json({
+      user: userProfile,
+      posts: userPosts
+    });
+  } catch (err) {
+    console.error("Profile Fetch Error:", err);
+    res.status(500).json({ msg: "Neural signal lost" });
+  }
+});
+
+/* ==========================================================
+    3️⃣ GET POSTS BY USER ID (FIXED ROUTE)
+========================================================== */
+// এই রুটটি নিশ্চিত করুন ফ্রন্টএন্ড থেকে /api/users/user-posts/:userId কল করা হচ্ছে
+router.get("/user-posts/:userId", auth, async (req, res) => {
+  try {
+    const targetUserId = decodeURIComponent(req.params.userId);
+    
+    const posts = await Post.find({
+      $or: [
+        { authorAuth0Id: targetUserId },
+        { author: targetUserId }
+      ]
+    }).sort({ createdAt: -1 }).lean();
+
+    res.json(posts);
+  } catch (err) {
+    console.error("📡 User Posts Error:", err);
+    res.status(500).json({ msg: "Error fetching user signals" });
+  }
+});
 /* ==========================================================
     🚀 2.5 NEURAL RANK UPDATE (New Feature)
     প্রতি ১০০ মেসেজে ১ পয়েন্ট যোগ করার জন্য
