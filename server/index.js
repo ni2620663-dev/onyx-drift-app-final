@@ -43,7 +43,7 @@ cloudinary.config({
 const app = express();
 const server = http.createServer(app);
 
-// ৩. CORS কনফিগারেশন
+// ৩. CORS কনফিগারেশন (Refined)
 const allowedOrigins = [
     "http://localhost:5173", 
     "https://onyx-drift-app-final.onrender.com",
@@ -78,7 +78,7 @@ const updateNeuralPulse = async (req, res, next) => {
     const auth0Id = req.auth?.payload?.sub; 
     if (auth0Id) {
         try {
-            // ইউজারের শেষ অ্যাক্টিভিটি আপডেট করা
+            // ইউজারের শেষ অ্যাক্টিভিটি আপডেট করা (Digital Legacy-র জন্য জরুরি)
             await User.updateOne(
                 { auth0Id: auth0Id },
                 { $set: { "deathSwitch.lastPulseTimestamp": new Date() } }
@@ -90,30 +90,46 @@ const updateNeuralPulse = async (req, res, next) => {
     next();
 };
 
-// ৫. সকেট আইও
+// ৫. সকেট আইও কনফিগারেশন
 const io = new Server(server, {
     cors: corsOptions,
     transports: ['websocket', 'polling'],
     path: '/socket.io/'
 });
 
-// ৬. Redis
+// ৬. Redis কানেকশন (With Error Handling)
 const redis = process.env.REDIS_URL ? new Redis(process.env.REDIS_URL, {
     maxRetriesPerRequest: null,
     enableReadyCheck: false
 }) : null;
 
+if (redis) {
+    redis.on("error", (err) => console.error("Redis Grid Error:", err));
+    redis.on("connect", () => console.log("📡 Neural Cache Connected (Redis)"));
+}
+
 /* ==========================================================
-    📡 এপিআই রাউটস (সিরিয়াল ফিক্সড)
+    ⏰ CRON JOBS (Digital Legacy & Maintenance)
 ========================================================== */
+// প্রতি ২৪ ঘণ্টায় একবার রান হবে ইউজারের পালস চেক করতে
+cron.schedule('0 0 * * *', async () => {
+    console.log("Running Neural Pulse Audit...");
+    // এখানে আপনার Legacy Logic (যেমন: ৩ মাস ইনঅ্যাক্টিভ থাকলে অটো-পোস্ট বা মেসেজ পাঠানো) লিখতে পারেন।
+});
+
+/* ==========================================================
+    📡 এপিআই রাউটস
+========================================================== */
+
+
 
 // পাবলিক বেস রাউট
 app.get("/", (req, res) => res.status(200).send("🚀 OnyxDrift Neural Core is Online!"));
 
-// 🛠️ Neural Feed - এটাকে একদম প্রথমে রাখুন কনফ্লিক্ট এড়াতে
+// 🛠️ Neural Feed - এটাকে একদম প্রথমে রাখুন কনফ্লিক্ট এড়াতে
 app.get("/api/posts/neural-feed", checkJwt, updateNeuralPulse, getNeuralFeed);
 
-// 🛠️ Feature Routes (সিরিয়াল অনুযায়ী)
+// 🛠️ Feature Routes
 app.use("/api/users", checkJwt, updateNeuralPulse, userRoutes);
 app.use("/api/profile", checkJwt, updateNeuralPulse, profileRoutes);
 app.use("/api/posts", checkJwt, updateNeuralPulse, postRoutes); 
@@ -125,7 +141,7 @@ app.use("/api/market", checkJwt, updateNeuralPulse, marketRoutes);
 app.use("/api/admin", checkJwt, updateNeuralPulse, adminRoutes);
 
 /* ==========================================================
-    📡 REAL-TIME ENGINE
+    📡 REAL-TIME ENGINE (Socket.io)
 ========================================================== */
 io.on("connection", (socket) => {
     socket.on("addNewUser", async (auth0Id) => { 
@@ -143,11 +159,16 @@ io.on("connection", (socket) => {
     socket.on("disconnect", async () => {
         if (redis && socket.userId) {
             await redis.hdel("online_users", socket.userId);
+            const allUsers = await redis.hgetall("online_users");
+            // ইউজার অফলাইন হলে বাকিদের জানানো
+            io.emit("getOnlineUsers", Object.keys(allUsers).map(id => ({ userId: id })));
         }
     });
 });
 
-// ৮. গ্লোবাল এরর হ্যান্ডলার
+/* ==========================================================
+    🛡️ GLOBAL ERROR HANDLER
+========================================================== */
 app.use((err, req, res, next) => {
     if (err.name === 'UnauthorizedError') {
         return res.status(401).json({ error: 'Identity Verification Failed', message: "Please Login Again" });
@@ -159,8 +180,16 @@ app.use((err, req, res, next) => {
     });
 });
 
-// ৯. সার্ভার লিসেনিং
+/* ==========================================================
+    🚀 SERVER START
+========================================================== */
 const PORT = process.env.PORT || 10000;
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 ONYX CORE ACTIVE ON PORT: ${PORT}`);
+    console.log(`
+    =========================================
+    🚀 ONYX CORE ACTIVE ON PORT: ${PORT}
+    🧠 NEURAL SYNC: ENABLED
+    📡 DATABASE: CONNECTED
+    =========================================
+    `);
 });

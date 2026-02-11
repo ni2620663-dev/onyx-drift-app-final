@@ -23,19 +23,16 @@ const upload = multer({
 /**
  * ১. লজড-ইন ইউজারের প্রোফাইল ডাটা পাওয়া
  * GET: api/user/profile
- * ফ্রন্টএন্ডে "stats undefined" এরর ফিক্স করতে এটি আপডেট করা হয়েছে
  */
 router.get('/profile', auth, async (req, res) => {
   try {
     const auth0Id = req.user.sub || req.user.id;
-    // .lean() ব্যবহার করা হয়েছে যাতে দ্রুত ডাটা পাওয়া যায়
     const user = await User.findOne({ auth0Id }).lean();
     
     if (!user) {
       return res.status(404).json({ message: "Profile not found." });
     }
     
-    // ফ্রন্টএন্ডের ডিমান্ড অনুযায়ী stats অবজেক্ট তৈরি
     const userWithStats = {
         ...user,
         stats: {
@@ -44,7 +41,6 @@ router.get('/profile', auth, async (req, res) => {
         }
     };
 
-    // ইউজারের পোস্টগুলো পাওয়া
     const posts = await Post.find({ 
       $or: [{ authorId: auth0Id }, { authorAuth0Id: auth0Id }, { author: auth0Id }] 
     }).sort({ createdAt: -1 }).lean();
@@ -57,19 +53,16 @@ router.get('/profile', auth, async (req, res) => {
 });
 
 /**
- * ২. রিলস ডাটা পাওয়া (৪০০ এরর ফিক্স)
- * GET: api/user/reels/all
+ * ২. রিলস ডাটা পাওয়া
  */
 router.get('/reels/all', async (req, res) => {
     try {
-        // mediaType: 'reel' অথবা video টাইপের পোস্টগুলো খোঁজা হচ্ছে
         const reels = await Post.find({ 
             $or: [{ mediaType: 'reel' }, { mediaType: 'video' }] 
         })
         .sort({ createdAt: -1 })
         .lean();
         
-        // যদি রিলস না থাকে তবে এরর না দিয়ে খালি এরে পাঠানোই ভালো
         res.status(200).json(reels || []);
     } catch (err) {
         res.status(400).json({ message: "Failed to fetch reels", error: err.message });
@@ -77,14 +70,26 @@ router.get('/reels/all', async (req, res) => {
 });
 
 /**
- * ৩. ইউজার ডাটা সিঙ্ক (Auth0 থেকে আসার পর)
+ * ৩. ইউজার ডাটা সিঙ্ক (GET & POST)
+ * ৪MD: ৪0৪ এরর ফিক্স করতে GET রুট যোগ করা হয়েছে
  */
+router.get('/sync', auth, async (req, res) => {
+  try {
+    const auth0Id = req.user.sub || req.user.id;
+    const user = await User.findOne({ auth0Id });
+    if (!user) return res.status(404).json({ message: "User not synced yet" });
+    res.status(200).json(user);
+  } catch (err) {
+    res.status(500).json({ message: "Sync fetch failed" });
+  }
+});
+
 router.post('/sync', auth, async (req, res) => {
   try {
     const { auth0Id, name, email, picture, username } = req.body;
     
     const user = await User.findOneAndUpdate(
-      { auth0Id: auth0Id }, 
+      { auth0Id: auth0Id || req.user.sub }, 
       { 
         $set: { 
           name: name,
@@ -139,7 +144,7 @@ router.get('/search', auth, async (req, res) => {
 });
 
 /**
- * ৫. নির্দিষ্ট ইউজারের প্রোফাইল দেখা (Public Profile)
+ * ৫. নির্দিষ্ট ইউজারের প্রোফাইল দেখা
  */
 router.get(['/profile/:userId', '/:userId'], auth, async (req, res, next) => {
   try {
@@ -151,14 +156,15 @@ router.get(['/profile/:userId', '/:userId'], auth, async (req, res, next) => {
     const targetId = decodeURIComponent(rawUserId);
     const user = await User.findOne({ auth0Id: targetId }).lean();
     
-    // পাবলিক প্রোফাইলে যেন ক্রাশ না করে তাই stats হ্যান্ডলিং
     const formattedUser = user ? {
         ...user,
         stats: {
             neuralImpact: user.neuralImpact || 0,
             rank: user.neuralRank || "Drifter"
         }
-    } : { name: "Unknown Drifter", neuralImpact: 0, stats: { neuralImpact: 0 } };
+    } : null;
+
+    if (!formattedUser) return res.status(404).json({ message: "User not found" });
 
     const posts = await Post.find({ 
         $or: [{ author: targetId }, { authorAuth0Id: targetId }, { authorId: targetId }] 
@@ -179,7 +185,7 @@ router.get(['/profile/:userId', '/:userId'], auth, async (req, res, next) => {
 router.post('/create', auth, upload.single('file'), createPost);
 
 /**
- * ৭. কেনাকাটা এবং এসেট ইকুইপ সিস্টেম
+ * ৭. কেনাকাটা সিস্টেম
  */
 router.post("/purchase-item", auth, async (req, res) => {
   try {
