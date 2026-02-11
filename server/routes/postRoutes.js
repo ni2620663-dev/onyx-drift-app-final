@@ -37,7 +37,8 @@ router.get('/reels/all', async (req, res) => {
         const reels = await Post.find({ 
             $or: [
                 { postType: 'reels' }, 
-                { mediaType: 'video' }
+                { mediaType: 'video' },
+                { mediaType: 'reel' } // Added 'reel' for safety
             ] 
         }).sort({ createdAt: -1 });
         res.json(reels);
@@ -47,7 +48,7 @@ router.get('/reels/all', async (req, res) => {
 });
 
 /* ==========================================================
-    ২. সব পোস্ট গেট করা
+    ২. সব পোস্ট গেট করা (Feed)
 ========================================================== */
 router.get('/', async (req, res) => {
     try {
@@ -65,7 +66,7 @@ router.get('/user/:userId', authMiddleware, async (req, res) => {
     try {
         const targetId = decodeURIComponent(req.params.userId);
         const posts = await Post.find({ 
-            $or: [ { authorId: targetId }, { authorAuth0Id: targetId } ] 
+            $or: [ { authorId: targetId }, { authorAuth0Id: targetId }, { author: targetId } ] 
         }).sort({ createdAt: -1 });
         res.json(posts);
     } catch (err) {
@@ -74,34 +75,37 @@ router.get('/user/:userId', authMiddleware, async (req, res) => {
 });
 
 /* ==========================================================
-    ৪. নতুন পোস্ট তৈরি (FIXED: Added '/create')
+    ৪. নতুন পোস্ট তৈরি (Matched with Frontend)
 ========================================================== */
 router.post('/create', authMiddleware, async (req, res) => {
     try {
-        const { text, media, mediaType, authorName, authorAvatar, isEncrypted } = req.body;
+        const { text, content, media, mediaType, authorName, authorAvatar, isEncrypted, type } = req.body;
         const currentUserId = req.user.sub || req.user.id; 
 
         const newPost = new Post({ 
-            text, 
+            text: text || content, // ফ্রন্টএন্ডে অনেক সময় content হিসেবে পাঠানো হয়
             media, 
-            mediaType: mediaType || 'photo', 
+            mediaType: mediaType || type || 'photo', 
             authorName, 
             authorAvatar, 
             authorId: currentUserId,
             authorAuth0Id: currentUserId,
+            author: currentUserId, // ব্যাকএন্ডের অন্যান্য মডেলের সাথে সামঞ্জস্য রাখতে
             isEncrypted: isEncrypted === true || isEncrypted === 'true',
-            likes: [] 
+            likes: [],
+            comments: []
         });
 
         const savedPost = await newPost.save();
         res.status(201).json(savedPost);
     } catch (err) {
+        console.error("Post Creation Error:", err);
         res.status(400).json({ message: "Post creation failed" });
     }
 });
 
 /* ==========================================================
-    ৫. পোস্ট লাইক (CHANGED to POST to match Frontend)
+    ৫. পোস্ট লাইক / আনলাইক
 ========================================================== */
 router.post('/:id/like', authMiddleware, async (req, res) => {
     try {
@@ -128,7 +132,32 @@ router.post('/:id/like', authMiddleware, async (req, res) => {
 });
 
 /* ==========================================================
-    ৬. পোস্ট ডিলিট
+    ৬. কমেন্ট করা (New Logic Added to Fix UI Resonance Error)
+========================================================== */
+router.post('/:id/comment', authMiddleware, async (req, res) => {
+    try {
+        const { text } = req.body;
+        const post = await Post.findById(req.params.id);
+        if (!post) return res.status(404).json({ message: "Post not found" });
+
+        const newComment = {
+            userId: req.user.sub || req.user.id,
+            userName: req.user.name || "Anonymous Drifter",
+            userAvatar: req.user.picture || "",
+            text,
+            createdAt: new Date()
+        };
+
+        post.comments.push(newComment);
+        await post.save();
+        res.json(post);
+    } catch (err) {
+        res.status(500).json({ message: "Comment injection failed" });
+    }
+});
+
+/* ==========================================================
+    ৭. পোস্ট ডিলিট
 ========================================================== */
 router.delete('/:id', authMiddleware, async (req, res) => {
     try {

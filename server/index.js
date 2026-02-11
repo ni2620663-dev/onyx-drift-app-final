@@ -74,6 +74,7 @@ app.use(express.urlencoded({ limit: "100mb", extended: true }));
     🧠 NEURAL PULSE UPDATE MIDDLEWARE
 ========================================================== */
 const updateNeuralPulse = async (req, res, next) => {
+    // Auth0 payload sub check (auth0Id)
     const auth0Id = req.auth?.payload?.sub; 
     if (auth0Id) {
         try {
@@ -115,22 +116,31 @@ const redis = process.env.REDIS_URL ? new Redis(process.env.REDIS_URL, {
 // পাবলিক রাউট
 app.get("/", (req, res) => res.status(200).send("🚀 OnyxDrift Neural Core is Online!"));
 
-/** * 🛠️ ফিক্স: 404 Error - /api/users/profile কল করছে ফ্রন্টএন্ড
- * আমরা profileRoutes এবং userRoutes ব্যবহার করে সব সম্ভাব্য পাথ কভার করছি।
+/** * 🛠️ ফিক্স: Profile Route Mappings
+ * ফ্রন্টএন্ড যদি plural /api/users/profile কল করে তবেও কাজ করবে।
  */
 app.use("/api/profile", checkJwt, updateNeuralPulse, profileRoutes); 
 app.use("/api/user/profile", checkJwt, updateNeuralPulse, profileRoutes); 
-app.use("/api/users/profile", checkJwt, updateNeuralPulse, profileRoutes); // Added 'users' plural support
+app.use("/api/users/profile", checkJwt, updateNeuralPulse, profileRoutes);
 
-/** * 🛠️ ফিক্স: 400 Error - /api/posts/reels/all কল করছে ফ্রন্টএন্ড
+/** * 🛠️ ফিক্স: Post & Feed Route Mappings
+ * ফ্রন্টএন্ডের ৪০০ এরর ফিক্স করার জন্য /api/posts রাউটকে আগে রাখা হয়েছে।
+ */
+app.use("/api/posts", checkJwt, updateNeuralPulse, postRoutes); 
+
+// যদি ফ্রন্টএন্ড সরাসরি /api/posts/neural-feed কল করে এবং postRoutes এ তা না থাকে
+// তবে আমরা এখানে সরাসরি mapping করে দিচ্ছি (নিশ্চিত করুন feedController আপনার প্রোজেক্টে আছে)
+import { getNeuralFeed } from "./controllers/feedController.js";
+app.get("/api/posts/neural-feed", checkJwt, updateNeuralPulse, getNeuralFeed);
+
+/** * 🛠️ ফিক্স: Reels Route Mappings
  */
 app.use("/api/reels", checkJwt, updateNeuralPulse, reelRoutes); 
 app.use("/api/posts/reels", checkJwt, updateNeuralPulse, reelRoutes); 
 
 // অন্যান্য মূল রাউটস
 app.use("/api/user", checkJwt, updateNeuralPulse, userRoutes);      
-app.use("/api/users", checkJwt, updateNeuralPulse, userRoutes); // Plural mapping
-app.use("/api/posts", checkJwt, updateNeuralPulse, postRoutes);  
+app.use("/api/users", checkJwt, updateNeuralPulse, userRoutes);
 app.use("/api/stories", checkJwt, updateNeuralPulse, storyRoute);
 app.use("/api/market", checkJwt, updateNeuralPulse, marketRoutes); 
 app.use("/api/admin", checkJwt, updateNeuralPulse, adminRoutes); 
