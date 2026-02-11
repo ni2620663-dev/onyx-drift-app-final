@@ -18,7 +18,7 @@ import Settings from "./pages/Settings";
 import FollowingPage from "./pages/FollowingPage";
 import ReelsFeed from "./pages/ReelsFeed";
 import ReelsEditor from "./pages/ReelsEditor";     
-import Landing from "./pages/Landing"; // আপনার নতুন ল্যান্ডিং পেজ
+import Landing from "./pages/Landing"; 
 import JoinPage from "./pages/JoinPage";
 import CallPage from "./pages/CallPage";
 import CustomCursor from "./components/CustomCursor";
@@ -48,7 +48,7 @@ export default function App() {
   // ইনকামিং কল স্টেট
   const [incomingCall, setIncomingCall] = useState(null);
 
-  /* =================📡 USER DATA SYNC LOGIC ================= */
+  /* =================📡 USER DATA SYNC LOGIC (FIXED URL) ================= */
   useEffect(() => {
     const syncUserWithDB = async () => {
       if (isAuthenticated && user) {
@@ -62,12 +62,13 @@ export default function App() {
             username: user.nickname || user.name?.split(' ')[0].toLowerCase(),
           };
 
-          await axios.post('https://onyx-drift-app-final-u29m.onrender.com/api/user/sync', userData, {
+          // URL ফিক্স করা হয়েছে: /api/user/sync -> /api/users/sync
+          await axios.post('https://onyx-drift-app-final-u29m.onrender.com/api/users/sync', userData, {
             headers: { Authorization: `Bearer ${token}` }
           });
           console.log("📡 Identity Synced with Neural Grid");
         } catch (err) {
-          console.error("❌ Sync Error:", err);
+          console.error("❌ Sync Error (404/500):", err.response?.data || err.message);
         }
       }
     };
@@ -83,6 +84,7 @@ export default function App() {
         socket.current = io(socketUrl, {
           transports: ["websocket", "polling"],
           withCredentials: true,
+          path: '/socket.io/' // ব্যাকএন্ডের সাথে ম্যাচ করানো হয়েছে
         });
 
         socket.current.on("connect", () => {
@@ -116,11 +118,7 @@ export default function App() {
 
   /* =================📏 LAYOUT LOGIC ================= */
   const isMessengerPage = location.pathname.startsWith("/messages") || location.pathname.startsWith("/messenger");
-
-  const isFullWidthPage = [
-    "/messenger", "/messages", "/settings", "/", "/join", "/reels", "/feed"
-  ].some(path => location.pathname === path || location.pathname.startsWith(path + "/"));
-
+  const isFullWidthPage = ["/messenger", "/messages", "/settings", "/", "/join", "/reels", "/feed", "/ai-twin"].some(path => location.pathname === path || location.pathname.startsWith(path + "/"));
   const isReelsPage = location.pathname.startsWith("/reels");
   const isFeedPage = location.pathname.startsWith("/feed"); 
   const isAuthPage = location.pathname === "/" || location.pathname === "/join";
@@ -151,19 +149,10 @@ export default function App() {
                 </div>
               </div>
               <div className="flex gap-3">
-                <button 
-                  onClick={() => setIncomingCall(null)}
-                  className="w-10 h-10 rounded-full bg-red-500/20 text-red-500 flex items-center justify-center hover:bg-red-500 hover:text-white transition-all"
-                >
+                <button onClick={() => setIncomingCall(null)} className="w-10 h-10 rounded-full bg-red-500/20 text-red-500 flex items-center justify-center hover:bg-red-500 hover:text-white transition-all">
                   <HiXMark size={20} />
                 </button>
-                <button 
-                  onClick={() => {
-                    navigate(`/call/${incomingCall.roomId}`);
-                    setIncomingCall(null);
-                  }}
-                  className="w-10 h-10 rounded-full bg-cyan-500 text-black flex items-center justify-center hover:scale-110 transition-all"
-                >
+                <button onClick={() => { navigate(`/call/${incomingCall.roomId}`); setIncomingCall(null); }} className="w-10 h-10 rounded-full bg-cyan-500 text-black flex items-center justify-center hover:scale-110 transition-all">
                   <FaPhone size={18} />
                 </button>
               </div>
@@ -173,20 +162,12 @@ export default function App() {
       </AnimatePresence>
 
       <div className="flex flex-col w-full">
-        {/* Navbar condition: hide on Auth Page and Messenger */}
         {isAuthenticated && !isAuthPage && !isReelsPage && !isFeedPage && !isMessengerPage && (
-          <Navbar 
-            user={user} 
-            socket={socket.current} 
-            setSearchQuery={setSearchQuery} 
-            setIsPostModalOpen={setIsPostModalOpen}
-            toggleSidebar={() => {}} 
-          />
+          <Navbar user={user} socket={socket.current} setSearchQuery={setSearchQuery} setIsPostModalOpen={setIsPostModalOpen} toggleSidebar={() => {}} />
         )}
         
         <div className="flex justify-center w-full transition-all duration-500">
           <div className={`flex w-full ${isFullWidthPage ? "max-w-full" : "max-w-[1440px] px-0 lg:px-6"} gap-6`}>
-            
             {isAuthenticated && !isFullWidthPage && (
               <aside className="hidden lg:block w-[280px] sticky top-6 h-[calc(100vh-40px)] mt-6">
                 <Sidebar />
@@ -197,32 +178,18 @@ export default function App() {
               <div className={`${isFullWidthPage ? "w-full" : "w-full lg:max-w-[650px] max-w-full"}`}>
                 <AnimatePresence mode="wait">
                   <Routes location={location} key={location.pathname}>
-                    {/* Landing Page Route */}
                     <Route path="/" element={isAuthenticated ? <Navigate to="/feed" /> : <Landing />} />
                     <Route path="/join" element={<JoinPage />} /> 
-
-                    <Route path="/feed" element={
-                      <ProtectedRoute component={() => 
-                        <PremiumHomeFeed 
-                          searchQuery={searchQuery} 
-                          isPostModalOpen={isPostModalOpen} 
-                          setIsPostModalOpen={setIsPostModalOpen} 
-                        />} 
-                      />} 
-                    />
-                    
+                    <Route path="/feed" element={<ProtectedRoute component={() => <PremiumHomeFeed searchQuery={searchQuery} isPostModalOpen={isPostModalOpen} setIsPostModalOpen={setIsPostModalOpen} />} />} />
                     <Route path="/reels" element={<ProtectedRoute component={ReelsFeed} />} />
                     <Route path="/reels-editor" element={<ProtectedRoute component={ReelsEditor} />} />
                     <Route path="/profile/:userId" element={<ProtectedRoute component={Profile} />} />
                     <Route path="/following" element={<ProtectedRoute component={FollowingPage} />} />
-
                     <Route path="/messages/:userId?" element={<ProtectedRoute component={() => <Messenger socket={socket.current} />} />} />
                     <Route path="/messenger/:userId?" element={<ProtectedRoute component={() => <Messenger socket={socket.current} />} />} />
-                    
                     <Route path="/settings" element={<ProtectedRoute component={Settings} />} />
                     <Route path="/call/:roomId" element={<ProtectedRoute component={CallPage} />} />
-                    <Route path="/ai-twin" element={<AITwinSync />} />
-                    
+                    <Route path="/ai-twin" element={<ProtectedRoute component={AITwinSync} />} />
                     <Route path="*" element={<Navigate to="/" />} />
                   </Routes>
                 </AnimatePresence>

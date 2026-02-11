@@ -1,19 +1,33 @@
 import express from 'express';
+import multer from 'multer';
+import { v2 as cloudinary } from 'cloudinary';
+import { CloudinaryStorage } from 'multer-storage-cloudinary';
 import User from '../models/User.js'; 
 import Post from '../models/Post.js'; 
-// আপনার প্রোভাইড করা server.js অনুযায়ী middleware চেক করুন
-// এখানে 'req.auth' অথবা 'req.user' হ্যান্ডেল করার জন্য ফিক্স করা হয়েছে।
 
 const router = express.Router();
 
 /* ==========================================================
+    📸 CLOUDINARY & MULTER CONFIGURATION (The Missing Part)
+========================================================== */
+// ক্লাউডিনারি স্টোরেজ কনফিগারেশন
+const storage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'onyx_drifters_profiles', // ক্লাউডিনারিতে এই ফোল্ডারে সেভ হবে
+    allowed_formats: ['jpg', 'png', 'jpeg', 'webp'],
+  },
+});
+
+const upload = multer({ storage: storage });
+
+/* ==========================================================
     🧠 HELPER: GET AUTH ID
-    Auth0 থেকে আসা আইডিটি req.auth অথবা req.user থেকে নিরাপদে বের করার জন্য
 ========================================================== */
 const getAuthId = (req) => req.auth?.payload?.sub || req.user?.sub || req.user?.id;
 
 /* ==========================================================
-    1️⃣ USER SYNC (লগইনের পর ডাটাবেসে সেভ করার জন্য)
+    1️⃣ USER SYNC (ডাটাবেসে ইউজার সেভ/আপডেট)
 ========================================================== */
 router.post('/sync', async (req, res) => {
   try {
@@ -38,10 +52,8 @@ router.post('/sync', async (req, res) => {
       { upsert: true, new: true, setDefaultsOnInsert: true } 
     );
     
-    console.log("✅ User Synced:", user.auth0Id);
     res.status(200).json(user);
   } catch (err) {
-    console.error("❌ Sync Error:", err.message);
     res.status(500).json({ message: "Sync failed", error: err.message });
   }
 });
@@ -54,13 +66,9 @@ router.get("/search", async (req, res) => {
     const queryTerm = req.query.q || ""; 
     const currentUserId = getAuthId(req);
 
-    let dbQuery = { 
-      name: { $exists: true, $ne: null } 
-    };
+    let dbQuery = { name: { $exists: true, $ne: null } };
 
-    if (currentUserId) {
-      dbQuery.auth0Id = { $ne: currentUserId };
-    }
+    if (currentUserId) dbQuery.auth0Id = { $ne: currentUserId };
 
     if (queryTerm.trim() !== "") {
       const searchRegex = new RegExp(queryTerm.trim(), "i");
@@ -72,13 +80,11 @@ router.get("/search", async (req, res) => {
 
     const users = await User.find(dbQuery)
       .select("name nickname avatar auth0Id bio isVerified neuralRank drifterLevel")
-      .limit(20)
-      .lean();
+      .limit(20).lean();
 
     res.json(users);
   } catch (err) {
-    console.error("🔍 SEARCH ERROR:", err.message);
-    res.status(500).json({ msg: "Search signal lost", error: err.message });
+    res.status(500).json({ msg: "Search signal lost" });
   }
 });
 
@@ -92,7 +98,6 @@ router.get(['/profile/:id', '/:id'], async (req, res) => {
     
     let user = await User.findOne({ auth0Id: targetId }).select("-__v").lean();
     
-    // যদি নিজের প্রোফাইল হয় এবং ডাটাবেসে না থাকে, তবে নতুন তৈরি হবে
     if (!user && targetId === myId && myId) {
       const newUser = new User({
         auth0Id: myId,
@@ -106,16 +111,14 @@ router.get(['/profile/:id', '/:id'], async (req, res) => {
     }
     
     if (!user) return res.status(404).json({ msg: "Drifter not found" });
-    
     res.json(user);
   } catch (err) {
-    console.error("📡 Profile Fetch Error:", err);
     res.status(500).json({ msg: "Neural link interrupted" });
   }
 });
 
 /* ==========================================================
-    4️⃣ UPDATE PROFILE (With Multi-part Support)
+    4️⃣ UPDATE PROFILE (Fixed the ReferenceError)
 ========================================================== */
 router.put("/update-profile", upload.fields([
   { name: 'avatar', maxCount: 1 },
@@ -125,16 +128,17 @@ router.put("/update-profile", upload.fields([
     const { nickname, name, bio, location, workplace } = req.body;
     const targetAuth0Id = getAuthId(req);
 
-    if (!targetAuth0Id) return res.status(401).json({ msg: "Unauthorized: No ID found" });
+    if (!targetAuth0Id) return res.status(401).json({ msg: "Unauthorized" });
 
     let updateFields = { name, nickname, bio, location, workplace };
 
+    // ফাইল পাথ ক্লাউডিনারি ইউআরএল থেকে নেওয়া
     if (req.files) {
       if (req.files.avatar) updateFields.avatar = req.files.avatar[0].path;
       if (req.files.cover) updateFields.coverImg = req.files.cover[0].path;
     }
 
-    // খালি ফিল্ডগুলো রিমুভ করা
+    // খালি ফিল্ড রিমুভ
     Object.keys(updateFields).forEach(key => 
       (updateFields[key] === undefined || updateFields[key] === "") && delete updateFields[key]
     );
@@ -142,66 +146,45 @@ router.put("/update-profile", upload.fields([
     const updatedUser = await User.findOneAndUpdate(
       { auth0Id: targetAuth0Id }, 
       { $set: updateFields },
-      { new: true, upsert: true, lean: true }
+      { new: true, lean: true }
     );
 
     res.json(updatedUser);
   } catch (err) {
-    console.error("📡 Profile Update Error:", err);
+    console.error("Update Error:", err);
     res.status(500).json({ msg: 'Identity Sync Failed' });
   }
 });
 
 /* ==========================================================
-    5️⃣ LEADERBOARD
+    5️⃣ LEADERBOARD & POSTS & FOLLOW (সহজ লজিক)
 ========================================================== */
 router.get('/leaderboard', async (req, res) => {
   try {
-    const topDrifters = await User.find()
-      .sort({ neuralImpact: -1 }) 
-      .limit(10)
-      .select('name nickname avatar neuralImpact neuralRank');
-
-    res.json(topDrifters);
-  } catch (err) {
-    res.status(500).json({ error: "Leaderboard link unstable" });
-  }
+    const top = await User.find().sort({ neuralImpact: -1 }).limit(10).select('name nickname avatar neuralImpact neuralRank');
+    res.json(top);
+  } catch (err) { res.status(500).json({ error: "Leaderboard link unstable" }); }
 });
 
-/* ==========================================================
-    6️⃣ GET POSTS BY USER ID
-========================================================== */
 router.get("/posts/user/:userId", async (req, res) => {
   try {
-    const targetUserId = decodeURIComponent(req.params.userId);
-    
+    const target = decodeURIComponent(req.params.userId);
     const posts = await Post.find({
-      $or: [
-        { authorAuth0Id: targetUserId },
-        { userId: targetUserId }
-      ]
+      $or: [{ authorAuth0Id: target }, { userId: target }]
     }).sort({ createdAt: -1 }).lean();
-
     res.json(posts);
-  } catch (err) {
-    console.error("📡 User Posts Error:", err);
-    res.status(500).json({ msg: "Error fetching user signals" });
-  }
+  } catch (err) { res.status(500).json({ msg: "Error fetching user signals" }); }
 });
 
-/* ==========================================================
-    7️⃣ FOLLOW / UNFOLLOW
-========================================================== */
 router.post("/follow/:targetId", async (req, res) => {
   try {
     const myId = getAuthId(req);
     const targetId = decodeURIComponent(req.params.targetId);
 
-    if (!myId) return res.status(401).json({ msg: "Unauthorized" });
-    if (myId === targetId) return res.status(400).json({ msg: "Self-link forbidden" });
+    if (!myId || myId === targetId) return res.status(400).json({ msg: "Invalid Link" });
 
     const targetUser = await User.findOne({ auth0Id: targetId });
-    if (!targetUser) return res.status(404).json({ msg: 'Target not found' });
+    if (!targetUser) return res.status(404).json({ msg: 'Not found' });
 
     const isFollowing = targetUser.followers?.includes(myId);
 
@@ -218,26 +201,16 @@ router.post("/follow/:targetId", async (req, res) => {
       ]);
       return res.json({ followed: true });
     }
-  } catch (err) {
-    console.error("Follow Error:", err);
-    res.status(500).json({ msg: "Connection failed" });
-  }
+  } catch (err) { res.status(500).json({ msg: "Connection failed" }); }
 });
 
-/* ==========================================================
-    8️⃣ DISCOVERY (All Users)
-========================================================== */
 router.get("/all", async (req, res) => {
   try {
-    const currentUserId = getAuthId(req);
-    const users = await User.find({ auth0Id: { $ne: currentUserId } })
-      .select("name nickname avatar auth0Id bio isVerified neuralRank drifterLevel")
-      .sort({ createdAt: -1 })
-      .limit(20).lean();
+    const users = await User.find({ auth0Id: { $ne: getAuthId(req) } })
+      .select("name nickname avatar auth0Id bio isVerified neuralRank")
+      .sort({ createdAt: -1 }).limit(20).lean();
     res.json(users);
-  } catch (err) {
-    res.status(500).json({ msg: "Discovery signal lost" });
-  }
+  } catch (err) { res.status(500).json({ msg: "Discovery signal lost" }); }
 });
 
 export default router;
