@@ -18,25 +18,19 @@ import Settings from "./pages/Settings";
 import FollowingPage from "./pages/FollowingPage";
 import ReelsFeed from "./pages/ReelsFeed";
 import ReelsEditor from "./pages/ReelsEditor";     
-import Landing from "./pages/Landing"; 
+import Landing from "./pages/Landing"; // আপনার নতুন ল্যান্ডিং পেজ
 import JoinPage from "./pages/JoinPage";
 import CallPage from "./pages/CallPage";
 import CustomCursor from "./components/CustomCursor";
 import MobileNav from "./components/MobileNav";
 import AITwinSync from './components/AITwinSync';
 
-// API Configuration
-const API_BASE_URL = "https://onyx-drift-app-final-u29m.onrender.com";
-
 // Protected Route Wrapper
 const ProtectedRoute = ({ component: Component, ...props }) => {
   const AuthenticatedComponent = withAuthenticationRequired(Component, {
     onRedirecting: () => (
-      <div className="h-screen flex items-center justify-center bg-[#020617] text-cyan-500 font-mono italic uppercase tracking-widest text-xs">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-10 h-10 border-2 border-cyan-500/20 border-t-cyan-500 rounded-full animate-spin" />
-          Initializing Neural Link...
-        </div>
+      <div className="h-screen flex items-center justify-center bg-[#020617] text-cyan-500 font-mono italic uppercase tracking-widest">
+        Initializing Neural Link...
       </div>
     ),
   });
@@ -50,6 +44,8 @@ export default function App() {
   const socket = useRef(null); 
   const [searchQuery, setSearchQuery] = useState("");
   const [isPostModalOpen, setIsPostModalOpen] = useState(false);
+  
+  // ইনকামিং কল স্টেট
   const [incomingCall, setIncomingCall] = useState(null);
 
   /* =================📡 USER DATA SYNC LOGIC ================= */
@@ -57,14 +53,7 @@ export default function App() {
     const syncUserWithDB = async () => {
       if (isAuthenticated && user) {
         try {
-          // Audience and Scope added to prevent Refresh Token errors
-          const token = await getAccessTokenSilently({
-            authorizationParams: {
-              audience: API_BASE_URL,
-              scope: "openid profile email offline_access"
-            }
-          });
-
+          const token = await getAccessTokenSilently();
           const userData = {
             auth0Id: user.sub,
             name: user.name,
@@ -73,12 +62,12 @@ export default function App() {
             username: user.nickname || user.name?.split(' ')[0].toLowerCase(),
           };
 
-          await axios.post(`${API_BASE_URL}/api/user/sync`, userData, {
+          await axios.post('https://onyx-drift-app-final-u29m.onrender.com/api/user/sync', userData, {
             headers: { Authorization: `Bearer ${token}` }
           });
           console.log("📡 Identity Synced with Neural Grid");
         } catch (err) {
-          console.error("❌ Sync Error:", err.message);
+          console.error("❌ Sync Error:", err);
         }
       }
     };
@@ -88,12 +77,12 @@ export default function App() {
   /* =================📡 SOCKET CONFIGURATION ================= */
   useEffect(() => {
     if (isAuthenticated && user?.sub) {
+      const socketUrl = "https://onyx-drift-app-final-u29m.onrender.com";
+      
       if (!socket.current) {
-        socket.current = io(API_BASE_URL, {
+        socket.current = io(socketUrl, {
           transports: ["websocket", "polling"],
           withCredentials: true,
-          reconnection: true,
-          reconnectionAttempts: 5,
         });
 
         socket.current.on("connect", () => {
@@ -103,11 +92,6 @@ export default function App() {
 
         socket.current.on("incomingCall", (data) => {
           setIncomingCall(data);
-          // Play notification sound here if needed
-        });
-
-        socket.current.on("connect_error", (err) => {
-          console.warn("Socket connection error, retrying...");
         });
       }
 
@@ -131,16 +115,18 @@ export default function App() {
   );
 
   /* =================📏 LAYOUT LOGIC ================= */
-  const isMessengerPage = location.pathname.includes("/messages") || location.pathname.includes("/messenger");
+  const isMessengerPage = location.pathname.startsWith("/messages") || location.pathname.startsWith("/messenger");
+
+  const isFullWidthPage = [
+    "/messenger", "/messages", "/settings", "/", "/join", "/reels", "/feed"
+  ].some(path => location.pathname === path || location.pathname.startsWith(path + "/"));
+
   const isReelsPage = location.pathname.startsWith("/reels");
   const isFeedPage = location.pathname.startsWith("/feed"); 
   const isAuthPage = location.pathname === "/" || location.pathname === "/join";
-  const isCallPage = location.pathname.startsWith("/call/");
-
-  const isFullWidthPage = isMessengerPage || isAuthPage || isReelsPage || isCallPage || location.pathname === "/settings";
 
   return (
-    <div className="min-h-screen bg-[#020617] text-gray-200 font-sans relative overflow-x-hidden selection:bg-cyan-500/30">
+    <div className="min-h-screen bg-[#020617] text-gray-200 font-sans relative overflow-x-hidden">
       <div className="bg-grainy" />
       <Toaster position="top-center" reverseOrder={false} />
       <CustomCursor />
@@ -161,7 +147,7 @@ export default function App() {
                 </div>
                 <div>
                   <h4 className="text-sm font-black text-white uppercase tracking-tight">{incomingCall.callerName || "Unknown Drifter"}</h4>
-                  <p className="text-[10px] text-cyan-500 font-bold animate-pulse uppercase">Neural Call Incoming...</p>
+                  <p className="text-[10px] text-cyan-500 font-bold animate-pulse">NEURAL CALL INCOMING...</p>
                 </div>
               </div>
               <div className="flex gap-3">
@@ -176,7 +162,7 @@ export default function App() {
                     navigate(`/call/${incomingCall.roomId}`);
                     setIncomingCall(null);
                   }}
-                  className="w-10 h-10 rounded-full bg-cyan-500 text-black flex items-center justify-center hover:scale-110 transition-all shadow-lg shadow-cyan-500/20"
+                  className="w-10 h-10 rounded-full bg-cyan-500 text-black flex items-center justify-center hover:scale-110 transition-all"
                 >
                   <FaPhone size={18} />
                 </button>
@@ -187,31 +173,31 @@ export default function App() {
       </AnimatePresence>
 
       <div className="flex flex-col w-full">
-        {/* Navbar condition */}
-        {isAuthenticated && !isAuthPage && !isReelsPage && !isCallPage && !isMessengerPage && (
+        {/* Navbar condition: hide on Auth Page and Messenger */}
+        {isAuthenticated && !isAuthPage && !isReelsPage && !isFeedPage && !isMessengerPage && (
           <Navbar 
             user={user} 
             socket={socket.current} 
             setSearchQuery={setSearchQuery} 
             setIsPostModalOpen={setIsPostModalOpen}
+            toggleSidebar={() => {}} 
           />
         )}
         
         <div className="flex justify-center w-full transition-all duration-500">
           <div className={`flex w-full ${isFullWidthPage ? "max-w-full" : "max-w-[1440px] px-0 lg:px-6"} gap-6`}>
             
-            {/* Sidebar Left */}
             {isAuthenticated && !isFullWidthPage && (
-              <aside className="hidden lg:block w-[280px] sticky top-6 h-[calc(100vh-48px)] mt-6">
+              <aside className="hidden lg:block w-[280px] sticky top-6 h-[calc(100vh-40px)] mt-6">
                 <Sidebar />
               </aside>
             )}
             
-            {/* Main Content Area */}
-            <main className={`flex-1 flex justify-center ${isFullWidthPage ? "mt-0" : "mt-6 pb-24 lg:pb-10"}`}>
+            <main className={`flex-1 flex justify-center ${isFullWidthPage ? "mt-0 pb-0" : "mt-6 pb-24 lg:pb-10"}`}>
               <div className={`${isFullWidthPage ? "w-full" : "w-full lg:max-w-[650px] max-w-full"}`}>
                 <AnimatePresence mode="wait">
                   <Routes location={location} key={location.pathname}>
+                    {/* Landing Page Route */}
                     <Route path="/" element={isAuthenticated ? <Navigate to="/feed" /> : <Landing />} />
                     <Route path="/join" element={<JoinPage />} /> 
 
@@ -235,7 +221,7 @@ export default function App() {
                     
                     <Route path="/settings" element={<ProtectedRoute component={Settings} />} />
                     <Route path="/call/:roomId" element={<ProtectedRoute component={CallPage} />} />
-                    <Route path="/ai-twin" element={<ProtectedRoute component={AITwinSync} />} />
+                    <Route path="/ai-twin" element={<AITwinSync />} />
                     
                     <Route path="*" element={<Navigate to="/" />} />
                   </Routes>
@@ -243,19 +229,13 @@ export default function App() {
               </div>
             </main>
 
-            {/* Sidebar Right Suggestions */}
             {isAuthenticated && !isFullWidthPage && (
-              <aside className="hidden xl:block w-[320px] sticky top-6 h-[calc(100vh-48px)] mt-6">
+              <aside className="hidden xl:block w-[320px] sticky top-6 h-[calc(100vh-40px)] mt-6">
                 <div className="bg-white/5 border border-white/10 rounded-3xl p-6 h-full backdrop-blur-md">
-                   <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-cyan-500 mb-6 flex items-center gap-2">
-                     <span className="w-2 h-2 bg-cyan-500 rounded-full animate-pulse" />
-                     Neural Suggestions
-                   </h3>
+                   <h3 className="text-xs font-black uppercase tracking-widest text-cyan-500 mb-4">Neural Suggestions</h3>
                    <div className="space-y-4">
-                      <div className="h-24 w-full bg-white/5 border border-white/5 rounded-2xl animate-pulse flex items-center justify-center">
-                        <p className="text-[10px] text-gray-500 italic">Scanning grid for peers...</p>
-                      </div>
-                      <div className="h-24 w-full bg-white/5 border border-white/5 rounded-2xl animate-pulse" />
+                      <p className="text-gray-500 text-xs italic">Syncing with drift...</p>
+                      <div className="h-20 w-full bg-white/5 rounded-xl animate-pulse" />
                    </div>
                 </div>
               </aside>
@@ -264,10 +244,7 @@ export default function App() {
         </div>
       </div>
 
-      {/* Mobile Navigation */}
-      {isAuthenticated && !isReelsPage && !isCallPage && (
-        <MobileNav userAuth0Id={user?.sub} />
-      )}
+      {isAuthenticated && !isReelsPage && <MobileNav userAuth0Id={user?.sub} />}
     </div>
   );
 }
