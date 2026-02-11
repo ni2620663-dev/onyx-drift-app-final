@@ -159,6 +159,7 @@ const CompactVideo = ({ src }) => {
     </div>
   );
 };
+
 const PremiumHomeFeed = ({ searchQuery = "" }) => {
   const { user, getAccessTokenSilently } = useAuth0();
   const navigate = useNavigate();
@@ -177,47 +178,55 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
   const [isEncrypted, setIsEncrypted] = useState(false); 
   const [userProfile, setUserProfile] = useState(null);
   const [toast, setToast] = useState({ show: false, message: "" });
+const API_URL = "https://onyx-drift-app-final-u29m.onrender.com";
+  const AUDIENCE = "https://onyx-drift-app-final-u29m.onrender.com"; // নিশ্চিত করুন এটি Auth0 ড্যাশবোর্ডের সাথে মেলে
 
-  const API_URL = "https://onyx-drift-app-final-u29m.onrender.com";
-  const AUDIENCE = "https://onyx-drift-app-final-u29m.onrender.com";
-
-  // --- ১. ডাটা ফেচিং ---
+  // --- ডাটা ফেচিং (সংশোধিত) ---
   const fetchPosts = async () => {
     try {
       setLoading(true);
       const token = await getAccessTokenSilently({
         authorizationParams: { audience: AUDIENCE }
       });
+
       const response = await axios.get(`${API_URL}/api/posts/neural-feed`, {
         headers: { Authorization: `Bearer ${token}` }
       });
+      
       setPosts(response.data);
     } catch (err) { 
+      console.warn("Neural Feed error, trying public fallback...", err.message);
       try {
+        // ফলব্যাক রিকোয়েস্টেও টোকেন পাঠানো নিরাপদ
         const token = await getAccessTokenSilently({
-          authorizationParams: { audience: AUDIENCE }
+           authorizationParams: { audience: AUDIENCE }
         }).catch(() => null); 
+
         const fallback = await axios.get(`${API_URL}/api/posts`, {
           headers: token ? { Authorization: `Bearer ${token}` } : {}
         });
         setPosts(fallback.data);
       } catch (finalErr) {
         console.error("Critical: Network Failure");
+        toast.error("Signal Lost: Check Connection");
       }
     } finally { setLoading(false); }
   };
 
-  // --- ২. প্রোফাইল ফেচিং ---
+  // --- প্রোফাইল ফেচিং (সংশোধিত) ---
   const fetchUserProfile = async () => {
     try {
       const token = await getAccessTokenSilently({
         authorizationParams: { audience: AUDIENCE }
       });
+
+      // প্রাইমারি রাউট ট্রাই
       const res = await axios.get(`${API_URL}/api/profile`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setUserProfile(res.data);
     } catch (err) { 
+        console.log("Primary profile route failed, trying secondary..."); 
         try {
             const token = await getAccessTokenSilently({
               authorizationParams: { audience: AUDIENCE }
@@ -227,11 +236,11 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
             });
             setUserProfile(res.data || {}); 
         } catch(e) { 
+            console.error("Profile synchronization failed completely.");
             setUserProfile({}); 
         }
     }
   };
-
   useEffect(() => {
     fetchPosts();
     fetchUserProfile();
@@ -252,18 +261,13 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
     return () => clearInterval(interval);
   }, []);
 
-  // --- ৩. ফিল্টার ও সার্চ ---
   const filteredPosts = useMemo(() => {
-    let list = posts.filter(p => 
-      p.text?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.authorName?.toLowerCase().includes(searchQuery.toLowerCase())
-    );
+    let list = [...posts];
     if (activeFilter === "Resonance") return list.sort((a, b) => (b.resonanceScore || 0) - (a.resonanceScore || 0));
     if (activeFilter === "Encrypted") return list.filter(p => p.isEncrypted);
     return list;
-  }, [posts, activeFilter, searchQuery]);
+  }, [posts, activeFilter]);
 
-  // --- ৪. লাইক হ্যান্ডেলার ---
   const handleLike = async (postId) => {
     const userId = user?.sub;
     if (!userId) return;
@@ -272,23 +276,18 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
         likes: p.likes?.includes(userId) ? p.likes.filter(id => id !== userId) : [...(p.likes || []), userId] 
     } : p));
     try {
-      const token = await getAccessTokenSilently({
-        authorizationParams: { audience: AUDIENCE }
-      });
+      const token = await getAccessTokenSilently();
       await axios.post(`${API_URL}/api/posts/${postId}/like`, {}, { 
         headers: { Authorization: `Bearer ${token}` } 
       });
     } catch (err) { fetchPosts(); }
   };
 
-  // --- ৫. পোস্ট সাবমিট ---
   const handlePostSubmit = async () => {
     if (!postText.trim() && !mediaFile) return;
     setIsSubmitting(true);
     try {
-      const token = await getAccessTokenSilently({
-        authorizationParams: { audience: AUDIENCE }
-      });
+      const token = await getAccessTokenSilently();
       const formData = new FormData();
       formData.append("text", postText);
       formData.append("isEncrypted", isEncrypted);
@@ -303,19 +302,15 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
       setPosts(prev => [response.data, ...prev]);
       setPostText(""); setMediaFile(null); setIsPostModalOpen(false);
       setToast({ show: true, message: "Transmission Successful. Neural training initiated." });
-      setTimeout(() => setToast({ show: false, message: "" }), 4000);
     } catch (err) { 
         alert("Transmission Failed. Check Connection."); 
     } finally { setIsSubmitting(false); }
   };
 
-  // --- ৬. কমেন্ট সাবমিট ---
   const handleCommentSubmit = async () => {
     if(!commentText.trim() || !activeCommentPost) return;
     try {
-      const token = await getAccessTokenSilently({
-        authorizationParams: { audience: AUDIENCE }
-      });
+      const token = await getAccessTokenSilently();
       const res = await axios.post(`${API_URL}/api/posts/${activeCommentPost._id}/comment`, { 
         text: commentText 
       }, { headers: { Authorization: `Bearer ${token}` } });
@@ -323,7 +318,6 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
       setActiveCommentPost(res.data); setCommentText("");
     } catch (err) { console.error("Comment Sync Error"); }
   };
-
 
   return (
     <div className="w-full min-h-screen bg-black text-white pb-32 font-sans overflow-x-hidden selection:bg-cyan-500/30">
