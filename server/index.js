@@ -23,7 +23,7 @@ import reelRoutes from "./routes/reels.js";
 import profileRoutes from "./routes/profile.js"; 
 import groupRoutes from "./routes/group.js"; 
 import marketRoutes from "./routes/market.js"; 
-import adminRoutes from "./routes/admin.js";      
+import adminRoutes from "./routes/admin.js";       
 import { getNeuralFeed } from "./controllers/feedController.js";
 
 // 🛡️ Auth0 JWT ভেরিফিকেশন মিডলওয়্যার
@@ -43,7 +43,7 @@ cloudinary.config({
 const app = express();
 const server = http.createServer(app);
 
-// ৩. CORS কনফিগারেশন (Refined)
+// ৩. CORS কনফিগারেশন
 const allowedOrigins = [
     "http://localhost:5173", 
     "https://onyx-drift-app-final.onrender.com",
@@ -72,17 +72,18 @@ app.use(express.json({ limit: "100mb" }));
 app.use(express.urlencoded({ limit: "100mb", extended: true }));
 
 /* ==========================================================
-    🧠 NEURAL PULSE & SYNC MIDDLEWARE (FIXED)
+    🧠 NEURAL PULSE & SYNC MIDDLEWARE
 ========================================================== */
 const updateNeuralPulse = async (req, res, next) => {
-    const auth0Id = req.auth?.payload?.sub; 
+    // Auth0 sub আইডি বের করার চেষ্টা
+    const auth0Id = req.auth?.payload?.sub || req.user?.sub; 
     
     if (auth0Id) {
-        // নন-ব্লকিং আপডেট: ডাটাবেস আপডেট হতে সময় লাগলেও API রেসপন্স আটকে থাকবে না
+        // নন-ব্লকিং ব্যাকগ্রাউন্ড আপডেট
         User.updateOne(
             { auth0Id: auth0Id },
             { $set: { "deathSwitch.lastPulseTimestamp": new Date() } }
-        ).catch(err => console.log("Pulse background bypass:", err.message));
+        ).catch(err => console.log("Pulse bypass log:", err.message));
     }
     next();
 };
@@ -94,7 +95,7 @@ const io = new Server(server, {
     path: '/socket.io/'
 });
 
-// ৬. Redis কানেকশন (With Error Handling)
+// ৬. Redis কানেকশন
 const redis = process.env.REDIS_URL ? new Redis(process.env.REDIS_URL, {
     maxRetriesPerRequest: null,
     enableReadyCheck: false
@@ -106,25 +107,24 @@ if (redis) {
 }
 
 /* ==========================================================
-    ⏰ CRON JOBS (Digital Legacy & Maintenance)
+    ⏰ CRON JOBS
 ========================================================== */
-// প্রতি ২৪ ঘণ্টায় একবার রান হবে
 cron.schedule('0 0 * * *', async () => {
     console.log("Running Neural Pulse Audit...");
-    // এখানে Legacy বা Death Switch লজিক যোগ করতে পারেন
+    // এখানে ডিজিটাল লিগ্যাসি লজিক রান হবে
 });
 
 /* ==========================================================
-    📡 এপিআই রাউটস (সিরিয়াল অনুযায়ী)
+    📡 এপিআই রাউটস
 ========================================================== */
 
-// পাবলিক বেস রাউট
+// পাবলিক রুট
 app.get("/", (req, res) => res.status(200).send("🚀 OnyxDrift Neural Core is Online!"));
 
-// 🛠️ Neural Feed - এটাকে একদম প্রথমে রাখুন কনফ্লিক্ট এড়াতে
+// 🛠️ Neural Feed - স্পেশাল প্রায়োরিটি রুট
 app.get("/api/posts/neural-feed", checkJwt, updateNeuralPulse, getNeuralFeed);
 
-// 🛠️ Feature Routes
+// 🛠️ ফিচার রাউটস (সিরিয়াল অনুযায়ী)
 app.use("/api/users", checkJwt, updateNeuralPulse, userRoutes);
 app.use("/api/profile", checkJwt, updateNeuralPulse, profileRoutes);
 app.use("/api/posts", checkJwt, updateNeuralPulse, postRoutes); 
@@ -139,6 +139,8 @@ app.use("/api/admin", checkJwt, updateNeuralPulse, adminRoutes);
     📡 REAL-TIME ENGINE (Socket.io)
 ========================================================== */
 io.on("connection", (socket) => {
+    console.log("New Neural Connection:", socket.id);
+
     socket.on("addNewUser", async (auth0Id) => { 
         if (!auth0Id) return;
         socket.userId = auth0Id; 
@@ -155,23 +157,28 @@ io.on("connection", (socket) => {
         if (redis && socket.userId) {
             await redis.hdel("online_users", socket.userId);
             const allUsers = await redis.hgetall("online_users");
-            // অনলাইন ইউজার লিস্ট আপডেট করে সবাইকে পাঠানো
             io.emit("getOnlineUsers", Object.keys(allUsers).map(id => ({ userId: id })));
         }
     });
 });
 
 /* ==========================================================
-    🛡️ GLOBAL ERROR HANDLER
+    🛡️ GLOBAL ERROR HANDLER (Enhanced for debugging)
 ========================================================== */
 app.use((err, req, res, next) => {
+    // লগ ফাইলে পূর্ণ এরর প্রিন্ট হবে
+    console.error("Critical System Log:", err);
+
     if (err.name === 'UnauthorizedError') {
-        return res.status(401).json({ error: 'Identity Verification Failed', message: "Please Login Again" });
+        return res.status(401).json({ 
+            error: 'Identity Verification Failed', 
+            message: "Authentication token is missing or invalid." 
+        });
     }
-    console.error("Critical Error:", err.stack);
+
     res.status(500).json({ 
         error: "Neural Grid Breakdown", 
-        message: err.message 
+        message: err.message || "An unexpected error occurred in the core."
     });
 });
 
