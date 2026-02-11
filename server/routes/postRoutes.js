@@ -4,28 +4,48 @@ import Post from '../models/Post.js';
 import authMiddleware from '../middleware/authMiddleware.js';
 import { GoogleGenerativeAI } from "@google/generative-ai"; 
 
-// Gemini Config
+// Gemini AI Config
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+
+/* ==========================================================
+    🧠 0. NEURAL FEED (Fix for Home Feed Error)
+    এটি সবার উপরে রাখা হয়েছে যাতে অন্য ডাইনামিক রাউটের সাথে কনফ্লিক্ট না হয়।
+========================================================== */
+router.get('/neural-feed', async (req, res) => {
+    try {
+        const posts = await Post.find()
+            .sort({ createdAt: -1 })
+            .limit(50)
+            .lean(); // পারফরম্যান্সের জন্য lean() ব্যবহার করা হয়েছে
+        res.status(200).json(posts);
+    } catch (err) {
+        console.error("Neural Feed Error:", err);
+        res.status(500).json({ message: "Neural Link Failure" });
+    }
+});
 
 /* ==========================================================
     🤖 AI Analysis Route
 ========================================================== */
 router.post("/ai-analyze", authMiddleware, async (req, res) => {
     const { text, authorName } = req.body;
+    if (!text) return res.status(400).json({ analysis: "Signal is empty, drifter." });
+
     try {
         const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
         const prompt = `
             System: You are 'Onyx Neural Analyst', a witty, futuristic, and mysterious AI for the Onyx Drift social network.
-            Task: Analyze the post signal from drifter '${authorName}'.
+            Task: Analyze the post signal from drifter '${authorName || 'Anonymous'}'.
             Post Content: "${text}"
-            Requirement: Give a reaction in max 15-20 words. Use cyberpunk slang. 
+            Requirement: Give a reaction in max 15-20 words. Use cyberpunk slang like 'choom', 'chrome', 'nova', 'flatlined'. 
             Be encouraging but maintain a cool AI persona.
         `;
         const result = await model.generateContent(prompt);
         const response = await result.response;
         res.json({ analysis: response.text() });
     } catch (error) {
-        res.status(500).json({ analysis: "Neural Link unstable." });
+        console.error("AI Analysis Error:", error);
+        res.status(500).json({ analysis: "Neural Link unstable. Try later." });
     }
 });
 
@@ -38,9 +58,9 @@ router.get('/reels/all', async (req, res) => {
             $or: [
                 { postType: 'reels' }, 
                 { mediaType: 'video' },
-                { mediaType: 'reel' } // Added 'reel' for safety
+                { mediaType: 'reel' }
             ] 
-        }).sort({ createdAt: -1 });
+        }).sort({ createdAt: -1 }).lean();
         res.json(reels);
     } catch (err) {
         res.status(500).json({ message: "Failed to fetch neural reels" });
@@ -48,11 +68,11 @@ router.get('/reels/all', async (req, res) => {
 });
 
 /* ==========================================================
-    ২. সব পোস্ট গেট করা (Feed)
+    ২. সব পোস্ট গেট করা (Generic Feed)
 ========================================================== */
 router.get('/', async (req, res) => {
     try {
-        const posts = await Post.find().sort({ createdAt: -1 });
+        const posts = await Post.find().sort({ createdAt: -1 }).limit(100);
         res.json(posts);
     } catch (err) {
         res.status(500).json({ message: "Server Error" });
@@ -60,14 +80,21 @@ router.get('/', async (req, res) => {
 });
 
 /* ==========================================================
-    ৩. নির্দিষ্ট ইউজারের পোস্ট
+    ৩. নির্দিষ্ট ইউজারের পোস্ট (Profile Fix)
 ========================================================== */
 router.get('/user/:userId', authMiddleware, async (req, res) => {
     try {
         const targetId = decodeURIComponent(req.params.userId);
+        // প্রোফাইলে পোস্ট না আসার ইস্যু ঠিক করতে এখানে সব সম্ভাব্য ID ফিল্ড চেক করা হচ্ছে
         const posts = await Post.find({ 
-            $or: [ { authorId: targetId }, { authorAuth0Id: targetId }, { author: targetId } ] 
-        }).sort({ createdAt: -1 });
+            $or: [ 
+                { authorId: targetId }, 
+                { authorAuth0Id: targetId }, 
+                { author: targetId },
+                { userId: targetId }
+            ] 
+        }).sort({ createdAt: -1 }).lean();
+        
         res.json(posts);
     } catch (err) {
         res.status(500).json({ message: "Failed to fetch user signals" });
@@ -83,14 +110,14 @@ router.post('/create', authMiddleware, async (req, res) => {
         const currentUserId = req.user.sub || req.user.id; 
 
         const newPost = new Post({ 
-            text: text || content, // ফ্রন্টএন্ডে অনেক সময় content হিসেবে পাঠানো হয়
+            text: text || content, 
             media, 
             mediaType: mediaType || type || 'photo', 
-            authorName, 
-            authorAvatar, 
+            authorName: authorName || req.user.name || "Drifter", 
+            authorAvatar: authorAvatar || req.user.picture || "", 
             authorId: currentUserId,
             authorAuth0Id: currentUserId,
-            author: currentUserId, // ব্যাকএন্ডের অন্যান্য মডেলের সাথে সামঞ্জস্য রাখতে
+            author: currentUserId,
             isEncrypted: isEncrypted === true || isEncrypted === 'true',
             likes: [],
             comments: []
@@ -114,9 +141,7 @@ router.post('/:id/like', authMiddleware, async (req, res) => {
 
         const userId = req.user.sub || req.user.id;
 
-        if (!Array.isArray(post.likes)) {
-            post.likes = [];
-        }
+        if (!Array.isArray(post.likes)) post.likes = [];
 
         if (post.likes.includes(userId)) {
             post.likes = post.likes.filter(id => id !== userId);
@@ -132,11 +157,13 @@ router.post('/:id/like', authMiddleware, async (req, res) => {
 });
 
 /* ==========================================================
-    ৬. কমেন্ট করা (New Logic Added to Fix UI Resonance Error)
+    ৬. কমেন্ট করা
 ========================================================== */
 router.post('/:id/comment', authMiddleware, async (req, res) => {
     try {
         const { text } = req.body;
+        if (!text) return res.status(400).json({ message: "Comment cannot be empty" });
+
         const post = await Post.findById(req.params.id);
         if (!post) return res.status(404).json({ message: "Post not found" });
 
@@ -165,12 +192,13 @@ router.delete('/:id', authMiddleware, async (req, res) => {
         if (!post) return res.status(404).json({ message: "Post not found" });
 
         const currentUserId = req.user.sub || req.user.id;
-        if (post.authorId !== currentUserId && post.authorAuth0Id !== currentUserId) {
-            return res.status(401).json({ message: "Unauthorized!" });
+        // চেক করা হচ্ছে ডিলিট রিকোয়েস্টকারীই পোস্টের মালিক কি না
+        if (post.authorId !== currentUserId && post.authorAuth0Id !== currentUserId && post.author !== currentUserId) {
+            return res.status(401).json({ message: "Unauthorized! This is not your signal." });
         }
         
         await post.deleteOne();
-        res.json({ message: "Post deleted successfully" });
+        res.json({ message: "Post terminated successfully", postId: req.params.id });
     } catch (err) {
         res.status(500).json({ message: "Delete failed" });
     }

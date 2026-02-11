@@ -24,6 +24,7 @@ import profileRoutes from "./routes/profile.js";
 import groupRoutes from "./routes/group.js"; 
 import marketRoutes from "./routes/market.js"; 
 import adminRoutes from "./routes/admin.js";      
+import { getNeuralFeed } from "./controllers/feedController.js";
 
 // 🛡️ Auth0 JWT ভেরিফিকেশন মিডলওয়্যার
 const checkJwt = auth({
@@ -93,7 +94,6 @@ const updateNeuralPulse = async (req, res, next) => {
 const io = new Server(server, {
     cors: corsOptions,
     transports: ['websocket', 'polling'],
-    allowEIO3: true, 
     path: '/socket.io/', 
     connectTimeout: 45000,
     pingTimeout: 60000,   
@@ -110,35 +110,23 @@ const redis = process.env.REDIS_URL ? new Redis(process.env.REDIS_URL, {
 }) : null;
 
 /* ==========================================================
-    📡 এপিআই রাউটস (রুট ম্যাপিং ফিক্স এবং ডুপ্লিকেট পাথ হ্যান্ডেলিং)
+    📡 এপিআই রাউটস (সিরিয়াল মেইনটেইন করা হয়েছে)
 ========================================================== */
 
 // পাবলিক রাউট
 app.get("/", (req, res) => res.status(200).send("🚀 OnyxDrift Neural Core is Online!"));
 
-/** * 🛠️ ফিক্স: Profile Route Mappings
- * ফ্রন্টএন্ড যদি plural /api/users/profile কল করে তবেও কাজ করবে।
- */
-app.use("/api/profile", checkJwt, updateNeuralPulse, profileRoutes); 
-app.use("/api/user/profile", checkJwt, updateNeuralPulse, profileRoutes); 
-app.use("/api/users/profile", checkJwt, updateNeuralPulse, profileRoutes);
-
-/** * 🛠️ ফিক্স: Post & Feed Route Mappings
- * ফ্রন্টএন্ডের ৪০০ এরর ফিক্স করার জন্য /api/posts রাউটকে আগে রাখা হয়েছে।
- */
-app.use("/api/posts", checkJwt, updateNeuralPulse, postRoutes); 
-
-// যদি ফ্রন্টএন্ড সরাসরি /api/posts/neural-feed কল করে এবং postRoutes এ তা না থাকে
-// তবে আমরা এখানে সরাসরি mapping করে দিচ্ছি (নিশ্চিত করুন feedController আপনার প্রোজেক্টে আছে)
-import { getNeuralFeed } from "./controllers/feedController.js";
+// 🛠️ Neural Feed - এটাকে পোস্ট রাউটের আগে রাখা ভালো যদি কনফ্লিক্ট হয়
 app.get("/api/posts/neural-feed", checkJwt, updateNeuralPulse, getNeuralFeed);
 
-/** * 🛠️ ফিক্স: Reels Route Mappings
- */
-app.use("/api/reels", checkJwt, updateNeuralPulse, reelRoutes); 
-app.use("/api/posts/reels", checkJwt, updateNeuralPulse, reelRoutes); 
+// 🛠️ Profile & User Routes (Priority Based)
+app.use("/api/users/profile", checkJwt, updateNeuralPulse, userRoutes);
+app.use("/api/user/profile", checkJwt, updateNeuralPulse, userRoutes); 
+app.use("/api/profile", checkJwt, updateNeuralPulse, profileRoutes); 
 
-// অন্যান্য মূল রাউটস
+// 🛠️ Core Feature Routes
+app.use("/api/posts", checkJwt, updateNeuralPulse, postRoutes); 
+app.use("/api/reels", checkJwt, updateNeuralPulse, reelRoutes); 
 app.use("/api/user", checkJwt, updateNeuralPulse, userRoutes);      
 app.use("/api/users", checkJwt, updateNeuralPulse, userRoutes);
 app.use("/api/stories", checkJwt, updateNeuralPulse, storyRoute);
@@ -148,7 +136,7 @@ app.use("/api/messages", checkJwt, updateNeuralPulse, messageRoutes);
 app.use("/api/groups", checkJwt, updateNeuralPulse, groupRoutes); 
 
 /* ==========================================================
-    💀 DEATH-SWITCH CRON JOB
+    💀 DEATH-SWITCH CRON JOB (রান হবে প্রতিদিন রাত ১২টায়)
 ========================================================== */
 cron.schedule('0 0 * * *', async () => {
     try {
@@ -158,11 +146,13 @@ cron.schedule('0 0 * * *', async () => {
             if (!user.deathSwitch.lastPulseTimestamp) continue;
             
             const thresholdDate = new Date(user.deathSwitch.lastPulseTimestamp);
-            thresholdDate.setMonth(thresholdDate.getMonth() + user.deathSwitch.inactivityThresholdMonths);
+            thresholdDate.setMonth(thresholdDate.getMonth() + (user.deathSwitch.inactivityThresholdMonths || 6));
             
             if (now > thresholdDate) {
                 user.deathSwitch.isTriggered = true;
-                user.legacyProtocol.vaultStatus = 'RELEASED';
+                if(user.legacyProtocol) {
+                    user.legacyProtocol.vaultStatus = 'RELEASED';
+                }
                 await user.save();
                 console.log(`💀 Vault Released for user: ${user.auth0Id}`);
             }
@@ -189,6 +179,7 @@ io.on("connection", (socket) => {
             io.emit("getOnlineUsers", Object.keys(allUsers).map(id => ({ userId: id })));
         }
 
+        // লগইন এর সময়ও পালস আপডেট (Death Switch Safety)
         try {
             await User.findOneAndUpdate(
                 { auth0Id: auth0Id }, 
@@ -218,7 +209,16 @@ io.on("connection", (socket) => {
     });
 });
 
-// ৮. সার্ভার লিসেনিং
+// ৮. গ্লোবাল এরর হ্যান্ডলার (CORS বা অন্য এরর এর জন্য)
+app.use((err, req, res, next) => {
+    if (err.name === 'UnauthorizedError') {
+        res.status(401).send('Invalid Token');
+    } else {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ৯. সার্ভার লিসেনিং
 const PORT = process.env.PORT || 10000;
 server.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 ONYX CORE ACTIVE ON PORT: ${PORT}`);
