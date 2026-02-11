@@ -10,7 +10,7 @@ const userSchema = new mongoose.Schema(
       required: true, 
       unique: true, 
       immutable: true,
-      index: true // দ্রুত ইউজার খোঁজার জন্য
+      index: true 
     }, 
     name: { 
       type: String, 
@@ -21,13 +21,15 @@ const userSchema = new mongoose.Schema(
       type: String, 
       trim: true, 
       unique: true, 
-      sparse: true // যাতে nickname না থাকলেও ডুপ্লিকেট এরর না দেয়
+      sparse: true 
     },
     email: { 
       type: String, 
       lowercase: true, 
       trim: true,
-      sparse: true, // এটি অত্যন্ত গুরুত্বপূর্ণ: খালি ইমেইল থাকলে এরর আটকাবে
+      // sparse: true এবং unique: true একসাথে থাকলেও যদি ডাটাবেসে "" (খালি স্ট্রিং) থাকে তবে এরর দেয়।
+      // তাই ইমেইল ফিল্ডটি ঐচ্ছিক রাখতে sparse ব্যবহার করা হয়েছে।
+      sparse: true, 
       unique: true,
       index: true 
     },
@@ -97,7 +99,7 @@ const userSchema = new mongoose.Schema(
     }],
 
     /* ==========================================================
-        ৫. NEURAL DEATH-SWITCH & LEGACY (The "Vayankar" Feature)
+        ৫. NEURAL DEATH-SWITCH & LEGACY
     ========================================================== */
     deathSwitch: {
       isActive: { type: Boolean, default: false },

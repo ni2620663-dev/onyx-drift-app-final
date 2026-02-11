@@ -1,17 +1,17 @@
 import { auth } from 'express-oauth2-jwt-bearer';
-import User from "../models/User.js"; // ইউজার মডেল ইম্পোর্ট নিশ্চিত করুন
+import User from "../models/User.js"; 
 
 /**
  * Auth0 JWT Validation Configuration
  */
 const checkJwt = auth({
-  audience: 'https://onyx-drift-api.com', 
-  issuerBaseURL: 'https://dev-6d0nxccsaycctfl1.us.auth0.com/', 
+  audience: process.env.AUTH0_AUDIENCE || 'https://onyx-drift-api.com', 
+  issuerBaseURL: `https://${process.env.AUTH0_DOMAIN || 'dev-6d0nxccsaycctfl1.us.auth0.com'}/`, 
   tokenSigningAlg: 'RS256'
 });
 
 /**
- * 🚀 Smart Auth Middleware with Database Sync
+ * 🚀 Smart Auth Middleware with Database Sync (Fixed)
  */
 const authMiddleware = (req, res, next) => {
   const authHeader = req.headers.authorization;
@@ -27,6 +27,7 @@ const authMiddleware = (req, res, next) => {
     if (err) {
       console.warn("⚠️ Token Invalid:", err.message);
       
+      // গুরুত্বপূর্ণ অ্যাকশনের ক্ষেত্রে গেস্ট অ্যালাউড না
       if (req.method === "POST" || req.method === "PATCH" || req.method === "DELETE") {
          return res.status(401).json({ 
            msg: "Session expired or invalid token. Please login again." 
@@ -43,21 +44,24 @@ const authMiddleware = (req, res, next) => {
         const payload = req.auth.payload;
         const auth0Id = payload.sub;
 
-        // ইউজারের বেসিক ডাটা অবজেক্ট (যদি টোকেনে নাম/ইমেইল থাকে)
-        // নোট: Auth0 Access Token-এ নাম/ইমেইল পেতে হলে 'openid profile email' স্কোপ সেট করতে হয়
-        const userData = {
+        // ✅ ফিক্স: ইমেইল না থাকলে সেটি আপডেট অবজেক্টে পাঠানো যাবে না
+        const updateData = {
           auth0Id: auth0Id,
-          name: payload.name || "Drifter",
-          email: payload.email || "",
+          name: payload.name || payload.nickname || "Drifter",
           nickname: payload.nickname || "Drifter",
           avatar: payload.picture || ""
         };
 
-        // ডাটাবেসে ইউজার আছে কি না চেক করে আপডেট বা ক্রিয়েট (Upsert) করা
-        // এতে সার্চ লিস্টে ইউজারদের নাম আসা শুরু করবে
+        // যদি পে-লোডে ইমেইল থাকে, তবেই সেটি অ্যাড করো
+        if (payload.email) {
+          updateData.email = payload.email;
+        }
+
+        // ডাটাবেসে ইউজার সিঙ্ক (Upsert)
+        // $set এর মাধ্যমে শুধুমাত্র পাঠানো ডাটা আপডেট হবে
         const user = await User.findOneAndUpdate(
           { auth0Id: auth0Id },
-          { $set: userData },
+          { $set: updateData },
           { upsert: true, new: true, setDefaultsOnInsert: true }
         );
 
@@ -75,8 +79,15 @@ const authMiddleware = (req, res, next) => {
         next();
       }
     } catch (dbErr) {
-      console.error("❌ Database Sync Error:", dbErr);
-      // ডাটাবেস এরর হলেও ইউজারকে রিকোয়েস্ট কন্টিনিউ করতে দিন
+      // ✅ লজিক: ডুপ্লিকেট কি এরর বা অন্য ডাটাবেস এরর হলে ক্রাশ না করে এগিয়ে যান
+      console.error("❌ Database Sync Error:", dbErr.message);
+      
+      // গেস্ট মুড বা টেম্পোরারি মুডে ইউজারকে রাখা যাতে অ্যাপ সচল থাকে
+      req.user = {
+        id: req.auth?.payload?.sub,
+        isGuest: false,
+        dbError: true
+      };
       next();
     }
   });
