@@ -25,7 +25,7 @@ cloudinary.config({
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 /* ==========================================================
-    🧠 0. NEURAL FEED
+    🧠 0. NEURAL FEED (Sobar Upore - Priority)
 ========================================================== */
 router.get("/neural-feed", async (req, res) => {
   try {
@@ -86,9 +86,8 @@ const upload = multer({
 });
 
 /* ==========================================================
-    ⚡ NEURAL CONTENT GENERATOR (The Heart of Automation)
+    ⚡ NEURAL CONTENT GENERATOR
 ========================================================== */
-// এখানে processNeuralInput কন্ট্রোলারটি অবশ্যই req.auth.payload.sub হ্যান্ডেল করতে হবে
 router.post("/neural-generate", processNeuralInput);
 
 /* ==========================================================
@@ -125,7 +124,6 @@ router.post("/", upload.single("media"), async (req, res) => {
       return res.status(400).json({ msg: "Empty transmission blocked." });
     }
 
-    // গুরুত্বপূর্ণ পরিবর্তন: req.user এর বদলে req.auth.payload.sub ব্যবহার
     const currentUserId = req.auth?.payload?.sub;
     
     if (!currentUserId) {
@@ -147,7 +145,7 @@ router.post("/", upload.single("media"), async (req, res) => {
 
     const postData = {
       author: currentUserId,
-      authorAuth0Id: currentUserId, // এটি আপনার Schema অনুযায়ী Required, তাই নিশ্চিত করলাম
+      authorAuth0Id: currentUserId,
       authorName: userProfile?.name || req.auth?.payload?.name || "Drifter",
       authorAvatar: userProfile?.avatar || req.auth?.payload?.picture || "",
       text: req.body.text || "",
@@ -203,6 +201,10 @@ router.post("/:id/like", async (req, res) => {
 router.post("/:id/rank-up", async (req, res) => {
   try {
     const userId = req.auth?.payload?.sub;
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+        return res.status(400).json({ msg: "Invalid Post ID" });
+    }
+
     const post = await Post.findById(req.params.id);
     if (!post) return res.status(404).json({ msg: "Post not found" });
 
@@ -243,6 +245,10 @@ router.post("/:id/rank-up", async (req, res) => {
 ========================================================== */
 router.post("/:id/comment", async (req, res) => {
     try {
+      if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+        return res.status(400).json({ msg: "Invalid Post ID" });
+      }
+
       const { text } = req.body;
       if (!text) return res.status(400).json({ msg: "Message empty." });
   
@@ -274,6 +280,10 @@ router.post("/:id/comment", async (req, res) => {
 ========================================================== */
 router.delete("/:id", async (req, res) => {
   try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+        return res.status(400).json({ msg: "Invalid Post ID" });
+    }
+
     const post = await Post.findById(req.params.id);
     if (!post) return res.status(404).json({ msg: "Post not found" });
 
@@ -289,7 +299,7 @@ router.delete("/:id", async (req, res) => {
 });
 
 /* ==========================================================
-    ✅ 7. USER SPECIFIC POSTS
+    ✅ 7. USER SPECIFIC POSTS (Niche thakbe jate conflict na hoy)
 ========================================================== */
 router.get("/user/:userId", async (req, res) => {
   try {
