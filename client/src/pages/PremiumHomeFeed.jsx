@@ -159,7 +159,6 @@ const CompactVideo = ({ src }) => {
     </div>
   );
 };
-
 const PremiumHomeFeed = ({ searchQuery = "" }) => {
   const { user, getAccessTokenSilently } = useAuth0();
   const navigate = useNavigate();
@@ -180,20 +179,27 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
   const [toast, setToast] = useState({ show: false, message: "" });
 
   const API_URL = "https://onyx-drift-app-final-u29m.onrender.com";
-  const postMediaRef = useRef(null);
+  const AUDIENCE = "https://onyx-drift-app-final-u29m.onrender.com";
 
-  // --- ডাটা ফেচিং ---
+  // --- ১. ডাটা ফেচিং ---
   const fetchPosts = async () => {
     try {
       setLoading(true);
-      const token = await getAccessTokenSilently();
+      const token = await getAccessTokenSilently({
+        authorizationParams: { audience: AUDIENCE }
+      });
       const response = await axios.get(`${API_URL}/api/posts/neural-feed`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setPosts(response.data);
     } catch (err) { 
       try {
-        const fallback = await axios.get(`${API_URL}/api/posts`);
+        const token = await getAccessTokenSilently({
+          authorizationParams: { audience: AUDIENCE }
+        }).catch(() => null); 
+        const fallback = await axios.get(`${API_URL}/api/posts`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {}
+        });
         setPosts(fallback.data);
       } catch (finalErr) {
         console.error("Critical: Network Failure");
@@ -201,24 +207,27 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
     } finally { setLoading(false); }
   };
 
+  // --- ২. প্রোফাইল ফেচিং ---
   const fetchUserProfile = async () => {
     try {
-      const token = await getAccessTokenSilently();
+      const token = await getAccessTokenSilently({
+        authorizationParams: { audience: AUDIENCE }
+      });
       const res = await axios.get(`${API_URL}/api/profile`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setUserProfile(res.data);
     } catch (err) { 
-        console.log("User Profile sync failed via primary route, trying secondary..."); 
         try {
-            const token = await getAccessTokenSilently();
+            const token = await getAccessTokenSilently({
+              authorizationParams: { audience: AUDIENCE }
+            });
             const res = await axios.get(`${API_URL}/api/user/profile`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
-            setUserProfile(res.data);
+            setUserProfile(res.data || {}); 
         } catch(e) { 
-            console.log("Profile not found.");
-            setUserProfile({}); // ✅ null thakle object set kore deya holo error bondho korar jonne
+            setUserProfile({}); 
         }
     }
   };
@@ -243,13 +252,18 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
     return () => clearInterval(interval);
   }, []);
 
+  // --- ৩. ফিল্টার ও সার্চ ---
   const filteredPosts = useMemo(() => {
-    let list = [...posts];
+    let list = posts.filter(p => 
+      p.text?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      p.authorName?.toLowerCase().includes(searchQuery.toLowerCase())
+    );
     if (activeFilter === "Resonance") return list.sort((a, b) => (b.resonanceScore || 0) - (a.resonanceScore || 0));
     if (activeFilter === "Encrypted") return list.filter(p => p.isEncrypted);
     return list;
-  }, [posts, activeFilter]);
+  }, [posts, activeFilter, searchQuery]);
 
+  // --- ৪. লাইক হ্যান্ডেলার ---
   const handleLike = async (postId) => {
     const userId = user?.sub;
     if (!userId) return;
@@ -258,18 +272,23 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
         likes: p.likes?.includes(userId) ? p.likes.filter(id => id !== userId) : [...(p.likes || []), userId] 
     } : p));
     try {
-      const token = await getAccessTokenSilently();
+      const token = await getAccessTokenSilently({
+        authorizationParams: { audience: AUDIENCE }
+      });
       await axios.post(`${API_URL}/api/posts/${postId}/like`, {}, { 
         headers: { Authorization: `Bearer ${token}` } 
       });
     } catch (err) { fetchPosts(); }
   };
 
+  // --- ৫. পোস্ট সাবমিট ---
   const handlePostSubmit = async () => {
     if (!postText.trim() && !mediaFile) return;
     setIsSubmitting(true);
     try {
-      const token = await getAccessTokenSilently();
+      const token = await getAccessTokenSilently({
+        authorizationParams: { audience: AUDIENCE }
+      });
       const formData = new FormData();
       formData.append("text", postText);
       formData.append("isEncrypted", isEncrypted);
@@ -284,15 +303,19 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
       setPosts(prev => [response.data, ...prev]);
       setPostText(""); setMediaFile(null); setIsPostModalOpen(false);
       setToast({ show: true, message: "Transmission Successful. Neural training initiated." });
+      setTimeout(() => setToast({ show: false, message: "" }), 4000);
     } catch (err) { 
         alert("Transmission Failed. Check Connection."); 
     } finally { setIsSubmitting(false); }
   };
 
+  // --- ৬. কমেন্ট সাবমিট ---
   const handleCommentSubmit = async () => {
     if(!commentText.trim() || !activeCommentPost) return;
     try {
-      const token = await getAccessTokenSilently();
+      const token = await getAccessTokenSilently({
+        authorizationParams: { audience: AUDIENCE }
+      });
       const res = await axios.post(`${API_URL}/api/posts/${activeCommentPost._id}/comment`, { 
         text: commentText 
       }, { headers: { Authorization: `Bearer ${token}` } });
@@ -300,6 +323,7 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
       setActiveCommentPost(res.data); setCommentText("");
     } catch (err) { console.error("Comment Sync Error"); }
   };
+
 
   return (
     <div className="w-full min-h-screen bg-black text-white pb-32 font-sans overflow-x-hidden selection:bg-cyan-500/30">
