@@ -4,81 +4,58 @@ import axios from "axios";
 
 export const processNeuralInput = async (req, res) => {
     try {
-        const { text, auth0Id, mood } = req.body;
+        const { text, auth0Id } = req.body;
         const PEXELS_API_KEY = process.env.PEXELS_API_KEY;
 
-        if (!text) {
-            return res.status(400).json({ message: "Neural Signal Empty." });
-        }
+        if (!text) return res.status(400).json({ message: "Neural Signal Empty." });
 
-        // ১. ইউজার ভ্যালিডেশন
         const user = await User.findOne({ auth0Id });
         if (!user) return res.status(404).json({ message: "Node not found." });
 
-        // ২. কন্টেন্ট টাইপ ডিটেকশন
         let contentType = text.length > 60 || text.includes("/") ? "REELS" : "POST";
-        
-        let mediaUrl = "https://images.pexels.com/photos/373543/pexels-photo-373543.jpeg"; // Default
+        let mediaUrl = "https://images.pexels.com/photos/373543/pexels-photo-373543.jpeg"; 
         let mediaType = "image";
 
-        // ৩. Pexels API কল (Safety added)
         if (PEXELS_API_KEY) {
             try {
-                const query = text.split(" ").slice(0, 3).join(" ") || "abstract";
+                const query = text.split(" ").slice(0, 3).join(" ") || "cyberpunk";
+                const endpoint = contentType === "REELS" ? "videos" : "v1";
+                const resPexels = await axios.get(`https://api.pexels.com/${endpoint}/search?query=${query}&per_page=1`, {
+                    headers: { Authorization: PEXELS_API_KEY }
+                });
                 
-                if (contentType === "REELS") {
-                    const response = await axios.get(`https://api.pexels.com/videos/search?query=${query}&per_page=1`, {
-                        headers: { Authorization: PEXELS_API_KEY }
-                    });
-                    // চেক করা হচ্ছে ডেটা আছে কিনা
-                    if (response.data.videos && response.data.videos.length > 0) {
-                        mediaUrl = response.data.videos[0].video_files[0].link;
-                        mediaType = "video";
-                    }
-                } else {
-                    const response = await axios.get(`https://api.pexels.com/v1/search?query=${query}&per_page=1`, {
-                        headers: { Authorization: PEXELS_API_KEY }
-                    });
-                    if (response.data.photos && response.data.photos.length > 0) {
-                        mediaUrl = response.data.photos[0].src.large;
-                        mediaType = "image";
-                    }
+                if (contentType === "REELS" && resPexels.data.videos?.[0]) {
+                    mediaUrl = resPexels.data.videos[0].video_files[0].link;
+                    mediaType = "reel"; // Model enum: 'reel'
+                } else if (resPexels.data.photos?.[0]) {
+                    mediaUrl = resPexels.data.photos[0].src.large;
+                    mediaType = "image";
                 }
-            } catch (apiErr) {
-                console.error("Pexels API Error:", apiErr.message);
-                // API এরর দিলে ডিফল্ট ইমেজেই থাকবে
-            }
+            } catch (apiErr) { console.error("API Error:", apiErr.message); }
         }
 
-        // ৪. পোস্ট অবজেক্ট তৈরি
-        const newNeuralContent = new Post({
-            author: user.auth0Id,
+        // মডেল অনুযায়ী সব required ফিল্ড দেওয়া হলো
+        const newPost = new Post({
+            author: user.auth0Id,           // Required field 1
+            authorAuth0Id: user.auth0Id,    // Required field 2
             authorName: user.name || user.nickname || "Anonymous",
             authorAvatar: user.avatar || user.picture,
             text: text,
             media: mediaUrl,
-            mediaType: contentType === "REELS" ? "reel" : mediaType,
-            syncRate: (Math.random() * (99 - 85) + 85).toFixed(2),
-            likes: [],
-            comments: []
+            mediaType: mediaType,
+            isAiGenerated: true,
+            neuralSyncLevel: (Math.random() * (99 - 85) + 85).toFixed(2)
         });
 
-        const savedContent = await newNeuralContent.save();
+        await newPost.save();
+        
+        // Impact update
+        user.neuralImpact = (user.neuralImpact || 0) + 10;
+        await user.save();
 
-        // ৫. ইউজারের ইমপ্যাক্ট আপডেট (নিশ্চিত করুন মডেলে neuralImpact ফিল্ড আছে)
-        if (typeof user.neuralImpact !== 'undefined') {
-            user.neuralImpact += 10;
-            await user.save();
-        }
-
-        return res.status(201).json({
-            success: true,
-            type: contentType,
-            data: savedContent
-        });
-
-    } catch (error) {
-        console.error("General Server Error:", error);
-        return res.status(500).json({ success: false, error: error.message });
+        res.status(201).json({ success: true, data: newPost });
+    } catch (err) {
+        console.error("AI Post Error:", err);
+        res.status(500).json({ message: "Neural Link Overloaded." });
     }
 };

@@ -21,40 +21,56 @@ const upload = multer({
 ========================================================== */
 
 /**
- * ১. লজড-ইন ইউজারের প্রোফাইল ডাটা পাওয়া
+ * ১. লজড-ইন ইউজারের প্রোফাইল ডাটা পাওয়া
  * GET: api/user/profile
- * ফ্রন্টএন্ড থেকে প্রোফাইল পেজে যাওয়ার সময় এটি কল হয়
+ * ফ্রন্টএন্ডে "stats undefined" এরর ফিক্স করতে এটি আপডেট করা হয়েছে
  */
 router.get('/profile', auth, async (req, res) => {
   try {
     const auth0Id = req.user.sub || req.user.id;
+    // .lean() ব্যবহার করা হয়েছে যাতে দ্রুত ডাটা পাওয়া যায়
     const user = await User.findOne({ auth0Id }).lean();
     
     if (!user) {
       return res.status(404).json({ message: "Profile not found." });
     }
     
-    // ইউজারের পোস্টগুলোও একসাথে পাঠানো হচ্ছে
-    const posts = await Post.find({ 
-      $or: [{ author: auth0Id }, { authorAuth0Id: auth0Id }] 
-    }).sort({ createdAt: -1 });
+    // ফ্রন্টএন্ডের ডিমান্ড অনুযায়ী stats অবজেক্ট তৈরি
+    const userWithStats = {
+        ...user,
+        stats: {
+            neuralImpact: user.neuralImpact || 0,
+            rank: user.neuralRank || "Novice Drifter"
+        }
+    };
 
-    res.status(200).json({ user, posts });
+    // ইউজারের পোস্টগুলো পাওয়া
+    const posts = await Post.find({ 
+      $or: [{ authorId: auth0Id }, { authorAuth0Id: auth0Id }, { author: auth0Id }] 
+    }).sort({ createdAt: -1 }).lean();
+
+    res.status(200).json({ user: userWithStats, posts });
   } catch (err) {
+    console.error("Profile Fetch Error:", err);
     res.status(500).json({ message: "Neural Link Error", error: err.message });
   }
 });
 
 /**
- * ২. রিলস ডাটা পাওয়া (Bad Request 400 এরর ফিক্স)
- * GET: api/user/reels/all (অথবা আপনার ফ্রন্টএন্ড অনুযায়ী পাথ সেট করুন)
+ * ২. রিলস ডাটা পাওয়া (৪০০ এরর ফিক্স)
+ * GET: api/user/reels/all
  */
 router.get('/reels/all', async (req, res) => {
     try {
-        const reels = await Post.find({ mediaType: 'reel' })
-            .sort({ createdAt: -1 })
-            .lean();
-        res.status(200).json(reels);
+        // mediaType: 'reel' অথবা video টাইপের পোস্টগুলো খোঁজা হচ্ছে
+        const reels = await Post.find({ 
+            $or: [{ mediaType: 'reel' }, { mediaType: 'video' }] 
+        })
+        .sort({ createdAt: -1 })
+        .lean();
+        
+        // যদি রিলস না থাকে তবে এরর না দিয়ে খালি এরে পাঠানোই ভালো
+        res.status(200).json(reels || []);
     } catch (err) {
         res.status(400).json({ message: "Failed to fetch reels", error: err.message });
     }
@@ -135,12 +151,21 @@ router.get(['/profile/:userId', '/:userId'], auth, async (req, res, next) => {
     const targetId = decodeURIComponent(rawUserId);
     const user = await User.findOne({ auth0Id: targetId }).lean();
     
+    // পাবলিক প্রোফাইলে যেন ক্রাশ না করে তাই stats হ্যান্ডলিং
+    const formattedUser = user ? {
+        ...user,
+        stats: {
+            neuralImpact: user.neuralImpact || 0,
+            rank: user.neuralRank || "Drifter"
+        }
+    } : { name: "Unknown Drifter", neuralImpact: 0, stats: { neuralImpact: 0 } };
+
     const posts = await Post.find({ 
-        $or: [{ author: targetId }, { authorAuth0Id: targetId }] 
+        $or: [{ author: targetId }, { authorAuth0Id: targetId }, { authorId: targetId }] 
     }).sort({ createdAt: -1 }).lean();
 
     res.status(200).json({
-      user: user || { name: "Unknown Drifter", neuralImpact: 0 },
+      user: formattedUser,
       posts: posts || []
     });
   } catch (err) {
