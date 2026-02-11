@@ -9,9 +9,17 @@ import { processNeuralIdentity } from "../controllers/aiController.js";
 import { processNeuralInput } from "../controllers/aiPostController.js"; 
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import mongoose from "mongoose";
+import { auth } from 'express-oauth2-jwt-bearer'; // ✅ Auth middleware import kora hoyeche
 
 dotenv.config();
 const router = express.Router();
+
+// Auth0 Middleware Configuration
+const checkJwt = auth({
+  audience: process.env.AUTH0_AUDIENCE || 'https://onyx-drift-api.com',
+  issuerBaseURL: `https://dev-6d0nxccsaycctfl1.us.auth0.com/`,
+  tokenSigningAlg: 'RS256'
+});
 
 /* ==========================================================
     ☁️ Cloudinary Configuration
@@ -25,7 +33,7 @@ cloudinary.config({
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 /* ==========================================================
-    🧠 0. NEURAL FEED (Priority Route)
+    🧠 0. NEURAL FEED (Fixed)
 ========================================================== */
 router.get("/neural-feed", async (req, res) => {
   try {
@@ -34,22 +42,25 @@ router.get("/neural-feed", async (req, res) => {
       .limit(50)
       .lean();
 
+    if (!posts) return res.status(200).json([]);
+
     const optimizedPosts = posts.map(post => ({
       ...post,
-      // Resonance Score: Likes = 2 points, Comments = 5 points
       resonanceScore: (post.likes?.length || 0) * 2 + (post.comments?.length || 0) * 5,
-      neuralSync: true
+      neuralSync: true,
+      authorName: post.authorName || "Unknown Drifter",
+      authorAvatar: post.authorAvatar || `https://ui-avatars.com/api/?name=D&background=random`
     }));
 
     res.json(optimizedPosts);
   } catch (err) {
     console.error("Neural Feed Fetch Error:", err);
-    res.status(500).json({ msg: "Neural Grid Offline" });
+    res.status(500).json({ msg: "Neural Grid Offline", error: err.message });
   }
 });
 
 /* ==========================================================
-    🤖 AI ANALYZE (Quick Reaction)
+    🤖 AI ANALYZE
 ========================================================== */
 router.post("/ai-analyze", async (req, res) => {
   const { text, authorName } = req.body;
@@ -57,15 +68,11 @@ router.post("/ai-analyze", async (req, res) => {
 
   try {
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-    const prompt = `You are a Cyberpunk AI analyst for "Onyx Drift" social network. 
-    Analyze this post by "${authorName || 'Drifter'}": "${text}". 
-    Short reaction (max 20 words), witty, futuristic, use cyberpunk slang. Stay in character.`;
-
+    const prompt = `Analyze this cyberpunk post by "${authorName || 'Drifter'}": "${text}". Max 20 words, witty.`;
     const result = await model.generateContent(prompt);
     res.json({ analysis: result.response.text() });
   } catch (error) {
-    console.error("Gemini Error:", error);
-    res.status(500).json({ analysis: "Connection to neural core lost." });
+    res.status(500).json({ analysis: "Connection lost." });
   }
 });
 
@@ -83,50 +90,15 @@ const storage = new CloudinaryStorage({
 
 const upload = multer({ 
   storage,
-  limits: { fileSize: 100 * 1024 * 1024 } // 100MB limit
+  limits: { fileSize: 100 * 1024 * 1024 } 
 });
 
 /* ==========================================================
-    ⚡ NEURAL CONTENT GENERATOR
+    🚀 2. CREATE POST (Manual) - Protected with checkJwt
 ========================================================== */
-router.post("/neural-generate", processNeuralInput);
-
-/* ==========================================================
-    🌍 1. GET ALL POSTS (Global Stream)
-========================================================== */
-router.get("/", async (req, res) => {
+router.post("/", checkJwt, upload.single("media"), async (req, res) => {
   try {
-    const posts = await Post.find()
-      .sort({ createdAt: -1 })
-      .limit(30)
-      .lean();
-    
-    const safePosts = posts.map(post => ({
-      ...post,
-      authorName: post.authorName || "Unknown Drifter",
-      authorAvatar: post.authorAvatar || `https://ui-avatars.com/api/?name=${post.authorName || 'D'}&background=random`,
-      likes: post.likes || [],
-      comments: post.comments || [],
-      rankClicks: post.rankClicks || []
-    }));
-
-    res.json(safePosts);
-  } catch (err) {
-    res.status(500).json({ msg: "Neural Fetch Failure" });
-  }
-});
-
-/* ==========================================================
-    🚀 2. CREATE POST (Manual)
-========================================================== */
-router.post("/", upload.single("media"), async (req, res) => {
-  try {
-    if (!req.body.text && !req.file) {
-      return res.status(400).json({ msg: "Empty transmission blocked." });
-    }
-
-    // ID extraction from Auth0
-    const currentUserId = req.auth?.payload?.sub || req.user?.sub;
+    const currentUserId = req.auth?.payload?.sub;
     
     if (!currentUserId) {
       return res.status(401).json({ msg: "Identity not verified." });
@@ -140,50 +112,34 @@ router.post("/", upload.single("media"), async (req, res) => {
     if (req.file) {
       const isVideo = req.file.mimetype.startsWith("video");
       detectedType = isVideo ? "video" : "image";
-      
-      // Manual overrides from body
-      if (req.body.type === "story" || req.body.isStory === "true") detectedType = "story";
-      else if ((req.body.type === "reel" || req.body.isReel === "true") && isVideo) detectedType = "reel";
     }
 
     const postData = {
       author: currentUserId,
       authorAuth0Id: currentUserId,
-      authorName: userProfile?.name || req.auth?.payload?.name || "Drifter",
-      authorAvatar: userProfile?.avatar || req.auth?.payload?.picture || "",
+      authorName: userProfile?.name || "Drifter",
+      authorAvatar: userProfile?.avatar || "",
       text: req.body.text || "",
       media: mediaUrl, 
       mediaType: detectedType,
-      isEncrypted: req.body.isEncrypted === "true" || req.body.isEncrypted === true,
       likes: [],
       comments: [],
       rankClicks: [], 
     };
 
     const post = await Post.create(postData);
-
-    // AI processing in background
-    if (post.text) {
-      processNeuralIdentity(currentUserId, post.text).catch(() => {});
-    }
-
     res.status(201).json(post);
   } catch (err) {
-    console.error("POST_CREATE_ERROR:", err.message);
     res.status(500).json({ msg: "Internal Neural Breakdown", error: err.message });
   }
 });
 
 /* ==========================================================
-    ❤️ 3. LIKE SYSTEM
+    ❤️ 3. LIKE SYSTEM - Protected
 ========================================================== */
-router.post("/:id/like", async (req, res) => {
+router.post("/:id/like", checkJwt, async (req, res) => {
   try {
-    const userId = req.auth?.payload?.sub || req.user?.sub;
-    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
-      return res.status(400).json({ msg: "Invalid Post ID" });
-    }
-
+    const userId = req.auth?.payload?.sub;
     const post = await Post.findById(req.params.id);
     if (!post) return res.status(404).json({ msg: "Post missing." });
 
@@ -195,76 +151,24 @@ router.post("/:id/like", async (req, res) => {
     const updatedPost = await Post.findByIdAndUpdate(req.params.id, update, { new: true });
     res.json(updatedPost);
   } catch (err) {
-    res.status(500).json({ error: "Sync error in the drift." });
+    res.status(500).json({ error: "Sync error." });
   }
 });
 
 /* ==========================================================
-    ⚡ 4. RANK UP SYSTEM
+    💬 5. ADD COMMENT - Protected
 ========================================================== */
-router.post("/:id/rank-up", async (req, res) => {
-  try {
-    const userId = req.auth?.payload?.sub || req.user?.sub;
-    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
-        return res.status(400).json({ msg: "Invalid Post ID" });
-    }
-
-    const post = await Post.findById(req.params.id);
-    if (!post) return res.status(404).json({ msg: "Post not found" });
-
-    if (post.rankClicks?.includes(userId)) {
-      return res.status(400).json({ msg: "Neural Pulse already sent!" });
-    }
-
-    const updatedPost = await Post.findByIdAndUpdate(
-      req.params.id,
-      { $addToSet: { rankClicks: userId } },
-      { new: true }
-    );
-
-    let rankIncreased = false;
-    const clickCount = updatedPost.rankClicks?.length || 0;
-
-    // logic: Every 10 rank clicks increases the author's neural rank
-    if (clickCount > 0 && clickCount % 10 === 0) {
-      await User.findOneAndUpdate(
-        { auth0Id: updatedPost.authorAuth0Id },
-        { $inc: { neuralRank: 1 } }
-      );
-      rankIncreased = true;
-    }
-
-    res.json({ 
-      success: true, 
-      clicks: clickCount, 
-      rankUp: rankIncreased,
-      msg: rankIncreased ? "Milestone Reached! Neural Rank Increased! ⚡" : "Pulse Synced"
-    });
-  } catch (err) {
-    res.status(500).json({ error: "Rank sync failure." });
-  }
-});
-
-/* ==========================================================
-    💬 5. ADD COMMENT
-========================================================== */
-router.post("/:id/comment", async (req, res) => {
+router.post("/:id/comment", checkJwt, async (req, res) => {
     try {
-      if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
-        return res.status(400).json({ msg: "Invalid Post ID" });
-      }
-
       const { text } = req.body;
-      if (!text) return res.status(400).json({ msg: "Message empty." });
-  
-      const userId = req.auth?.payload?.sub || req.user?.sub;
+      const userId = req.auth?.payload?.sub;
       const userProfile = await User.findOne({ auth0Id: userId }).lean();
   
       const comment = {
         text,
         userId: userId,
-        userName: userProfile?.name || req.auth?.payload?.name || "Drifter",
-        userAvatar: userProfile?.avatar || req.auth?.payload?.picture || "",
+        userName: userProfile?.name || "Drifter",
+        userAvatar: userProfile?.avatar || "",
         createdAt: new Date()
       };
   
@@ -283,20 +187,13 @@ router.post("/:id/comment", async (req, res) => {
 /* ==========================================================
     🗑️ 6. DELETE POST
 ========================================================== */
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", checkJwt, async (req, res) => {
   try {
-    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
-        return res.status(400).json({ msg: "Invalid Post ID" });
-    }
-
     const post = await Post.findById(req.params.id);
-    if (!post) return res.status(404).json({ msg: "Post not found" });
-
-    const userId = req.auth?.payload?.sub || req.user?.sub;
+    const userId = req.auth?.payload?.sub;
     
-    // Security check: Only author can delete
-    if (post.authorAuth0Id !== userId && post.author !== userId) {
-      return res.status(401).json({ msg: "Access Denied. Identity mismatch." });
+    if (post.authorAuth0Id !== userId) {
+      return res.status(401).json({ msg: "Access Denied." });
     }
 
     await post.deleteOne();
@@ -307,17 +204,13 @@ router.delete("/:id", async (req, res) => {
 });
 
 /* ==========================================================
-    ✅ 7. USER SPECIFIC POSTS (Profile Feed)
+    ✅ 7. USER SPECIFIC POSTS
 ========================================================== */
 router.get("/user/:userId", async (req, res) => {
   try {
     const targetId = decodeURIComponent(req.params.userId);
     const userPosts = await Post.find({
-      $or: [
-        { authorAuth0Id: targetId }, 
-        { author: targetId },
-        { authorId: targetId }
-      ]
+      $or: [{ authorAuth0Id: targetId }, { author: targetId }]
     }).sort({ createdAt: -1 }).lean();
 
     res.json(userPosts || []);
