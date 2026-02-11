@@ -44,16 +44,23 @@ export default function App() {
   const socket = useRef(null); 
   const [searchQuery, setSearchQuery] = useState("");
   const [isPostModalOpen, setIsPostModalOpen] = useState(false);
-  
-  // ইনকামিং কল স্টেট
   const [incomingCall, setIncomingCall] = useState(null);
 
-  /* =================📡 USER DATA SYNC LOGIC (FIXED URL) ================= */
+  // ✅ আপনার API Identifier (Audience)
+  const API_AUDIENCE = "https://onyx-drift-api.com";
+
+  /* =================📡 USER DATA SYNC LOGIC (FIXED) ================= */
   useEffect(() => {
     const syncUserWithDB = async () => {
       if (isAuthenticated && user) {
         try {
-          const token = await getAccessTokenSilently();
+          // 🛠️ FIX: অডিয়েন্সসহ টোকেন নেওয়া হচ্ছে যাতে ব্যাকএন্ড এটি ভেরিফাই করতে পারে
+          const token = await getAccessTokenSilently({
+            authorizationParams: {
+              audience: API_AUDIENCE,
+            },
+          });
+
           const userData = {
             auth0Id: user.sub,
             name: user.name,
@@ -62,13 +69,15 @@ export default function App() {
             username: user.nickname || user.name?.split(' ')[0].toLowerCase(),
           };
 
-          // URL ফিক্স করা হয়েছে: /api/user/sync -> /api/users/sync
           await axios.post('https://onyx-drift-app-final-u29m.onrender.com/api/users/sync', userData, {
-            headers: { Authorization: `Bearer ${token}` }
+            headers: { 
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            }
           });
           console.log("📡 Identity Synced with Neural Grid");
         } catch (err) {
-          console.error("❌ Sync Error (404/500):", err.response?.data || err.message);
+          console.error("❌ Sync Error:", err.response?.data || err.message);
         }
       }
     };
@@ -84,7 +93,7 @@ export default function App() {
         socket.current = io(socketUrl, {
           transports: ["websocket", "polling"],
           withCredentials: true,
-          path: '/socket.io/' // ব্যাকএন্ডের সাথে ম্যাচ করানো হয়েছে
+          path: '/socket.io/' 
         });
 
         socket.current.on("connect", () => {

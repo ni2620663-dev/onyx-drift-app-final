@@ -6,13 +6,14 @@ import App from "./app.jsx";
 import { AuthProvider } from "./context/AuthContext"; 
 import "./index.css";
 
-// কনফিগারেশন
+/**
+ * 🔐 Auth0 Configuration
+ * নিশ্চিত করুন এই ডিটেইলসগুলো আপনার Auth0 ড্যাশবোর্ডের সাথে মিলছে।
+ */
 const AUTH0_DOMAIN = "dev-6d0nxccsaycctfl1.us.auth0.com";
 const AUTH0_CLIENT_ID = "tcfTAHv3K8KC1VwtZQrqIbqsZRN2PJFr";
 
-/* ❌ ভুল ছিল: https://${AUTH0_DOMAIN}/api/v2/
-  ✅ সঠিক (স্ক্রিনশট অনুযায়ী): আপনার কাস্টম এপিআই আইডেন্টিফায়ার
-*/
+// ✅ এটি আপনার ব্যাকএন্ডের authMiddleware.js এর audience এর সাথে হুবহু মিলতে হবে
 const API_AUDIENCE = "https://onyx-drift-api.com"; 
 
 ReactDOM.createRoot(document.getElementById("root")).render(
@@ -22,7 +23,8 @@ ReactDOM.createRoot(document.getElementById("root")).render(
       clientId={AUTH0_CLIENT_ID}
       authorizationParams={{
         redirect_uri: window.location.origin,
-        audience: API_AUDIENCE, // এখন এটি আপনার কাস্টম এপিআইকে পয়েন্ট করবে
+        audience: API_AUDIENCE, 
+        // scope এ 'read:current_user' বা কাস্টম পারমিশন থাকলে যোগ করতে পারেন
         scope: "openid profile email offline_access"
       }}
       useRefreshTokens={true}

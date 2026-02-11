@@ -17,7 +17,7 @@ import Notification from "./Notifications";
 import Settings from "./Settings";
 import LegacySetup from '../components/LegacySetup';
 
-// কনফিগারেশন
+// ✅ কনফিগারেশন (নিশ্চিত করুন এগুলো আপনার App.jsx এর সাথে মিলছে)
 const API_URL = "https://onyx-drift-app-final-u29m.onrender.com";
 const AUTH_AUDIENCE = "https://onyx-drift-api.com";
 
@@ -59,6 +59,7 @@ const NeuralInput = ({ onPostSuccess }) => {
     if (!text.trim()) return;
     setStatus("SYNCING");
     try {
+      // 🛠️ FIX: অডিয়েন্সসহ টোকেন নেওয়া
       const token = await getAccessTokenSilently({
         authorizationParams: { audience: AUTH_AUDIENCE }
       });
@@ -165,6 +166,7 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
   const fetchPosts = async () => {
     try {
       setLoading(true);
+      // 🛠️ FIX: অডিয়েন্সসহ টোকেন নেওয়া
       const token = await getAccessTokenSilently({
         authorizationParams: { audience: AUTH_AUDIENCE }
       });
@@ -173,7 +175,7 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
       });
       setPosts(response.data);
     } catch (err) { 
-      console.error("Feed Fetch Error", err);
+      console.error("Feed Fetch Error", err.response?.data || err.message);
     } finally { setLoading(false); }
   };
 
@@ -251,7 +253,6 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
         text: commentText 
       }, { headers: { Authorization: `Bearer ${token}` } });
       
-      // আপডেট করা পোস্টটি লোকাল স্টেট এ সেট করা
       setPosts(prev => prev.map(p => p._id === activeCommentPost._id ? res.data : p));
       setActiveCommentPost(res.data);
       setCommentText("");
@@ -318,11 +319,11 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
 
                <nav className="flex flex-col gap-2">
                  {[
-                    { icon: <FaHome />, label: 'Neural Feed', tab: 'home' }, 
-                    { icon: <FaStore />, label: 'Marketplace', tab: 'market' }, 
-                    { icon: <FaBrain />, label: 'AI Twin Sync', path: `/ai-twin` }, 
-                    { icon: <FaFingerprint />, label: 'Digital Legacy', tab: 'legacy' },
-                    { icon: <FaCog />, label: 'Settings', tab: 'settings' }
+                   { icon: <FaHome />, label: 'Neural Feed', tab: 'home' }, 
+                   { icon: <FaStore />, label: 'Marketplace', tab: 'market' }, 
+                   { icon: <FaBrain />, label: 'AI Twin Sync', path: `/ai-twin` }, 
+                   { icon: <FaFingerprint />, label: 'Digital Legacy', tab: 'legacy' },
+                   { icon: <FaCog />, label: 'Settings', tab: 'settings' }
                  ].map((item, i) => (
                    <div key={i} onClick={() => { if(item.tab) setActiveTab(item.tab); if(item.path) navigate(item.path); setIsSideMenuOpen(false); }} className={`flex items-center gap-4 p-3 rounded-xl transition-all font-bold text-[10px] uppercase tracking-widest cursor-pointer ${activeTab === item.tab ? 'text-cyan-400 bg-cyan-500/10' : 'text-zinc-500 hover:text-white'}`}>
                      <span className="text-lg">{item.icon}</span> {item.label}
@@ -458,8 +459,8 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
                   <div key={i} className="flex gap-3">
                     <img src={c.userAvatar || `https://ui-avatars.com/api/?name=${c.userName}`} className="w-8 h-8 rounded-xl" alt="" />
                     <div className="bg-white/5 p-3 rounded-2xl flex-1">
-                       <p className="text-cyan-500 font-bold text-[9px] uppercase">{c.userName}</p>
-                       <p className="text-[12px] text-gray-300 mt-1">{c.text}</p>
+                        <p className="text-cyan-500 font-bold text-[9px] uppercase">{c.userName}</p>
+                        <p className="text-[12px] text-gray-300 mt-1">{c.text}</p>
                     </div>
                   </div>
                 ))}
