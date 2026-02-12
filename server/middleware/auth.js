@@ -6,10 +6,10 @@ import User from "../models/User.js";
  */
 const checkJwt = auth({
   audience: process.env.AUTH0_AUDIENCE || 'https://onyx-drift-api.com', 
-  issuerBaseURL: `https://${process.env.AUTH0_DOMAIN || 'dev-6d0nxccsaycctfl1.us.auth0.com'}/`, 
+  // এখানে ডিফল্ট ডোমেইনটি আপনার বর্তমান ডোমেইন দিয়ে আপডেট করুন
+  issuerBaseURL: `https://${process.env.AUTH0_DOMAIN || 'dev-prxn6v2o08xp5loz.us.auth0.com'}/`, 
   tokenSigningAlg: 'RS256'
 });
-
 /**
  * 🚀 Smart Auth Middleware with Database Sync
  * এটি টোকেন ভেরিফাই করে এবং ইউজার প্রোফাইল ডাটাবেসে সিঙ্ক করে।
