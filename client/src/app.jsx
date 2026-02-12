@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, Suspense, lazy } from "react";
+import React, { useEffect, useRef, useState, Suspense } from "react";
 import { Routes, Route, useLocation, Navigate, useNavigate } from "react-router-dom";
 import { useAuth0, withAuthenticationRequired } from "@auth0/auth0-react";
 import { io } from "socket.io-client"; 
@@ -49,7 +49,7 @@ export default function App() {
   const API_AUDIENCE = "https://onyx-drift-api.com";
   const BACKEND_URL = "https://onyx-drift-app-final-u29m.onrender.com";
 
-  /* =================📡 USER DATA SYNC LOGIC ================= */
+  /* =================📡 USER DATA SYNC ================= */
   useEffect(() => {
     const syncUserWithDB = async () => {
       if (isAuthenticated && user) {
@@ -97,16 +97,20 @@ export default function App() {
 
         socket.current.on("incomingCall", (data) => {
           setIncomingCall(data);
+          toast.success("Incoming Neural Call...", { 
+            icon: '📞', 
+            style: { background: '#020617', color: '#06b6d4', border: '1px solid rgba(6,182,212,0.3)' } 
+          });
         });
       }
-
-      return () => {
-        if (socket.current) {
-          socket.current.disconnect();
-          socket.current = null;
-        }
-      };
     }
+
+    return () => {
+      if (socket.current) {
+        socket.current.disconnect();
+        socket.current = null;
+      }
+    };
   }, [isAuthenticated, user?.sub]);
 
   /* =================⌛ LOADING STATE ================= */
@@ -120,10 +124,9 @@ export default function App() {
   );
 
   /* =================📏 LAYOUT LOGIC ================= */
-  const isMessengerPage = location.pathname.startsWith("/messages") || location.pathname.startsWith("/messenger");
-  const isFullWidthPage = ["/messenger", "/messages", "/settings", "/", "/join", "/reels", "/feed", "/ai-twin"].some(path => location.pathname === path || location.pathname.startsWith(path + "/"));
+  const isMessengerPage = location.pathname.includes("/messages") || location.pathname.includes("/messenger");
+  const isFullWidthPage = ["/messenger", "/messages", "/settings", "/", "/join", "/reels", "/ai-twin"].some(path => location.pathname === path || location.pathname.startsWith(path + "/"));
   const isReelsPage = location.pathname.startsWith("/reels");
-  const isFeedPage = location.pathname.startsWith("/feed"); 
   const isAuthPage = location.pathname === "/" || location.pathname === "/join";
 
   return (
@@ -132,14 +135,15 @@ export default function App() {
       <Toaster position="top-center" reverseOrder={false} />
       <CustomCursor />
 
-      {/* --- 📞 INCOMING CALL MODAL --- */}
+      {/* --- 📞 INCOMING CALL MODAL (Fixed Framer Motion Warning) --- */}
       <AnimatePresence>
         {incomingCall && (
           <motion.div 
-            initial={{ y: -100, opacity: 0 }}
-            animate={{ y: 20, opacity: 1 }}
-            exit={{ y: -100, opacity: 0 }}
-            className="fixed top-0 left-1/2 -translate-x-1/2 z-[9999] w-[90%] max-w-md bg-zinc-900/90 backdrop-blur-2xl border border-cyan-500/30 p-5 rounded-3xl shadow-[0_0_40px_rgba(6,182,212,0.2)]"
+            // Fixed: "transparent" এর বদলে নির্দিষ্ট rgba ভ্যালু ব্যবহার করা হয়েছে লুপ এবং এরর এড়াতে
+            initial={{ y: -100, opacity: 0, backgroundColor: "rgba(24, 24, 27, 0)" }}
+            animate={{ y: 20, opacity: 1, backgroundColor: "rgba(24, 24, 27, 0.9)" }}
+            exit={{ y: -100, opacity: 0, backgroundColor: "rgba(24, 24, 27, 0)" }}
+            className="fixed top-0 left-1/2 -translate-x-1/2 z-[9999] w-[90%] max-w-md backdrop-blur-2xl border border-cyan-500/30 p-5 rounded-3xl shadow-[0_0_40px_rgba(6,182,212,0.2)]"
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
@@ -152,10 +156,10 @@ export default function App() {
                 </div>
               </div>
               <div className="flex gap-3">
-                <button onClick={() => setIncomingCall(null)} className="w-10 h-10 rounded-full bg-red-500/20 text-red-500 flex items-center justify-center hover:bg-red-500 transition-all">
+                <button onClick={() => setIncomingCall(null)} className="w-10 h-10 rounded-full bg-red-500/20 text-red-500 flex items-center justify-center hover:bg-red-500 hover:text-white transition-all">
                   <HiXMark size={20} />
                 </button>
-                <button onClick={() => { navigate(`/call/${incomingCall.roomId}`); setIncomingCall(null); }} className="w-10 h-10 rounded-full bg-cyan-500 text-black flex items-center justify-center hover:scale-110 transition-all">
+                <button onClick={() => { navigate(`/call/${incomingCall.roomId}`); setIncomingCall(null); }} className="w-10 h-10 rounded-full bg-cyan-500 text-black flex items-center justify-center hover:scale-110 transition-all shadow-[0_0_15px_rgba(6,182,212,0.5)]">
                   <FaPhone size={18} />
                 </button>
               </div>
@@ -165,25 +169,26 @@ export default function App() {
       </AnimatePresence>
 
       <div className="flex flex-col w-full">
-        {isAuthenticated && !isAuthPage && !isReelsPage && !isFeedPage && !isMessengerPage && (
+        {isAuthenticated && !isAuthPage && !isReelsPage && !isMessengerPage && (
           <Navbar user={user} socket={socket.current} setSearchQuery={setSearchQuery} setIsPostModalOpen={setIsPostModalOpen} />
         )}
         
         <div className="flex justify-center w-full transition-all duration-500">
           <div className={`flex w-full ${isFullWidthPage ? "max-w-full" : "max-w-[1440px] px-0 lg:px-6"} gap-6`}>
-            {isAuthenticated && !isFullWidthPage && (
+            
+            {/* Sidebar Logic */}
+            {isAuthenticated && !isFullWidthPage && !isReelsPage && (
               <aside className="hidden lg:block w-[280px] sticky top-6 h-[calc(100vh-40px)] mt-6">
                 <Sidebar />
               </aside>
             )}
             
-            <main className={`flex-1 flex justify-center ${isFullWidthPage ? "mt-0 pb-0" : "mt-6 pb-24 lg:pb-10"}`}>
-              <div className={`${isFullWidthPage ? "w-full" : "w-full lg:max-w-[650px] max-w-full"}`}>
-                {/* 🛡️ Suspense added to prevent 'chunk-YSNNQQNS' errors during lazy loads */}
-                <Suspense fallback={<div className="text-cyan-500 text-center mt-20 font-mono">SYNCING NEURAL GRID...</div>}>
+            <main className={`flex-1 flex justify-center ${isFullWidthPage ? "mt-0" : "mt-6 pb-24 lg:pb-10"}`}>
+              <div className={`${isFullWidthPage ? "w-full" : "w-full lg:max-w-[650px]"}`}>
+                <Suspense fallback={<div className="text-cyan-500 text-center mt-20 font-mono tracking-widest animate-pulse">ACCESSING NEURAL GRID...</div>}>
                   <AnimatePresence mode="wait">
                     <Routes location={location} key={location.pathname}>
-                      <Route path="/" element={isAuthenticated ? <Navigate to="/feed" /> : <Landing />} />
+                      <Route path="/" element={isAuthenticated ? <Navigate to="/feed" replace /> : <Landing />} />
                       <Route path="/join" element={<JoinPage />} /> 
                       <Route path="/feed" element={<ProtectedRoute component={() => <PremiumHomeFeed searchQuery={searchQuery} isPostModalOpen={isPostModalOpen} setIsPostModalOpen={setIsPostModalOpen} />} />} />
                       <Route path="/reels" element={<ProtectedRoute component={ReelsFeed} />} />
@@ -195,18 +200,20 @@ export default function App() {
                       <Route path="/settings" element={<ProtectedRoute component={Settings} />} />
                       <Route path="/call/:roomId" element={<ProtectedRoute component={CallPage} />} />
                       <Route path="/ai-twin" element={<ProtectedRoute component={AITwinSync} />} />
-                      <Route path="*" element={<Navigate to="/" />} />
+                      <Route path="*" element={<Navigate to="/" replace />} />
                     </Routes>
                   </AnimatePresence>
                 </Suspense>
               </div>
             </main>
 
-            {isAuthenticated && !isFullWidthPage && (
+            {/* Right Sidebar Suggestions */}
+            {isAuthenticated && !isFullWidthPage && !isReelsPage && (
               <aside className="hidden xl:block w-[320px] sticky top-6 h-[calc(100vh-40px)] mt-6">
                 <div className="bg-white/5 border border-white/10 rounded-3xl p-6 h-full backdrop-blur-md">
                    <h3 className="text-xs font-black uppercase tracking-widest text-cyan-500 mb-4">Neural Suggestions</h3>
                    <div className="space-y-4">
+                      <div className="h-20 w-full bg-white/5 rounded-xl animate-pulse" />
                       <div className="h-20 w-full bg-white/5 rounded-xl animate-pulse" />
                       <div className="h-20 w-full bg-white/5 rounded-xl animate-pulse" />
                    </div>

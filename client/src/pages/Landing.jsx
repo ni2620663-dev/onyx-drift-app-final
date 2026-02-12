@@ -18,7 +18,6 @@ const Landing = () => {
     },
   };
 
-  // AI-Autonomous Features Data
   const aiFeatures = [
     { 
       title: "Neural Shadow", 
@@ -122,12 +121,12 @@ const Landing = () => {
           {aiFeatures.map((feature, index) => (
             <motion.div 
               key={index}
-              initial={{ opacity: 0, y: 20 }}
+              initial={{ opacity: 0, y: 20, borderColor: "rgba(255, 255, 255, 0.1)" }}
               whileInView={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.1 }}
               viewport={{ once: true }}
               whileHover={{ y: -10, borderColor: "rgba(6, 182, 212, 0.5)" }}
-              className="p-8 bg-white/5 backdrop-blur-xl border border-white/10 rounded-[2.5rem] text-left transition-all group"
+              className="p-8 bg-white/5 backdrop-blur-xl border rounded-[2.5rem] text-left transition-all group"
             >
               <div className="text-4xl mb-6 bg-cyan-500/10 w-16 h-16 flex items-center justify-center rounded-2xl group-hover:scale-110 transition-transform">
                 {feature.icon}
@@ -163,7 +162,6 @@ const Landing = () => {
         </div>
       </div>
 
-      {/* Footer Branding */}
       <footer className="relative z-30 py-12 opacity-20 text-center">
         <p className="text-[10px] font-mono text-white tracking-[0.5em] uppercase italic">
           © 2026 Onyx Drift // Neural Systems Integrated
