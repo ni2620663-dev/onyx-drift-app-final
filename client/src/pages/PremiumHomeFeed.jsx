@@ -17,11 +17,11 @@ import Notification from "./Notifications";
 import Settings from "./Settings";
 import LegacySetup from '../components/LegacySetup';
 
-// ✅ কনফিগারেশন (নিশ্চিত করুন এগুলো আপনার App.jsx এর সাথে মিলছে)
+// ✅ কনফিগারেশন (আপনার ব্যাকএন্ডের সাথে মিল রাখা হয়েছে)
 const API_URL = "https://onyx-drift-app-final-u29m.onrender.com";
 const AUTH_AUDIENCE = "https://onyx-drift-api.com";
 
-// --- ১. NEURAL TOAST COMPONENT ---
+// --- ১. NEURAL TOAST ---
 const NeuralToast = ({ isVisible, message }) => (
   <AnimatePresence>
     {isVisible && (
@@ -32,24 +32,20 @@ const NeuralToast = ({ isVisible, message }) => (
         className="fixed top-20 right-4 z-[9999] pointer-events-none"
       >
         <div className="bg-black/90 backdrop-blur-2xl border border-purple-500/40 p-4 rounded-2xl shadow-[0_0_20px_rgba(168,85,247,0.3)] flex items-center gap-4 min-w-[260px]">
-          <div className="relative">
-            <div className="p-2 bg-purple-500/20 rounded-xl text-purple-400">
-              <FaBrain className="animate-pulse" />
-            </div>
-            <div className="absolute -top-1 -right-1 w-2 h-2 bg-cyan-400 rounded-full animate-ping" />
+          <div className="p-2 bg-purple-500/20 rounded-xl text-purple-400">
+            <FaBrain className="animate-pulse" />
           </div>
           <div>
             <h4 className="text-[9px] font-black text-purple-500 uppercase tracking-[0.2em] mb-0.5">Neural Shadow Sync</h4>
             <p className="text-[11px] text-gray-300 font-mono italic">{message}</p>
           </div>
-          <FaBolt className="ml-auto text-yellow-500 text-[10px] animate-bounce" />
         </div>
       </motion.div>
     )}
   </AnimatePresence>
 );
 
-// --- ২. NEURAL INPUT COMPONENT ---
+// --- ২. NEURAL INPUT (AI Generation Fix) ---
 const NeuralInput = ({ onPostSuccess }) => {
   const { user, getAccessTokenSilently } = useAuth0();
   const [text, setText] = useState("");
@@ -59,15 +55,15 @@ const NeuralInput = ({ onPostSuccess }) => {
     if (!text.trim()) return;
     setStatus("SYNCING");
     try {
-      // 🛠️ FIX: অডিয়েন্সসহ টোকেন নেওয়া
       const token = await getAccessTokenSilently({
         authorizationParams: { audience: AUTH_AUDIENCE }
       });
       
-      const res = await axios.post(`${API_URL}/api/posts/neural-generate`, {
+      // ✅ ব্যাকএন্ডের Post কন্ট্রোলারের সাথে মিল রেখে রিকোয়েস্ট
+      const res = await axios.post(`${API_URL}/api/posts`, {
         text,
-        auth0Id: user?.sub,
-        mood: "creative"
+        isAiGenerated: true,
+        aiPersona: "Neural Shadow"
       }, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -78,7 +74,7 @@ const NeuralInput = ({ onPostSuccess }) => {
             setStatus("IDLE");
             setText("");
             if (onPostSuccess) onPostSuccess();
-        }, 2000);
+        }, 1500);
       }
     } catch (err) {
       console.error("Neural Sync Failed", err);
@@ -88,29 +84,25 @@ const NeuralInput = ({ onPostSuccess }) => {
 
   return (
     <motion.div 
-      animate={status === "SYNCING" ? {
-        x: [0, -2, 2, -1, 1, 0],
-        filter: ["hue-rotate(0deg)", "hue-rotate(90deg)", "hue-rotate(0deg)"]
-      } : {}}
+      animate={status === "SYNCING" ? { x: [0, -2, 2, 0], filter: ["hue-rotate(0deg)", "hue-rotate(90deg)", "hue-rotate(0deg)"] } : {}}
       transition={{ repeat: Infinity, duration: 0.2 }}
-      className="bg-[#080808] border border-cyan-500/20 p-5 rounded-[24px] mb-6 shadow-[0_0_20px_rgba(0,0,0,0.5)] group relative overflow-hidden"
+      className="bg-[#080808] border border-cyan-500/20 p-5 rounded-[24px] mb-6 shadow-[0_0_20px_rgba(0,0,0,0.5)] relative overflow-hidden"
     >
-      <div className="flex items-center gap-2 mb-3 relative z-10">
+      <div className="flex items-center gap-2 mb-3">
          <div className="w-1.5 h-1.5 bg-cyan-500 rounded-full animate-ping" />
          <h3 className="text-cyan-500 font-mono text-[9px] uppercase tracking-[0.3em] flex items-center gap-2">
-            <FaBrain className={status === "SYNCING" ? "animate-spin" : ""} />
-            Neural_Input_Core_v2
+            <FaBrain className={status === "SYNCING" ? "animate-spin" : ""} /> Neural_Core_v2
          </h3>
       </div>
       <textarea 
-        className="w-full bg-transparent border-none outline-none text-gray-200 font-mono text-sm placeholder-zinc-700 resize-none min-h-[80px] relative z-10"
+        className="w-full bg-transparent border-none outline-none text-gray-200 font-mono text-sm placeholder-zinc-700 resize-none min-h-[80px]"
         placeholder="Type a thought to synthesize..."
         value={text}
         onChange={(e) => setText(e.target.value)}
       />
-      <div className="flex justify-between items-center mt-3 border-t border-white/5 pt-3 relative z-10">
+      <div className="flex justify-between items-center mt-3 border-t border-white/5 pt-3">
         <span className="text-[8px] text-zinc-600 font-mono uppercase tracking-widest">
-            {status === "SYNCING" ? ">> SYNTHESIZING..." : ">> AWAITING_TRANSMISSION"}
+            {status === "SYNCING" ? ">> SYNTHESIZING..." : ">> AWAITING_INPUT"}
         </span>
         <button 
           onClick={handleGenerate}
@@ -166,7 +158,6 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
   const fetchPosts = async () => {
     try {
       setLoading(true);
-      // 🛠️ FIX: অডিয়েন্সসহ টোকেন নেওয়া
       const token = await getAccessTokenSilently({
         authorizationParams: { audience: AUTH_AUDIENCE }
       });
@@ -175,7 +166,7 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
       });
       setPosts(response.data);
     } catch (err) { 
-      console.error("Feed Fetch Error", err.response?.data || err.message);
+      console.error("Feed Fetch Error", err);
     } finally { setLoading(false); }
   };
 
@@ -195,11 +186,8 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
 
   useEffect(() => {
     if (isAuthenticated) {
-        const loadInitialData = async () => {
-            await fetchUserProfile();
-            await fetchPosts();
-        };
-        loadInitialData();
+        fetchUserProfile();
+        fetchPosts();
     }
   }, [isAuthenticated]);
 
@@ -213,7 +201,7 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
         headers: { Authorization: `Bearer ${token}` } 
       });
       setPosts(prev => prev.map(p => p._id === postId ? res.data : p));
-    } catch (err) { console.error("Like Sync Error"); }
+    } catch (err) { console.error("Like Error"); }
   };
 
   const handlePostSubmit = async () => {
@@ -236,7 +224,7 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
       });
       setPosts(prev => [response.data, ...prev]);
       setPostText(""); setMediaFile(null); setIsPostModalOpen(false);
-      setToast({ show: true, message: "Transmission Successful" });
+      setToast({ show: true, message: "Uplink Successful" });
       setTimeout(() => setToast({ show: false, message: "" }), 3000);
     } catch (err) { 
         alert("Transmission Failed."); 
@@ -256,7 +244,7 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
       setPosts(prev => prev.map(p => p._id === activeCommentPost._id ? res.data : p));
       setActiveCommentPost(res.data);
       setCommentText("");
-    } catch (err) { console.error("Comment Sync Error"); }
+    } catch (err) { console.error("Comment Error"); }
   };
 
   const filteredPosts = useMemo(() => {
@@ -270,7 +258,7 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
   }, [posts, activeFilter, searchQuery]);
 
   return (
-    <div className="w-full min-h-screen bg-black text-white pb-32 font-sans overflow-x-hidden selection:bg-cyan-500/30">
+    <div className="w-full min-h-screen bg-black text-white pb-32 font-sans overflow-x-hidden">
       <NeuralToast isVisible={toast.show} message={toast.message} />
 
       {/* --- HEADER --- */}
@@ -278,7 +266,7 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
         <div className="flex items-center gap-3">
           <img 
             src={user?.picture} 
-            className="w-8 h-8 rounded-full border border-cyan-500/50 cursor-pointer object-cover hover:scale-110 transition-transform" 
+            className="w-8 h-8 rounded-full border border-cyan-500/50 cursor-pointer object-cover" 
             onClick={() => setIsSideMenuOpen(true)} 
             alt="profile" 
           />
@@ -286,12 +274,8 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
             Onyx<span className="text-white">Drift</span>
           </h2>
         </div>
-        <div className="flex gap-4 items-center text-zinc-400">
-          <FaSearch className="cursor-pointer hover:text-white" onClick={() => navigate('/search')} />
-          <div className="relative cursor-pointer" onClick={() => setActiveTab('notify')}>
-             <FaRegBell className="hover:text-white" />
-             <div className="absolute -top-1 -right-1 w-2 h-2 bg-rose-500 rounded-full animate-ping" />
-          </div>
+        <div className="flex gap-4 items-center">
+          <FaSearch className="text-zinc-400 cursor-pointer" onClick={() => navigate('/search')} />
           <div className="flex items-center gap-1 bg-white/5 px-2 py-1 rounded-lg border border-white/10">
             <FaBolt className="text-cyan-500 text-[10px]" />
             <span className="text-[10px] font-mono text-cyan-200">{userProfile?.neuralRank || 0}</span>
@@ -311,10 +295,7 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
                     <div className="absolute -bottom-1 -right-1 bg-cyan-500 p-1 rounded-lg text-[8px] text-black font-black uppercase">Level {userProfile?.neuralRank || 1}</div>
                   </div>
                   <h4 className="font-black text-gray-100 text-lg uppercase">{user?.nickname}</h4>
-                  <div className="flex items-center gap-2 mt-1">
-                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                    <p className="text-[9px] text-cyan-500 font-mono tracking-widest">Neural Link: ACTIVE</p>
-                  </div>
+                  <p className="text-[9px] text-cyan-500 font-mono tracking-widest mt-1">Neural Link: ACTIVE</p>
                </div>
 
                <nav className="flex flex-col gap-2">
@@ -341,7 +322,7 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
           <>
             <div className="flex justify-center gap-2 py-4 border-b border-white/5 sticky top-14 z-50 bg-black/80 backdrop-blur-md px-4">
               {['Global', 'Encrypted', 'Resonance'].map((f) => (
-                <button key={f} onClick={() => setActiveFilter(f)} className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all border ${activeFilter === f ? 'bg-cyan-500 text-black border-cyan-400' : 'bg-white/5 text-zinc-500 border-white/5 hover:text-white'}`}>
+                <button key={f} onClick={() => setActiveFilter(f)} className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all border ${activeFilter === f ? 'bg-cyan-500 text-black border-cyan-400' : 'bg-white/5 text-zinc-500 border-white/5'}`}>
                   {f}
                 </button>
               ))}
@@ -354,18 +335,18 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
             {loading ? (
                 <div className="flex flex-col items-center py-20 gap-4">
                    <div className="w-10 h-10 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin" />
-                   <p className="text-[9px] text-cyan-500 font-mono uppercase tracking-[2px]">Scanning Grid Waves...</p>
+                   <p className="text-[9px] text-cyan-500 font-mono tracking-[2px]">Scanning Grid Waves...</p>
                 </div>
             ) : (
                 <div className="divide-y divide-white/5">
                   {filteredPosts.map((post) => (
-                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} key={post._id} className={`p-5 transition-all group ${post.isAiGenerated ? 'bg-purple-500/[0.03] border-l-2 border-purple-500' : 'hover:bg-white/[0.01]'}`}>
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} key={post._id} className={`p-5 transition-all ${post.isAiGenerated ? 'bg-purple-500/[0.03] border-l-2 border-purple-500' : 'hover:bg-white/[0.01]'}`}>
                       <div className="flex gap-3">
                         <img 
                           src={post.authorAvatar || `https://ui-avatars.com/api/?name=${post.authorName}`} 
                           className="w-11 h-11 rounded-2xl border border-white/10 object-cover cursor-pointer" 
                           alt="avatar" 
-                          onClick={() => navigate(`/profile/${post.authorId || post.userId}`)}
+                          onClick={() => navigate(`/profile/${post.authorAuth0Id || post.userId}`)} // ✅ ID FIX
                         />
                         <div className="flex-1">
                           <div className="flex items-center justify-between mb-1">
@@ -376,7 +357,7 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
                               {new Date(post.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                             </span>
                           </div>
-                          <p className={`text-[13px] leading-relaxed ${post.isAiGenerated ? 'text-purple-300 italic' : 'text-gray-400'}`}>
+                          <p className={`text-[13px] leading-relaxed ${post.isAiGenerated ? 'text-purple-300 italic font-mono' : 'text-gray-400'}`}>
                             {post.text}
                           </p>
                           {post.media && (
@@ -474,7 +455,7 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
                   className="flex-1 bg-white/5 rounded-xl px-4 py-3 outline-none text-[12px]" 
                 />
                 <button onClick={handleCommentSubmit} className="bg-cyan-500 text-black p-3.5 rounded-xl">
-                   <FaPaperPlane size={14}/>
+                    <FaPaperPlane size={14}/>
                 </button>
               </div>
             </motion.div>
@@ -491,7 +472,6 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
       >
         <FaBolt size={20} />
       </motion.button>
-      
     </div>
   );
 };

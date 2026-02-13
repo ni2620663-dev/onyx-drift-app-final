@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 
 const postSchema = new mongoose.Schema(
   {
+    // Auth0 Sub ID (Primary identifier)
     author: { 
       type: String, 
       required: true, 
@@ -26,14 +27,13 @@ const postSchema = new mongoose.Schema(
       default: 'none' 
     },
     
-    // ❤️ Like system with default empty array
+    // ❤️ Like system - String IDs stored in array
     likes: { 
       type: [String], 
       default: [] 
     }, 
 
     // ⚡ RANK UP SYSTEM FIELD
-    // এখানে ১০ জন ইউজারের ID জমা হলে ক্রিয়েটরের র‍্যাঙ্ক বাড়বে
     rankClicks: { 
       type: [String], 
       default: [] 
@@ -41,9 +41,9 @@ const postSchema = new mongoose.Schema(
     
     comments: [
       {
-        userId: { type: String }, 
-        userName: { type: String },
-        userAvatar: { type: String },
+        userId: { type: String, required: true }, 
+        userName: { type: String, default: "Ghost Drifter" },
+        userAvatar: { type: String, default: "" },
         text: { type: String, required: true },
         createdAt: { type: Date, default: Date.now }
       }
@@ -52,26 +52,29 @@ const postSchema = new mongoose.Schema(
     views: { type: Number, default: 0 },
 
     /* ==========================================================
-        🤖 AI AUTONOMOUS FIELDS (NEW)
+        🤖 AI AUTONOMOUS FIELDS
     ========================================================== */
     isAiGenerated: { 
       type: Boolean, 
-      default: false 
-    }, // AI নিজে পোস্ট করলে এটি true হবে
+      default: false,
+      index: true
+    }, 
     
     aiPersona: { 
       type: String, 
       default: "Neural Shadow" 
-    }, // এআই-এর পার্সোনালিটি টাইপ
+    }, 
     
     neuralSyncLevel: { 
       type: Number, 
-      default: 0 
-    }, // ইউজারের সাথে এআই-এর মিলের পার্সেন্টেজ (যেমন: 98.2)
+      default: 0,
+      min: 0,
+      max: 100 
+    },
 
     aiThoughtProcess: { 
       type: String 
-    } // ঐচ্ছিক: AI কেন এই কন্টেন্টটি পছন্দ করল তার ব্যাখ্যা
+    } 
   },
   { 
     timestamps: true 
@@ -79,14 +82,18 @@ const postSchema = new mongoose.Schema(
 );
 
 /* ==========================================================
-    🚀 OPTIMIZED INDEXING
+    🚀 OPTIMIZED INDEXING & VIRTUALS
 ========================================================== */
+
+// ১. ডাইনামিক লাইক কাউন্ট পাওয়ার জন্য ভার্চুয়াল প্রোপার্টি (ঐচ্ছিক)
+postSchema.virtual('likesCount').get(function() {
+  return this.likes.length;
+});
+
+// ২. কম্পাউন্ড ইনডেক্স - যাতে প্রোফাইল এবং ফিড খুব ফাস্ট লোড হয়
 postSchema.index({ authorAuth0Id: 1, createdAt: -1 });
 postSchema.index({ createdAt: -1 });
-// র‍্যাঙ্ক ক্লিক কাউন্ট দিয়ে কোয়েরি ফাস্ট করার জন্য ইনডেক্স
-postSchema.index({ rankClicks: 1 }); 
-// AI ফিল্টার করার জন্য ইনডেক্স
-postSchema.index({ isAiGenerated: 1 });
+postSchema.index({ isAiGenerated: 1, createdAt: -1 });
 
 const Post = mongoose.model('Post', postSchema);
 export default Post;
