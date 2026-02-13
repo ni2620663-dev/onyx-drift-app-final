@@ -5,10 +5,9 @@ import { auth } from 'express-oauth2-jwt-bearer';
  */
 const checkJwt = auth({
   audience: 'https://onyx-drift-api.com', 
-  issuerBaseURL: 'https://dev-6d0nxccsaycctfl1.us.auth0.com/', 
+  issuerBaseURL: 'https://dev-prxn6v2o08xp5loz.us.auth0.com/', // আপনার বর্তমান ডোমেইন
   tokenSigningAlg: 'RS256'
 });
-
 /**
  * 🚀 Strict Auth Middleware
  * এটি নিশ্চিত করে যে ইউজার ভ্যালিড টোকেন ছাড়া কোনো এপিআই এক্সেস করতে পারবে না।
