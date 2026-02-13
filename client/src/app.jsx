@@ -38,7 +38,7 @@ const ProtectedRoute = ({ component: Component, ...props }) => {
 };
 
 export default function App() {
-  const { isAuthenticated, isLoading, user, getAccessTokenSilently, logout } = useAuth0();
+  const { isAuthenticated, isLoading, user, getAccessTokenSilently } = useAuth0();
   const location = useLocation();
   const navigate = useNavigate();
   const socket = useRef(null); 
@@ -55,7 +55,6 @@ export default function App() {
     const syncUserWithDB = async () => {
       if (isAuthenticated && user) {
         try {
-          // সঠিক অডিয়েন্স দিয়ে টোকেন নেওয়া হচ্ছে
           const token = await getAccessTokenSilently({
             authorizationParams: { 
               audience: API_AUDIENCE,
@@ -71,7 +70,7 @@ export default function App() {
             username: user.nickname || user.name?.split(' ')[0].toLowerCase(),
           };
 
-          // ব্যাকএন্ডে ইউজার সিঙ্ক (প্লুরাল রাউট /api/users/sync)
+          // ব্যাকএন্ডে ইউজার সিঙ্ক - প্লুরাল রাউট /api/users/sync
           await axios.post(`${BACKEND_URL}/api/users/sync`, userData, {
             headers: { 
               Authorization: `Bearer ${token}`,
@@ -81,10 +80,6 @@ export default function App() {
           console.log("📡 Identity Synced with Neural Grid");
         } catch (err) {
           console.error("❌ Sync Error:", err.response?.data || err.message);
-          // যদি টোকেন ইনভ্যালিড হয় (JWKS error), ইউজারকে লগআউট করা নিরাপদ
-          if (err.response?.status === 401) {
-            console.warn("Session expired or invalid key. Re-authenticating...");
-          }
         }
       }
     };
@@ -98,10 +93,13 @@ export default function App() {
         socket.current = io(BACKEND_URL, {
           transports: ["websocket"],
           withCredentials: true,
-          path: '/socket.io/' 
+          path: '/socket.io/',
+          reconnection: true,
+          reconnectionAttempts: 10
         });
 
         socket.current.on("connect", () => {
+          console.log("🔌 Connected to Neural Socket");
           socket.current.emit("addNewUser", user.sub);
         });
 
@@ -135,7 +133,7 @@ export default function App() {
 
   /* =================📏 LAYOUT LOGIC ================= */
   const isMessengerPage = location.pathname.includes("/messages") || location.pathname.includes("/messenger");
-  const isFullWidthPage = ["/messenger", "/messages", "/settings", "/", "/join", "/reels", "/ai-twin"].some(path => location.pathname === path || location.pathname.startsWith(path + "/"));
+  const isFullWidthPage = ["/messenger", "/messages", "/settings", "/", "/join", "/reels", "/ai-twin", "/call"].some(path => location.pathname === path || location.pathname.startsWith(path + "/"));
   const isReelsPage = location.pathname.startsWith("/reels");
   const isAuthPage = location.pathname === "/" || location.pathname === "/join";
 
@@ -149,10 +147,10 @@ export default function App() {
       <AnimatePresence>
         {incomingCall && (
           <motion.div 
-            initial={{ y: -100, opacity: 0, backgroundColor: "rgba(24, 24, 27, 0)" }}
-            animate={{ y: 20, opacity: 1, backgroundColor: "rgba(24, 24, 27, 0.9)" }}
-            exit={{ y: -100, opacity: 0, backgroundColor: "rgba(24, 24, 27, 0)" }}
-            className="fixed top-0 left-1/2 -translate-x-1/2 z-[9999] w-[90%] max-w-md backdrop-blur-2xl border border-cyan-500/30 p-5 rounded-3xl shadow-[0_0_40px_rgba(6,182,212,0.2)]"
+            initial={{ y: -100, opacity: 0 }}
+            animate={{ y: 20, opacity: 1 }}
+            exit={{ y: -100, opacity: 0 }}
+            className="fixed top-0 left-1/2 -translate-x-1/2 z-[9999] w-[90%] max-w-md backdrop-blur-2xl border border-cyan-500/30 p-5 rounded-3xl shadow-[0_0_40px_rgba(6,182,212,0.2)] bg-black/80"
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
