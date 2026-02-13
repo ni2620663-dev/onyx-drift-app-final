@@ -38,7 +38,7 @@ const ProtectedRoute = ({ component: Component, ...props }) => {
 };
 
 export default function App() {
-  const { isAuthenticated, isLoading, user, getAccessTokenSilently } = useAuth0();
+  const { isAuthenticated, isLoading, user, getAccessTokenSilently, logout } = useAuth0();
   const location = useLocation();
   const navigate = useNavigate();
   const socket = useRef(null); 
@@ -46,6 +46,7 @@ export default function App() {
   const [isPostModalOpen, setIsPostModalOpen] = useState(false);
   const [incomingCall, setIncomingCall] = useState(null);
 
+  // Constants
   const API_AUDIENCE = "https://onyx-drift-api.com";
   const BACKEND_URL = "https://onyx-drift-app-final-u29m.onrender.com";
 
@@ -54,8 +55,12 @@ export default function App() {
     const syncUserWithDB = async () => {
       if (isAuthenticated && user) {
         try {
+          // সঠিক অডিয়েন্স দিয়ে টোকেন নেওয়া হচ্ছে
           const token = await getAccessTokenSilently({
-            authorizationParams: { audience: API_AUDIENCE },
+            authorizationParams: { 
+              audience: API_AUDIENCE,
+              scope: "openid profile email" 
+            },
           });
 
           const userData = {
@@ -66,6 +71,7 @@ export default function App() {
             username: user.nickname || user.name?.split(' ')[0].toLowerCase(),
           };
 
+          // ব্যাকএন্ডে ইউজার সিঙ্ক (প্লুরাল রাউট /api/users/sync)
           await axios.post(`${BACKEND_URL}/api/users/sync`, userData, {
             headers: { 
               Authorization: `Bearer ${token}`,
@@ -75,6 +81,10 @@ export default function App() {
           console.log("📡 Identity Synced with Neural Grid");
         } catch (err) {
           console.error("❌ Sync Error:", err.response?.data || err.message);
+          // যদি টোকেন ইনভ্যালিড হয় (JWKS error), ইউজারকে লগআউট করা নিরাপদ
+          if (err.response?.status === 401) {
+            console.warn("Session expired or invalid key. Re-authenticating...");
+          }
         }
       }
     };
@@ -135,11 +145,10 @@ export default function App() {
       <Toaster position="top-center" reverseOrder={false} />
       <CustomCursor />
 
-      {/* --- 📞 INCOMING CALL MODAL (Fixed Framer Motion Warning) --- */}
+      {/* --- 📞 INCOMING CALL MODAL --- */}
       <AnimatePresence>
         {incomingCall && (
           <motion.div 
-            // Fixed: "transparent" এর বদলে নির্দিষ্ট rgba ভ্যালু ব্যবহার করা হয়েছে লুপ এবং এরর এড়াতে
             initial={{ y: -100, opacity: 0, backgroundColor: "rgba(24, 24, 27, 0)" }}
             animate={{ y: 20, opacity: 1, backgroundColor: "rgba(24, 24, 27, 0.9)" }}
             exit={{ y: -100, opacity: 0, backgroundColor: "rgba(24, 24, 27, 0)" }}
@@ -176,7 +185,6 @@ export default function App() {
         <div className="flex justify-center w-full transition-all duration-500">
           <div className={`flex w-full ${isFullWidthPage ? "max-w-full" : "max-w-[1440px] px-0 lg:px-6"} gap-6`}>
             
-            {/* Sidebar Logic */}
             {isAuthenticated && !isFullWidthPage && !isReelsPage && (
               <aside className="hidden lg:block w-[280px] sticky top-6 h-[calc(100vh-40px)] mt-6">
                 <Sidebar />
@@ -207,7 +215,6 @@ export default function App() {
               </div>
             </main>
 
-            {/* Right Sidebar Suggestions */}
             {isAuthenticated && !isFullWidthPage && !isReelsPage && (
               <aside className="hidden xl:block w-[320px] sticky top-6 h-[calc(100vh-40px)] mt-6">
                 <div className="bg-white/5 border border-white/10 rounded-3xl p-6 h-full backdrop-blur-md">

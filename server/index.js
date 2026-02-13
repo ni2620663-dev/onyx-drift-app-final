@@ -23,13 +23,15 @@ import reelRoutes from "./routes/reels.js";
 import profileRoutes from "./routes/profile.js"; 
 import groupRoutes from "./routes/group.js"; 
 import marketRoutes from "./routes/market.js"; 
-import adminRoutes from "./routes/admin.js";       
+import adminRoutes from "./routes/admin.js";        
 import { getNeuralFeed } from "./controllers/feedController.js";
 
-// 🛡️ Auth0 JWT ভেরিফিকেশন মিডলওয়্যার
+// 🛡️ Auth0 JWT ভেরিফিকেশন মিডলওয়্যার (FIXED DOMAIN & AUDIENCE)
 const checkJwt = auth({
-  audience: process.env.AUTH0_AUDIENCE || 'https://onyx-drift-api.com', 
-  issuerBaseURL: `https://dev-6d0nxccsaycctfl1.us.auth0.com/`, 
+  // এটি আপনার ড্যাশবোর্ডের Identifier এর সাথে হুবহু মিলতে হবে
+  audience: 'https://onyx-drift-api.com', 
+  // এটি আপনার ড্যাশবোর্ড থেকে পাওয়া সঠিক ডোমেইন
+  issuerBaseURL: 'https://dev-prxn6v2o08xp5loz.us.auth0.com/', 
   tokenSigningAlg: 'RS256'
 });
 
@@ -79,7 +81,6 @@ const updateNeuralPulse = async (req, res, next) => {
     const auth0Id = req.auth?.payload?.sub || req.user?.sub; 
     
     if (auth0Id) {
-        // নন-ব্লকিং ব্যাকগ্রাউন্ড আপডেট
         User.updateOne(
             { auth0Id: auth0Id },
             { $set: { "deathSwitch.lastPulseTimestamp": new Date() } }
@@ -107,24 +108,16 @@ if (redis) {
 }
 
 /* ==========================================================
-    ⏰ CRON JOBS
-========================================================== */
-cron.schedule('0 0 * * *', async () => {
-    console.log("Running Neural Pulse Audit...");
-    // এখানে ডিজিটাল লিগ্যাসি লজিক রান হবে
-});
-
-/* ==========================================================
     📡 এপিআই রাউটস
 ========================================================== */
 
 // পাবলিক রুট
 app.get("/", (req, res) => res.status(200).send("🚀 OnyxDrift Neural Core is Online!"));
 
-// 🛠️ Neural Feed - স্পেশাল প্রায়োরিটি রুট
+// 🛠️ Neural Feed - স্পেশাল প্রায়োরিটি রুট
 app.get("/api/posts/neural-feed", checkJwt, updateNeuralPulse, getNeuralFeed);
 
-// 🛠️ ফিচার রাউটস (সিরিয়াল অনুযায়ী)
+// 🛠️ ফিচার রাউটস (সিরিয়াল অনুযায়ী)
 app.use("/api/users", checkJwt, updateNeuralPulse, userRoutes);
 app.use("/api/profile", checkJwt, updateNeuralPulse, profileRoutes);
 app.use("/api/posts", checkJwt, updateNeuralPulse, postRoutes); 
@@ -163,16 +156,15 @@ io.on("connection", (socket) => {
 });
 
 /* ==========================================================
-    🛡️ GLOBAL ERROR HANDLER (Enhanced for debugging)
+    🛡️ GLOBAL ERROR HANDLER
 ========================================================== */
 app.use((err, req, res, next) => {
-    // লগ ফাইলে পূর্ণ এরর প্রিন্ট হবে
     console.error("Critical System Log:", err);
 
     if (err.name === 'UnauthorizedError') {
         return res.status(401).json({ 
             error: 'Identity Verification Failed', 
-            message: "Authentication token is missing or invalid." 
+            message: err.message || "Authentication token is missing or invalid." 
         });
     }
 
@@ -187,12 +179,5 @@ app.use((err, req, res, next) => {
 ========================================================== */
 const PORT = process.env.PORT || 10000;
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`
-    =========================================
-    🚀 ONYX CORE ACTIVE ON PORT: ${PORT}
-    🧠 NEURAL SYNC: ENABLED
-    📡 DATABASE: CONNECTED
-    🛡️ SECURITY: JWT/CORS ACTIVE
-    =========================================
-    `);
+    console.log(`🚀 ONYX CORE ACTIVE ON PORT: ${PORT}`);
 });
