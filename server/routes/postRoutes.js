@@ -183,6 +183,8 @@ router.post('/:id/comment', authMiddleware, async (req, res) => {
     }
 });
 
+
+
 /* ==========================================================
     ৭. পোস্ট ডিলিট
 ========================================================== */
@@ -203,5 +205,18 @@ router.delete('/:id', authMiddleware, async (req, res) => {
         res.status(500).json({ message: "Delete failed" });
     }
 });
+
+const express = require('express');
+const router = express.Router();
+const multer = require('multer');
+const videoController = require('../controllers/videoController');
+
+// ফাইল আপলোড কনফিগারেশন
+const upload = multer({ dest: 'uploads/' });
+
+// আপনার এডিটর থেকে এই রাউটে ডাটা আসবে
+router.post('/process', upload.single('media'), videoController.processAndUploadVideo);
+
+
 
 export default router;

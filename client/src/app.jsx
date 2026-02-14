@@ -46,7 +46,7 @@ export default function App() {
   const [isPostModalOpen, setIsPostModalOpen] = useState(false);
   const [incomingCall, setIncomingCall] = useState(null);
 
-  // Constants
+  // Constants (Ensure these match your Auth0 Dashboard exactly)
   const API_AUDIENCE = "https://onyx-drift-api.com";
   const BACKEND_URL = "https://onyx-drift-app-final-u29m.onrender.com";
 
@@ -55,10 +55,11 @@ export default function App() {
     const syncUserWithDB = async () => {
       if (isAuthenticated && user) {
         try {
+          // Token generation with specific audience to fix 401 error
           const token = await getAccessTokenSilently({
             authorizationParams: { 
               audience: API_AUDIENCE,
-              scope: "openid profile email" 
+              scope: "openid profile email offline_access" 
             },
           });
 
@@ -79,7 +80,8 @@ export default function App() {
           });
           console.log("📡 Identity Synced with Neural Grid");
         } catch (err) {
-          console.error("❌ Sync Error:", err.response?.data || err.message);
+          console.error("❌ Neural Sync Error:", err.response?.data || err.message);
+          // If 401 persists, it means Audience mismatch between FE and BE
         }
       }
     };
@@ -91,15 +93,15 @@ export default function App() {
     if (isAuthenticated && user?.sub) {
       if (!socket.current) {
         socket.current = io(BACKEND_URL, {
-          transports: ["websocket"],
+          transports: ["polling", "websocket"], // Polling added for better reliability on Render
           withCredentials: true,
           path: '/socket.io/',
           reconnection: true,
-          reconnectionAttempts: 10
+          reconnectionAttempts: 5
         });
 
         socket.current.on("connect", () => {
-          console.log("🔌 Connected to Neural Socket");
+          console.log("🔌 Connected to Neural Socket:", socket.current.id);
           socket.current.emit("addNewUser", user.sub);
         });
 
@@ -109,6 +111,10 @@ export default function App() {
             icon: '📞', 
             style: { background: '#020617', color: '#06b6d4', border: '1px solid rgba(6,182,212,0.3)' } 
           });
+        });
+
+        socket.current.on("connect_error", (err) => {
+          console.error("Socket Connection Error:", err.message);
         });
       }
     }

@@ -14,13 +14,21 @@ const API_URL = "https://onyx-drift-app-final-u29m.onrender.com";
 const AUTH_AUDIENCE = "https://onyx-drift-api.com";
 
 /* ==========================================================
-    ১. হেল্পার ফাংশন (User Data Resolver)
+    ১. হেল্পার ফাংশন (User Data Resolver - FIXED)
 ========================================================== */
 const getUserData = (reel) => {
-  const u = reel.user || reel.author || {};
-  const name = reel.authorName || u.name || u.nickname || "Drifter";
-  const avatar = reel.authorAvatar || u.avatar || u.picture || `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=0d1117&color=00f2ff&bold=true`;
-  const id = reel.authorAuth0Id || u.auth0Id || u.userId || "";
+  // ব্যাকএন্ড থেকে আসা ইউজারের বিভিন্ন ফরম্যাট চেক করা হচ্ছে
+  const u = reel.user || reel.author || reel.userDetails || {};
+  
+  // নাম পাওয়ার অগ্রাধিকার: authorName -> user.name -> user.nickname -> "Unknown Drifter"
+  const name = reel.authorName || u.name || u.nickname || u.displayName || "Unknown Drifter";
+  
+  // অবতার পাওয়ার অগ্রাধিকার
+  const avatar = reel.authorAvatar || u.avatar || u.picture || u.profilePicture || 
+                 `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=0d1117&color=00f2ff&bold=true`;
+  
+  const id = reel.authorAuth0Id || u.auth0Id || u.userId || u.sub || "";
+  
   return { name, avatar, id };
 };
 
@@ -43,19 +51,28 @@ const VideoUploadModal = ({ isOpen, onClose, onUploadSuccess }) => {
 
     try {
       const token = await getAccessTokenSilently({
-        authorizationParams: { audience: AUTH_AUDIENCE }
+        authorizationParams: { 
+            audience: AUTH_AUDIENCE,
+            scope: "openid profile email"
+        }
       });
       await axios.post(`${API_URL}/api/reels/upload`, formData, {
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'multipart/form-data' },
+        headers: { 
+            Authorization: `Bearer ${token}`, 
+            'Content-Type': 'multipart/form-data' 
+        },
         onUploadProgress: (p) => setUploadProgress(Math.round((p.loaded * 100) / p.total))
       });
       toast.success("Neural Signal Uplinked!");
       onUploadSuccess();
       onClose();
     } catch (err) {
+      console.error("Upload Error:", err);
       toast.error("Uplink Interrupted");
     } finally {
       setIsUploading(false);
+      setFile(null);
+      setCaption("");
     }
   };
 
@@ -64,7 +81,7 @@ const VideoUploadModal = ({ isOpen, onClose, onUploadSuccess }) => {
       {isOpen && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[4000] bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
           <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} className="bg-zinc-900 border border-cyan-500/30 w-full max-w-md rounded-3xl p-6 relative">
-            <button onClick={onClose} className="absolute top-4 right-4 text-white/50"><X /></button>
+            <button onClick={onClose} className="absolute top-4 right-4 text-white/50 hover:text-white"><X /></button>
             <h2 className="text-xl font-black text-cyan-400 mb-6 flex items-center gap-2"><UploadCloud /> Neural Uplink</h2>
             {!file ? (
               <label className="border-2 border-dashed border-white/10 rounded-2xl h-48 flex flex-col items-center justify-center cursor-pointer hover:border-cyan-500/50 transition-all">
@@ -75,8 +92,8 @@ const VideoUploadModal = ({ isOpen, onClose, onUploadSuccess }) => {
             ) : (
               <div className="space-y-4">
                 <div className="bg-black/50 p-4 rounded-xl border border-white/5 text-xs text-cyan-200 truncate">{file.name}</div>
-                <textarea placeholder="Enter caption..." className="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-white text-sm outline-none focus:border-cyan-500/50 h-24" onChange={(e) => setCaption(e.target.value)} />
-                <button disabled={isUploading} onClick={handleUpload} className="w-full py-4 bg-cyan-500 text-black font-black uppercase rounded-xl">
+                <textarea placeholder="Enter caption..." className="w-full bg-white/5 border border-white/10 rounded-xl p-4 text-white text-sm outline-none focus:border-cyan-500/50 h-24" value={caption} onChange={(e) => setCaption(e.target.value)} />
+                <button disabled={isUploading} onClick={handleUpload} className="w-full py-4 bg-cyan-500 text-black font-black uppercase rounded-xl active:scale-95 transition-all">
                   {isUploading ? `Uplinking ${uploadProgress}%` : "Initiate Transmission"}
                 </button>
               </div>
@@ -103,22 +120,23 @@ const ReelItem = ({ reel }) => {
   const drifter = getUserData(reel);
 
   useEffect(() => {
-    if (currentUser) {
-      const myId = currentUser.sub;
-      setIsLiked(reel.likes?.includes(myId));
+    if (currentUser && reel.likes) {
+      setIsLiked(reel.likes.includes(currentUser.sub));
     }
   }, [currentUser, reel]);
 
   useEffect(() => {
     const observer = new IntersectionObserver((entries) => {
       entries.forEach(entry => {
-        if (entry.isIntersecting) videoRef.current?.play().catch(() => {});
-        else {
+        if (entry.isIntersecting) {
+            videoRef.current?.play().catch(() => {});
+        } else {
             videoRef.current?.pause();
             if (videoRef.current) videoRef.current.currentTime = 0;
         }
       });
-    }, { threshold: 0.6 });
+    }, { threshold: 0.8 });
+    
     if (videoRef.current) observer.observe(videoRef.current);
     return () => observer.disconnect();
   }, []);
@@ -126,32 +144,51 @@ const ReelItem = ({ reel }) => {
   const handleLike = async (e) => {
     if(e) e.stopPropagation();
     try {
-      const token = await getAccessTokenSilently({ authorizationParams: { audience: AUTH_AUDIENCE } });
+      const token = await getAccessTokenSilently({ 
+          authorizationParams: { audience: AUTH_AUDIENCE } 
+      });
       const newStatus = !isLiked;
       setIsLiked(newStatus);
       setLikesCount(prev => newStatus ? prev + 1 : prev - 1);
-      await axios.post(`${API_URL}/api/posts/${reel._id}/like`, {}, { headers: { Authorization: `Bearer ${token}` } });
+      
+      await axios.post(`${API_URL}/api/posts/${reel._id}/like`, {}, { 
+          headers: { Authorization: `Bearer ${token}` } 
+      });
     } catch (err) { 
-      setIsLiked(!isLiked);
+      setIsLiked(!isLiked); // এরর হলে আগের অবস্থায় ফেরত যাবে
       setLikesCount(reel.likes?.length || 0);
     }
   };
 
   return (
     <div className="h-[100dvh] w-full snap-start relative bg-black flex items-center justify-center overflow-hidden">
+      {/* Progress Bar */}
       <div className="absolute top-0 left-0 w-full h-[2px] z-[2100] bg-white/10">
-        <div className="h-full bg-cyan-400 shadow-[0_0_8px_#00f2ff]" style={{ width: `${playbackProgress}%` }} />
+        <div className="h-full bg-cyan-400 shadow-[0_0_8px_#00f2ff] transition-all duration-100" style={{ width: `${playbackProgress}%` }} />
       </div>
 
       <video
         ref={videoRef} 
         src={reel.mediaUrl || reel.media} 
         loop playsInline muted
-        onTimeUpdate={() => setPlaybackProgress((videoRef.current.currentTime / videoRef.current.duration) * 100)}
+        onTimeUpdate={() => {
+            if(videoRef.current) {
+                setPlaybackProgress((videoRef.current.currentTime / videoRef.current.duration) * 100);
+            }
+        }}
         className="absolute inset-0 w-full h-full object-cover"
-        onDoubleClick={() => { if (!isLiked) handleLike(); setShowHeart(true); setTimeout(() => setShowHeart(false), 800); }}
+        onClick={(e) => {
+            if(videoRef.current?.paused) videoRef.current.play();
+            else videoRef.current?.pause();
+        }}
+        onDoubleClick={() => { 
+            if (!isLiked) handleLike(); 
+            setShowHeart(true); 
+            setTimeout(() => setShowHeart(false), 800); 
+        }}
       />
 
+      {/* Double Tap Heart Animation */}
       <AnimatePresence>
         {showHeart && (
           <motion.div initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1.5, opacity: 1 }} exit={{ scale: 2, opacity: 0 }} className="absolute z-[1010] pointer-events-none">
@@ -163,23 +200,30 @@ const ReelItem = ({ reel }) => {
       <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-black/90 z-[1005] pointer-events-none">
         <div className="absolute bottom-0 left-0 right-0 p-5 pb-24 flex items-end justify-between pointer-events-auto">
           <div className="flex-1 text-white pr-12">
-            <div className="flex items-center gap-3 mb-4 cursor-pointer" onClick={() => navigate(`/profile/${drifter.id}`)}>
+            <div className="flex items-center gap-3 mb-4 cursor-pointer w-fit" onClick={() => navigate(`/profile/${drifter.id}`)}>
               <img src={drifter.avatar} className="w-11 h-11 rounded-full border-2 border-cyan-500 object-cover" alt="" />
               <div>
                 <h4 className="font-black text-sm uppercase tracking-tighter">{drifter.name}</h4>
-                <p className="text-[8px] text-cyan-400 font-bold">SIGNAL_ID: {reel._id.slice(-6)}</p>
+                <p className="text-[8px] text-cyan-400 font-bold uppercase">Signal: Online</p>
               </div>
             </div>
-            <p className="text-[13px] mb-5 line-clamp-2 text-gray-200">{reel.text}</p>
+            <p className="text-[13px] mb-5 line-clamp-2 text-gray-200 leading-snug">{reel.text}</p>
             <div className="flex items-center gap-2 bg-white/10 backdrop-blur-md px-4 py-2 rounded-full w-fit">
               <Music size={12} className="animate-spin text-cyan-400" />
-              <span className="text-[10px] text-cyan-400 font-black uppercase">Original Signal - {drifter.name}</span>
+              <span className="text-[10px] text-cyan-400 font-black uppercase tracking-tight">Original Signal - {drifter.name}</span>
             </div>
           </div>
 
           <div className="flex flex-col gap-6 items-center">
             <ActionIcon icon={<Award size={26} />} count={reel.rankClicks?.length || 0} />
-            <div onClick={handleLike}><ActionIcon icon={<Heart fill={isLiked ? "#ff0050" : "none"} size={30} />} count={likesCount} active={isLiked} color={isLiked ? "text-[#ff0050]" : "text-white"} /></div>
+            <div onClick={handleLike}>
+                <ActionIcon 
+                    icon={<Heart fill={isLiked ? "#ff0050" : "none"} size={30} />} 
+                    count={likesCount} 
+                    active={isLiked} 
+                    color={isLiked ? "text-[#ff0050]" : "text-white"} 
+                />
+            </div>
             <ActionIcon icon={<MessageCircle size={30} />} count={reel.comments?.length || 0} />
             <ActionIcon icon={<Share2 size={30} />} count="Share" />
           </div>
@@ -191,10 +235,10 @@ const ReelItem = ({ reel }) => {
 
 const ActionIcon = ({ icon, count, color = "text-white", active = false }) => (
   <div className="flex flex-col items-center gap-1">
-    <div className={`p-2.5 rounded-full bg-black/30 backdrop-blur-md transition-all ${active ? 'scale-110' : ''}`}>
+    <div className={`p-2.5 rounded-full bg-black/30 backdrop-blur-md transition-all active:scale-75 ${active ? 'scale-110' : ''}`}>
       <span className={color}>{icon}</span>
     </div>
-    <span className="text-[11px] font-black text-white">{count}</span>
+    <span className="text-[11px] font-black text-white drop-shadow-lg">{count}</span>
   </div>
 );
 
@@ -206,16 +250,30 @@ const ReelsFeed = () => {
   const [loading, setLoading] = useState(true);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const navigate = useNavigate();
+  const { getAccessTokenSilently } = useAuth0();
 
   const fetchReels = async () => {
     try {
-      const response = await axios.get(`${API_URL}/api/posts/neural-feed`); 
-      // শুধু ভিডিও ফাইলগুলো ফিল্টার করা হচ্ছে
+      const token = await getAccessTokenSilently({
+        authorizationParams: {
+          audience: AUTH_AUDIENCE,
+          scope: "openid profile email"
+        }
+      });
+
+      // API Call with Token - (Fixed 401 Unauthorized)
+      const response = await axios.get(`${API_URL}/api/posts/neural-feed`, {
+        headers: { Authorization: `Bearer ${token}` }
+      }); 
+
       const reelsOnly = response.data.filter(post => 
-        post.media && (post.media.toLowerCase().endsWith('.mp4') || post.mediaType === 'video')
+        post.media && (post.media.toLowerCase().endsWith('.mp4') || 
+        post.mediaType === 'video' || 
+        post.media.includes('video/upload'))
       );
       setReels(reelsOnly);
     } catch (err) { 
+      console.error("Feed Error:", err);
       toast.error("Signal Lost");
     } finally { setLoading(false); }
   };
@@ -224,6 +282,7 @@ const ReelsFeed = () => {
 
   return (
     <div className="fixed inset-0 bg-black z-[2000] overflow-y-scroll snap-y snap-mandatory hide-scrollbar scroll-smooth">
+      {/* Top Controls */}
       <div className="fixed top-6 left-0 right-0 z-[2110] px-4 flex justify-between items-center pointer-events-none">
         <button onClick={() => navigate(-1)} className="p-3 bg-black/40 backdrop-blur-md rounded-full text-white border border-white/10 pointer-events-auto active:scale-90 transition-all">
           <ArrowLeft size={20} />
@@ -238,7 +297,14 @@ const ReelsFeed = () => {
           <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1 }} className="w-12 h-12 border-4 border-t-cyan-500 border-cyan-500/20 rounded-full" />
         </div>
       ) : (
-        reels.map((reel) => <ReelItem key={reel._id} reel={reel} />)
+        reels.length > 0 ? (
+            reels.map((reel) => <ReelItem key={reel._id} reel={reel} />)
+        ) : (
+            <div className="h-full flex flex-col items-center justify-center text-zinc-500 gap-4">
+                <Cpu size={48} className="animate-pulse" />
+                <p className="font-black uppercase tracking-widest text-xs">No Video Signals Found</p>
+            </div>
+        )
       )}
 
       <VideoUploadModal 

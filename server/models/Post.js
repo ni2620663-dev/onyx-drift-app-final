@@ -27,6 +27,31 @@ const postSchema = new mongoose.Schema(
       default: 'none' 
     },
     
+    /* ==========================================================
+        🎥 PRO EDITOR & RENDERING METADATA
+    ========================================================== */
+    editMetadata: {
+      filters: {
+        brightness: { type: Number, default: 100 },
+        contrast: { type: Number, default: 100 },
+        saturate: { type: Number, default: 100 },
+        hue: { type: Number, default: 0 },
+        blur: { type: Number, default: 0 }
+      },
+      playbackSpeed: { type: Number, default: 1 },
+      aspectRatio: { type: String, default: "9/16" },
+      layers: [
+        {
+          id: String,
+          type: { type: String, default: 'text' },
+          content: String,
+          x: Number,
+          y: Number
+        }
+      ],
+      renderType: { type: String, default: "FFMPEG_CLOUD" }
+    },
+
     // ❤️ Like system - String IDs stored in array
     likes: { 
       type: [String], 
@@ -85,15 +110,16 @@ const postSchema = new mongoose.Schema(
     🚀 OPTIMIZED INDEXING & VIRTUALS
 ========================================================== */
 
-// ১. ডাইনামিক লাইক কাউন্ট পাওয়ার জন্য ভার্চুয়াল প্রোপার্টি (ঐচ্ছিক)
+// ১. ডাইনামিক লাইক কাউন্ট পাওয়ার জন্য ভার্চুয়াল প্রোপার্টি
 postSchema.virtual('likesCount').get(function() {
   return this.likes.length;
 });
 
-// ২. কম্পাউন্ড ইনডেক্স - যাতে প্রোফাইল এবং ফিড খুব ফাস্ট লোড হয়
+// ২. কমপাউন্ড ইনডেক্স - যাতে প্রোফাইল এবং ফিড খুব ফাস্ট লোড হয়
 postSchema.index({ authorAuth0Id: 1, createdAt: -1 });
 postSchema.index({ createdAt: -1 });
 postSchema.index({ isAiGenerated: 1, createdAt: -1 });
+postSchema.index({ mediaType: 1 }); // ভিডিও বা রিল ফিল্টার করার জন্য
 
 const Post = mongoose.model('Post', postSchema);
 export default Post;
