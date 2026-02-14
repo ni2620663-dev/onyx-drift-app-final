@@ -5,9 +5,9 @@ import { auth } from 'express-oauth2-jwt-bearer';
 // মডেল ইম্পোর্ট
 import Conversation from "../models/Conversation.js"; 
 import Message from "../models/Message.js";      
-import User from "../models/User.js"; 
+import User from "../models/User.js";  
 
-// 🛡️ JWT Middleware
+// 🛡️ JWT Middleware (Issuer URL dynamic রাখা ভালো, তবে আপনারটা ফিক্সড করে দিচ্ছি)
 const checkJwt = auth({
   audience: 'https://onyx-drift-api.com',
   issuerBaseURL: `https://dev-6d0nxccsaycctfl1.us.auth0.com/`,
@@ -15,7 +15,7 @@ const checkJwt = auth({
 });
 
 /* ==========================================================
-    🔍 SEARCH USERS BY NAME/EMAIL
+    🔍 SEARCH USERS (For New Conversations)
 ========================================================== */
 router.get("/search-users/:query", checkJwt, async (req, res) => {
   try {
@@ -27,19 +27,16 @@ router.get("/search-users/:query", checkJwt, async (req, res) => {
     }
 
     const users = await User.find({
-      $and: [
-        { auth0Id: { $ne: currentUserId } },
-        {
-          $or: [
-            { name: { $regex: query, $options: "i" } },
-            { nickname: { $regex: query, $options: "i" } },
-            { email: { $regex: query, $options: "i" } }
-          ]
-        }
+      auth0Id: { $ne: currentUserId },
+      $or: [
+        { name: { $regex: query, $options: "i" } },
+        { nickname: { $regex: query, $options: "i" } },
+        { email: { $regex: query, $options: "i" } }
       ]
     })
     .limit(10)
-    .select("name nickname email avatar auth0Id isVerified neuralRank"); 
+    .select("name nickname email avatar auth0Id isVerified neuralRank")
+    .lean(); 
 
     res.status(200).json(users);
   } catch (err) {
@@ -49,7 +46,7 @@ router.get("/search-users/:query", checkJwt, async (req, res) => {
 });
 
 /* ==========================================================
-    1️⃣ GET ALL CONVERSATIONS (FIXED WITH USER DETAILS)
+    1️⃣ GET ALL CONVERSATIONS (Fixed & Optimized)
 ========================================================== */
 router.get("/conversations", checkJwt, async (req, res) => {
   try {
@@ -59,31 +56,26 @@ router.get("/conversations", checkJwt, async (req, res) => {
       return res.status(401).json({ error: "Neural identity missing" });
     }
 
-    // ১. প্রথমে ইউজারের সব কনভারসেশন খুঁজে বের করা
+    // ১. সব কনভারসেশন খুঁজে বের করা
     const conversations = await Conversation.find({
       members: { $in: [currentUserId] },
-    }).sort({ updatedAt: -1 });
+    }).sort({ updatedAt: -1 }).lean();
 
-    // ২. ম্যানুয়ালি মেম্বারদের ডিটেইলস পপুলেট করা (যেহেতু auth0Id স্ট্রিং ব্যবহার করছেন)
+    // ২. ডিটেইলস পপুলেট করা (Manually handling auth0Id mapping)
     const detailedConversations = await Promise.all(
       conversations.map(async (conv) => {
-        const convObj = conv.toObject();
+        if (!conv.isGroup) {
+          const otherMemberId = conv.members.find((id) => id !== currentUserId);
+          const userDetails = await User.findOne({ auth0Id: otherMemberId })
+            .select("name nickname email avatar auth0Id neuralRank")
+            .lean();
 
-        if (!convObj.isGroup) {
-          // অন্য মেম্বারের ID বের করা
-          const otherMemberId = convObj.members.find((id) => id !== currentUserId);
-
-          // ইউজার টেবিল থেকে তার ডাটা নিয়ে আসা
-          const userDetails = await User.findOne({ auth0Id: otherMemberId }).select(
-            "name nickname email avatar auth0Id"
-          );
-
-          convObj.userDetails = userDetails || { 
+          conv.userDetails = userDetails || { 
             name: "Unknown Drifter", 
             auth0Id: otherMemberId 
           };
         }
-        return convObj;
+        return conv;
       })
     );
 
@@ -93,6 +85,7 @@ router.get("/conversations", checkJwt, async (req, res) => {
     res.status(500).json({ error: "Could not sync conversations" });
   }
 });
+
 /* ==========================================================
     2️⃣ CREATE OR GET CONVERSATION
 ========================================================== */
@@ -117,6 +110,7 @@ router.post("/conversation", checkJwt, async (req, res) => {
 
     if (!receiverId) return res.status(400).json({ error: "Receiver ID required" });
 
+    // চেক করা হচ্ছে আগে থেকেই কনভারসেশন আছে কিনা
     let conversation = await Conversation.findOne({
       isGroup: false,
       members: { $all: [senderId, receiverId], $size: 2 },
@@ -125,19 +119,21 @@ router.post("/conversation", checkJwt, async (req, res) => {
     if (!conversation) {
       conversation = new Conversation({
         members: [senderId, receiverId],
-        isGroup: false
+        isGroup: false,
+        lastMessage: { text: "Neural Link Established", senderId: senderId }
       });
       await conversation.save();
     }
 
     res.status(200).json(conversation);
   } catch (err) {
+    console.error("Link Init Error:", err);
     res.status(500).json({ error: "Failed to initialize link" });
   }
 });
 
 /* ==========================================================
-    3️⃣ SAVE NEW MESSAGE (Enhanced with Mood & Media)
+    3️⃣ SAVE NEW MESSAGE (Fixed for 500 Error)
 ========================================================== */
 router.post("/message", checkJwt, async (req, res) => {
   try {
@@ -153,9 +149,10 @@ router.post("/message", checkJwt, async (req, res) => {
       return res.status(400).json({ error: "Conversation ID required" });
     }
 
+    // সেলফ-ডিস্ট্রাক্ট TTL লজিক
     let expireAt = null;
     if (isSelfDestruct) {
-      expireAt = new Date(Date.now() + 15 * 1000); // ১৫ সেকেন্ড পর ডিলিট হবে
+      expireAt = new Date(Date.now() + 15 * 1000); 
     }
 
     const newMessage = new Message({
@@ -175,13 +172,13 @@ router.post("/message", checkJwt, async (req, res) => {
 
     const savedMessage = await newMessage.save();
 
-    // লাস্ট মেসেজ টেক্সট সেট করা
-    let lastMsgText = text;
+    // লাস্ট মেসেজ টেক্সট হ্যান্ডলিং
+    let lastMsgText = text || "Media attachment";
     if (isSelfDestruct) lastMsgText = "👻 Self-destructing message";
     else if (mediaType === "image") lastMsgText = "📷 Photo transmitted";
     else if (mediaType === "voice") lastMsgText = "🎙️ Voice note";
 
-    // কনভারসেশন আপডেট
+    // কনভারসেশন আপডেট (Ensure lastMessage is an object if that's what your schema expects)
     await Conversation.findByIdAndUpdate(conversationId, {
       $set: { 
         updatedAt: Date.now(),
@@ -197,17 +194,21 @@ router.post("/message", checkJwt, async (req, res) => {
 });
 
 /* ==========================================================
-    4️⃣ GET MESSAGES (Fixed Path)
+    4️⃣ GET MESSAGES (With Safety Check)
 ========================================================== */
 router.get("/:conversationId", checkJwt, async (req, res) => {
   try {
     const { conversationId } = req.params;
     
-    // শুধুমাত্র ডেলিভারি টাইম পার হওয়া মেসেজগুলো আসবে (টাইম ক্যাপসুলের জন্য)
+    // Safety check for invalid IDs
+    if (!conversationId || conversationId === "undefined") {
+        return res.status(400).json({ error: "Valid Conversation ID required" });
+    }
+
     const messages = await Message.find({
       conversationId: conversationId,
-      deliverAt: { $lte: new Date() }
-    }).sort({ createdAt: 1 });
+      deliverAt: { $lte: new Date() } // টাইম ক্যাপসুল হ্যান্ডলিং
+    }).sort({ createdAt: 1 }).lean();
     
     res.status(200).json(messages || []);
   } catch (err) {

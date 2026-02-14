@@ -23,14 +23,12 @@ import reelRoutes from "./routes/reels.js";
 import profileRoutes from "./routes/profile.js"; 
 import groupRoutes from "./routes/group.js"; 
 import marketRoutes from "./routes/market.js"; 
-import adminRoutes from "./routes/admin.js";        
+import adminRoutes from "./routes/admin.js";         
 import { getNeuralFeed } from "./controllers/feedController.js";
 
-// 🛡️ Auth0 JWT ভেরিফিকেশন মিডলওয়্যার (FIXED DOMAIN & AUDIENCE)
+// 🛡️ Auth0 JWT ভেরিফিকেশন মিডলওয়্যার
 const checkJwt = auth({
-  // এটি আপনার ড্যাশবোর্ডের Identifier এর সাথে হুবহু মিলতে হবে
   audience: 'https://onyx-drift-api.com', 
-  // এটি আপনার ড্যাশবোর্ড থেকে পাওয়া সঠিক ডোমেইন
   issuerBaseURL: 'https://dev-prxn6v2o08xp5loz.us.auth0.com/', 
   tokenSigningAlg: 'RS256'
 });
@@ -78,7 +76,7 @@ app.use(express.urlencoded({ limit: "100mb", extended: true }));
 ========================================================== */
 const updateNeuralPulse = async (req, res, next) => {
     // Auth0 sub আইডি বের করার চেষ্টা
-    const auth0Id = req.auth?.payload?.sub || req.user?.sub; 
+    const auth0Id = req.auth?.payload?.sub; 
     
     if (auth0Id) {
         User.updateOne(
@@ -92,7 +90,7 @@ const updateNeuralPulse = async (req, res, next) => {
 // ৫. সকেট আইও কনফিগারেশন
 const io = new Server(server, {
     cors: corsOptions,
-    transports: ['websocket', 'polling'],
+    transports: ['polling', 'websocket'], // Polling আগে দিলে কানেকশন দ্রুত হয়
     path: '/socket.io/'
 });
 
@@ -117,8 +115,9 @@ app.get("/", (req, res) => res.status(200).send("🚀 OnyxDrift Neural Core is O
 // 🛠️ Neural Feed - স্পেশাল প্রায়োরিটি রুট
 app.get("/api/posts/neural-feed", checkJwt, updateNeuralPulse, getNeuralFeed);
 
-// 🛠️ ফিচার রাউটস (সিরিয়াল অনুযায়ী)
-app.use("/api/users", checkJwt, updateNeuralPulse, userRoutes);
+// 🛠️ ফিচার রাউটস (FIXED: Added /api/user to prevent 404)
+app.use("/api/user", checkJwt, updateNeuralPulse, userRoutes); 
+app.use("/api/users", checkJwt, updateNeuralPulse, userRoutes); 
 app.use("/api/profile", checkJwt, updateNeuralPulse, profileRoutes);
 app.use("/api/posts", checkJwt, updateNeuralPulse, postRoutes); 
 app.use("/api/reels", checkJwt, updateNeuralPulse, reelRoutes); 
@@ -159,15 +158,14 @@ io.on("connection", (socket) => {
     🛡️ GLOBAL ERROR HANDLER
 ========================================================== */
 app.use((err, req, res, next) => {
-    console.error("Critical System Log:", err);
-
     if (err.name === 'UnauthorizedError') {
         return res.status(401).json({ 
             error: 'Identity Verification Failed', 
-            message: err.message || "Authentication token is missing or invalid." 
+            message: "Authentication token is missing or invalid. Check your Audience and Issuer." 
         });
     }
 
+    console.error("Critical System Log:", err);
     res.status(500).json({ 
         error: "Neural Grid Breakdown", 
         message: err.message || "An unexpected error occurred in the core."

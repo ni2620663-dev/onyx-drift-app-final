@@ -21,8 +21,7 @@ const upload = multer({
 ========================================================== */
 
 /**
- * ১. লজড-ইন ইউজারের প্রোফাইল ডাটা পাওয়া
- * GET: api/user/profile
+ * ১. লজড-ইন ইউজারের প্রোফাইল ডাটা পাওয়া
  */
 router.get('/profile', auth, async (req, res) => {
   try {
@@ -53,7 +52,7 @@ router.get('/profile', auth, async (req, res) => {
 });
 
 /**
- * ২. রিলস ডাটা পাওয়া
+ * ২. রিলস ডাটা পাওয়া
  */
 router.get('/reels/all', async (req, res) => {
     try {
@@ -70,8 +69,7 @@ router.get('/reels/all', async (req, res) => {
 });
 
 /**
- * ৩. ইউজার ডাটা সিঙ্ক (GET & POST)
- * ৪MD: ৪0৪ এরর ফিক্স করতে GET রুট যোগ করা হয়েছে
+ * ৩. ইউজার ডাটা সিঙ্ক
  */
 router.get('/sync', auth, async (req, res) => {
   try {
@@ -107,24 +105,26 @@ router.post('/sync', auth, async (req, res) => {
       { upsert: true, new: true, setDefaultsOnInsert: true } 
     );
 
-    console.log(`✅ Neural Sync: ${user.name} is now in Database.`);
     res.status(200).json(user);
   } catch (err) {
-    console.error("Sync Error:", err);
     res.status(500).json({ message: "Identity sync failed" });
   }
 });
 
 /**
- * ৪. ড্রিপ্টার সার্চ
+ * ৪. ড্রিপ্টার সার্চ (FIXED FOR 404 & QUERY PARAMS)
  */
 router.get('/search', auth, async (req, res) => {
   try {
-    const { query } = req.query;
-    if (!query || query.trim() === "") return res.json([]);
+    // ফ্রন্টএন্ড 'q' অথবা 'query' যেটাই পাঠাক তা হ্যান্ডেল করবে
+    const searchQuery = req.query.query || req.query.q;
+    
+    if (!searchQuery || searchQuery.trim() === "") {
+        return res.json([]);
+    }
 
     const currentUserId = req.user.sub || req.user.id;
-    const searchRegex = new RegExp(`${query.trim()}`, "i");
+    const searchRegex = new RegExp(`${searchQuery.trim()}`, "i");
 
     const users = await User.find({
       auth0Id: { $ne: currentUserId }, 
@@ -139,6 +139,7 @@ router.get('/search', auth, async (req, res) => {
     
     res.status(200).json(users);
   } catch (err) {
+    console.error("Search Error:", err);
     res.status(500).json({ message: "Search signal lost" });
   }
 });
@@ -146,25 +147,25 @@ router.get('/search', auth, async (req, res) => {
 /**
  * ৫. নির্দিষ্ট ইউজারের প্রোফাইল দেখা
  */
-router.get(['/profile/:userId', '/:userId'], auth, async (req, res, next) => {
+router.get('/profile/:userId', auth, async (req, res) => {
   try {
-    const rawUserId = req.params.userId;
-    if (!rawUserId || ['search', 'all', 'undefined', 'profile'].includes(rawUserId)) {
-        return next();
+    const targetId = decodeURIComponent(req.params.userId);
+    
+    // রিজার্ভড কিউওয়ার্ড ফিল্টারিং
+    if (['search', 'all', 'sync', 'reels'].includes(targetId)) {
+        return res.status(400).json({ message: "Invalid User ID" });
     }
 
-    const targetId = decodeURIComponent(rawUserId);
     const user = await User.findOne({ auth0Id: targetId }).lean();
-    
-    const formattedUser = user ? {
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    const formattedUser = {
         ...user,
         stats: {
             neuralImpact: user.neuralImpact || 0,
             rank: user.neuralRank || "Drifter"
         }
-    } : null;
-
-    if (!formattedUser) return res.status(404).json({ message: "User not found" });
+    };
 
     const posts = await Post.find({ 
         $or: [{ author: targetId }, { authorAuth0Id: targetId }, { authorId: targetId }] 
