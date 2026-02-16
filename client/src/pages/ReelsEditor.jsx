@@ -7,11 +7,11 @@ import { ArrowLeft, Plus, Play, Sparkles, Send, Wand2, Layers } from "lucide-rea
 import toast from 'react-hot-toast';
 
 // সাব-কম্পোনেন্ট ইমপোর্ট
-import Sidebar from "./components/Editor/Sidebar";
-import Timeline from "./components/Editor/Timeline";
-import Modals from "./components/Editor/Modals";
-import Marketplace from "./components/Editor/Marketplace"; // Marketplace ইমপোর্ট করা হয়েছে
-
+// সঠিক ইমপোর্ট পাথ (Correct Import Path)
+import Sidebar from "../components/Editor/Sidebar";
+import Timeline from "../components/Editor/Timeline";
+import Modals from "../components/Editor/Modals";
+import Marketplace from "../components/Editor/Marketplace";
 const API_URL = "https://onyx-drift-app-final-u29m.onrender.com";
 
 const TikTokEditor = () => {
