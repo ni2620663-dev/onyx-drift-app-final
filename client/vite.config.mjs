@@ -11,7 +11,25 @@ export default defineConfig({
   },
   resolve: {
     alias: {
+      '@': path.resolve(__dirname, './src'),
       react: path.resolve('./node_modules/react'),
+    },
+  },
+  server: {
+    // FFmpeg ব্রাউজারে চালানোর জন্য এই হেডারগুলো অত্যন্ত জরুরি
+    headers: {
+      "Cross-Origin-Opener-Policy": "same-origin",
+      "Cross-Origin-Embedder-Policy": "require-corp",
+    },
+  },
+  optimizeDeps: {
+    // FFmpeg কে প্রাক-অপ্টিমাইজেশন থেকে বাদ রাখা হয় অনেক সময় সমস্যা এড়াতে
+    exclude: ['@ffmpeg/ffmpeg', '@ffmpeg/util'],
+  },
+  build: {
+    rollupOptions: {
+      // যদি বিল্ডের সময় কোনো মডিউল খুঁজে না পায় তবে এখানে চেক করতে হয়
+      external: [],
     },
   },
 })
