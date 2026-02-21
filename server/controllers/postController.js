@@ -135,7 +135,61 @@ export const getReels = async (req, res) => {
     res.status(500).json({ msg: "Failed to fetch neural reels" });
   }
 };
+export const toggleEnergy = async (req, res) => {
+  try {
+    const post = await Post.findById(req.params.id);
+    const userId = req.user.sub; // Auth0 ID from middleware
 
+    if (!post) return res.status(404).json({ msg: "Signal lost: Post not found" });
+
+    const isEnergized = post.energy.includes(userId);
+
+    if (isEnergized) {
+      // Energy সরিয়ে ফেলা (Unlike)
+      post.energy = post.energy.filter(id => id !== userId);
+    } else {
+      // Energy যোগ করা (Like)
+      post.energy.push(userId);
+      
+      // অপশনাল: পোস্টের মালিকের Neural Impact বাড়ানো
+      await User.findOneAndUpdate(
+        { auth0Id: post.authorAuth0Id }, 
+        { $inc: { neuralImpact: 1 } }
+      );
+    }
+
+    await post.save();
+    res.json({ energyCount: post.energy.length, isEnergized: !isEnergized });
+  } catch (err) {
+    res.status(500).json({ msg: "Energy Sync Failure" });
+  }
+};
+
+// @desc    Add Neural Comment
+// @route   POST /api/posts/:id/comment
+export const addComment = async (req, res) => {
+  try {
+    const { text } = req.body;
+    const post = await Post.findById(req.params.id);
+    const currentUser = await User.findOne({ auth0Id: req.user.sub });
+
+    if (!post) return res.status(404).json({ msg: "Signal lost" });
+
+    const newComment = {
+      user: req.user.sub,
+      userName: currentUser.name,
+      userAvatar: currentUser.avatar,
+      text: text
+    };
+
+    post.comments.unshift(newComment);
+    await post.save();
+
+    res.json(post.comments);
+  } catch (err) {
+    res.status(500).json({ msg: "Comment Transmission Error" });
+  }
+};
 /* ==========================================================
     ৪. রিলস ভিউ আপডেট (Pulse Update)
 ========================================================== */

@@ -1,227 +1,158 @@
-import React, { useState, useRef } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import React, { useState, useRef } from 'react';
+import { motion } from 'framer-motion';
 import { 
-  FaCamera, FaLink, FaCalendarAlt, FaMapMarkerAlt, 
-  FaArrowLeft, FaEllipsisH, FaTimes, FaUserEdit 
-} from "react-icons/fa";
-import { HiBadgeCheck } from "react-icons/hi";
-import toast from "react-hot-toast";
+  FaArrowLeft, FaMapMarkerAlt, FaLink, FaCalendarAlt, FaEllipsisH 
+} from 'react-icons/fa';
+import { HiBadgeCheck } from 'react-icons/hi';
+import EditProfileModal from "./EditProfileModal";
+import SignalCard from "./SignalCard"; // SignalCard আলাদা ফাইলে রাখতে পারো
 
-const Profile = ({ userProfile, isOwnProfile, userPosts, onUpdate, currentUserId }) => {
-  const [activeTab, setActiveTab] = useState("Echoes");
-  const [isMenuOpen, setIsMenuOpen] = useState(false); // 3-dot dropdown state
+const ProfilePage = ({ user, isOwnProfile, userPosts, onUpdate, currentUserId, fetchMorePosts, hasMore }) => {
+  const [activeTab, setActiveTab] = useState("Signals");
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [isFollowing, setIsFollowing] = useState(userProfile?.followers?.includes(currentUserId));
-  
-  // States for Real-time Image Preview
-  const [avatarPreview, setAvatarPreview] = useState(userProfile?.avatar || "https://via.placeholder.com/150");
-  const [coverPreview, setCoverPreview] = useState(userProfile?.coverImg || "https://images.unsplash.com/photo-1614850523296-d8c1af93d400");
+  const [isFollowing, setIsFollowing] = useState(user?.followers?.includes(currentUserId));
 
-  const [editData, setEditData] = useState({
-    name: userProfile?.name || "",
-    bio: userProfile?.bio || "",
-    location: userProfile?.location || "",
-    website: userProfile?.website || ""
-  });
+  const observer = useRef();
+  const tabs = ["Signals", "Replies", "Media", "Energy"];
 
-  const coverInputRef = useRef(null);
-  const avatarInputRef = useRef(null);
-
-  const {
-    nickname = "drifter_id",
-    followers = [],
-    following = [],
-    isVerified = true,
-    joinedDate = "Joined February 2026"
-  } = userProfile || {};
-
-  // Handle Image Selection
-  const handleImageUpload = (e, type) => {
-    const file = e.target.files[0];
-    if (file) {
-      const imageUrl = URL.createObjectURL(file);
-      if (type === "avatar") setAvatarPreview(imageUrl);
-      else setCoverPreview(imageUrl);
-      toast.success(`${type === 'avatar' ? 'Avatar' : 'Cover'} updated locally!`);
-    }
+  // Infinite Scroll Logic
+  const lastPostRef = (node) => {
+    if (observer.current) observer.current.disconnect();
+    observer.current = new IntersectionObserver(entries => {
+      if (entries[0].isIntersecting && hasMore) fetchMorePosts();
+    });
+    if (node) observer.current.observe(node);
   };
 
-  const handleFollowToggle = () => {
+  const toggleFollow = () => {
     setIsFollowing(!isFollowing);
-    toast.success(isFollowing ? "Unfollowed Node" : "Linked to Node ⚡");
-  };
-
-  const handleSaveProfile = () => {
-    onUpdate({ ...editData, avatar: avatarPreview, coverImg: coverPreview });
-    setIsEditModalOpen(false);
-    toast.success("Identity Reshaped! 🧬");
   };
 
   return (
-    <div className="w-full min-h-screen bg-black text-white font-sans border-x border-white/10 max-w-2xl mx-auto pb-20">
+    <div className="min-h-screen bg-black text-white max-w-2xl mx-auto border-x border-zinc-800 pb-20">
       
-      {/* --- 1. Top Navigation Bar --- */}
-      <div className="sticky top-0 z-50 bg-black/70 backdrop-blur-md px-4 py-1 flex items-center gap-8 border-b border-white/5">
-        <button className="p-2 hover:bg-white/10 rounded-full transition-all">
-          <FaArrowLeft size={16} />
-        </button>
+      {/* 🔝 Sticky Top Bar */}
+      <div className="sticky top-0 z-50 bg-black/70 backdrop-blur-md p-3 flex items-center gap-6 border-b border-zinc-900">
+        <FaArrowLeft className="cursor-pointer hover:bg-zinc-900 p-2 rounded-full w-9 h-9" />
         <div>
-          <h2 className="text-xl font-black tracking-tight flex items-center gap-1">
-            {userProfile?.name || editData.name} {isVerified && <HiBadgeCheck className="text-cyan-400" />}
+          <h2 className="text-xl font-black flex items-center gap-1">
+            {user?.name} {user?.isVerified && <HiBadgeCheck className="text-cyan-400" />}
           </h2>
-          <p className="text-[11px] text-zinc-500 font-bold uppercase tracking-widest">
-            {userPosts?.length || 0} Echoes
+          <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-[0.2em]">
+            {userPosts?.length || 0} Signals
           </p>
         </div>
       </div>
 
-      {/* --- 2. Header Section --- */}
+      {/* 🖼 Cover & 👤 Avatar Section */}
       <div className="relative">
-        <div className="h-48 md:h-52 bg-zinc-900 overflow-hidden relative">
-          <img src={coverPreview} className="w-full h-full object-cover" alt="Cover" />
+        <div className="h-44 md:h-52 bg-zinc-900 overflow-hidden">
+          <img 
+            src={user?.coverImg || "https://images.unsplash.com/photo-1614850523296-d8c1af93d400"} 
+            alt="cover" 
+            className="w-full h-full object-cover" 
+          />
         </div>
 
-        <div className="px-4 relative">
-          <div className="absolute -top-16 left-4">
-            <div className="w-32 h-32 rounded-full border-4 border-black bg-black overflow-hidden relative shadow-2xl">
-              <img src={avatarPreview} className="w-full h-full object-cover" alt="Avatar" />
+        <div className="px-4">
+          <div className="relative flex justify-between items-end -mt-16 mb-4">
+            <div className="w-32 h-32 rounded-full border-4 border-black bg-black overflow-hidden shadow-2xl relative group">
+              <img src={user?.avatar || "https://via.placeholder.com/150"} alt="avatar" className="w-full h-full object-cover" />
+            </div>
+            
+            <div className="flex gap-2 mb-2">
+              <button className="p-2 border border-zinc-800 rounded-full hover:bg-zinc-900 transition-all text-zinc-400">
+                <FaEllipsisH size={14} />
+              </button>
+              {isOwnProfile ? (
+                <button 
+                  onClick={() => setIsEditModalOpen(true)} 
+                  className="border border-zinc-700 hover:bg-white/10 px-5 py-2 rounded-full font-bold text-sm transition-all"
+                >
+                  Edit identity
+                </button>
+              ) : (
+                <button 
+                  onClick={toggleFollow} 
+                  className={`px-6 py-2 rounded-full font-black text-sm transition-all ${isFollowing ? "border border-zinc-700 text-white" : "bg-white text-black"}`}
+                >
+                  {isFollowing ? "Orbiting" : "Orbit"}
+                </button>
+              )}
             </div>
           </div>
 
-          {/* Buttons & 3-Dot Menu */}
-          <div className="flex justify-end items-center gap-3 py-3 h-16 relative">
-            
-            {/* ৩-ডট আইকন (সব সময় থাকবে) */}
-            <div className="relative">
-              <button 
-                onClick={() => setIsMenuOpen(!isMenuOpen)}
-                className="p-2 border border-white/20 rounded-full hover:bg-white/5 transition-all text-zinc-400"
-              >
-                <FaEllipsisH size={16} />
-              </button>
-
-              <AnimatePresence>
-                {isMenuOpen && (
-                  <motion.div 
-                    initial={{ opacity: 0, scale: 0.95, y: -10 }}
-                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.95, y: -10 }}
-                    className="absolute right-0 mt-2 w-48 bg-black border border-white/10 rounded-xl shadow-2xl z-[60] overflow-hidden"
-                  >
-                    <button className="w-full text-left px-4 py-3 hover:bg-white/5 flex items-center gap-3 text-sm font-bold border-b border-white/5">
-                      <FaLink /> Copy Link
-                    </button>
-                  </motion.div>
-                )}
-              </AnimatePresence>
+          {/* User Details */}
+          <div className="space-y-3 mb-4">
+            <div>
+              <h1 className="text-2xl font-black tracking-tighter flex items-center gap-1">
+                {user?.name} {user?.isVerified && <HiBadgeCheck className="text-cyan-400" />}
+              </h1>
+              <p className="text-zinc-500 font-medium">@{user?.nickname || user?.username}</p>
             </div>
-            
-            {/* বাটন কন্ডিশন: নিজের প্রোফাইল হলে Edit বাটন, অন্যের প্রোফাইল হলে Follow/Unfollow বাটন */}
-            {isOwnProfile ? (
-              <button 
-                onClick={() => setIsEditModalOpen(true)}
-                className="border border-zinc-600 px-5 py-1.5 rounded-full font-bold text-sm hover:bg-white/10 transition-all"
-              >
-                Edit profile
-              </button>
-            ) : (
-              <button 
-                onClick={handleFollowToggle}
-                className={`px-6 py-1.5 rounded-full font-black text-sm transition-all ${
-                  isFollowing ? "border border-zinc-600" : "bg-white text-black"
-                }`}
-              >
-                {isFollowing ? "Following" : "Follow"}
-              </button>
-            )}
-          </div>
-
-          {/* User Info */}
-          <div className="mt-4">
-            <h1 className="text-2xl font-black tracking-tighter flex items-center gap-1">
-              {userProfile?.name || editData.name} {isVerified && <HiBadgeCheck className="text-cyan-400" />}
-            </h1>
-            <p className="text-zinc-500 font-medium">@{nickname}</p>
-          </div>
-
-          <div className="mt-3 text-[15px] leading-relaxed text-zinc-200">{userProfile?.bio || editData.bio}</div>
-
-          <div className="flex flex-wrap gap-x-4 gap-y-1 mt-3 text-zinc-500 text-[14px]">
-            <span className="flex items-center gap-1"><FaMapMarkerAlt size={12}/> {userProfile?.location || editData.location}</span>
-            <span className="flex items-center gap-1"><FaCalendarAlt size={12}/> {joinedDate}</span>
-          </div>
-
-          <div className="flex gap-5 mt-4 pb-4 border-b border-white/5">
-            <div className="flex gap-1 text-sm"><span className="font-bold text-white">{following.length}</span> <span className="text-zinc-500">Following</span></div>
-            <div className="flex gap-1 text-sm"><span className="font-bold text-white">{followers.length}</span> <span className="text-zinc-500">Followers</span></div>
+            <p className="text-[15px] leading-relaxed text-zinc-200">{user?.bio || "No bio available."}</p>
+            <div className="flex flex-wrap gap-4 text-zinc-500 text-[13px] font-medium">
+              <span className="flex items-center gap-1"><FaMapMarkerAlt size={12}/> {user?.location || "Neo-City"}</span>
+              <span className="flex items-center gap-1 text-cyan-500"><FaLink size={12}/> {user?.website || "neural.link"}</span>
+              <span className="flex items-center gap-1"><FaCalendarAlt size={12}/> Joined Feb 2026</span>
+            </div>
+            <div className="flex gap-5 pt-1">
+              <p className="hover:underline cursor-pointer text-sm font-medium text-zinc-500">
+                <span className="text-white font-black">{user?.following?.length || 0}</span> Orbiting
+              </p>
+              <p className="hover:underline cursor-pointer text-sm font-medium text-zinc-500">
+                <span className="text-white font-black">{user?.followers?.length || 0}</span> In Orbit
+              </p>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* --- Tabs --- */}
-      <div className="flex sticky top-[53px] bg-black/80 backdrop-blur-md z-40">
-        {["Echoes", "Replies", "Likes"].map((tab) => (
-          <button key={tab} onClick={() => setActiveTab(tab)} className="flex-1 py-4 text-sm font-bold relative">
+      {/* 📑 Tabs Section */}
+      <div className="flex sticky top-[57px] bg-black/80 backdrop-blur-md z-40 border-b border-zinc-900">
+        {tabs.map((tab) => (
+          <button key={tab} onClick={() => setActiveTab(tab)} className="flex-1 py-4 text-sm font-bold relative hover:bg-zinc-900/50 transition-all">
             <span className={activeTab === tab ? "text-white" : "text-zinc-500"}>{tab}</span>
-            {activeTab === tab && <motion.div layoutId="activeXTab" className="absolute bottom-0 left-1/2 -translate-x-1/2 w-14 h-1 bg-cyan-500 rounded-full" />}
+            {activeTab === tab && (
+              <motion.div layoutId="tab" className="absolute bottom-0 left-1/2 -translate-x-1/2 w-14 h-1 bg-cyan-500 rounded-full" />
+            )}
           </button>
         ))}
       </div>
 
-      {/* --- Edit Profile Modal --- */}
-      <AnimatePresence>
-        {isEditModalOpen && (
-          <motion.div 
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[100] bg-zinc-900/60 backdrop-blur-sm flex items-center justify-center p-4"
-          >
-            <motion.div 
-              initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }}
-              className="bg-black w-full max-w-lg rounded-2xl overflow-hidden border border-white/20 shadow-2xl"
-            >
-              <div className="flex items-center justify-between p-4 border-b border-white/10">
-                <div className="flex items-center gap-6">
-                  <FaTimes className="cursor-pointer" onClick={() => setIsEditModalOpen(false)} />
-                  <h3 className="text-lg font-bold">Edit Profile</h3>
-                </div>
-                <button onClick={handleSaveProfile} className="bg-white text-black px-4 py-1 rounded-full font-bold text-sm">Save</button>
-              </div>
-
-              {/* Image Editors */}
-              <div className="relative h-48 bg-zinc-800">
-                <img src={coverPreview} className="w-full h-full object-cover opacity-50" />
-                <button onClick={() => coverInputRef.current.click()} className="absolute inset-0 m-auto w-10 h-10 bg-black/50 rounded-full flex items-center justify-center hover:bg-black/70 transition-all">
-                  <FaCamera />
-                </button>
-                <div className="absolute -bottom-12 left-4 w-24 h-24 rounded-full border-4 border-black overflow-hidden bg-black">
-                   <img src={avatarPreview} className="w-full h-full object-cover opacity-50" />
-                   <button onClick={() => avatarInputRef.current.click()} className="absolute inset-0 m-auto w-8 h-8 bg-black/40 rounded-full flex items-center justify-center hover:bg-black/60 transition-all">
-                    <FaCamera size={14} />
-                  </button>
-                </div>
-              </div>
-
-              {/* Form Inputs */}
-              <div className="p-4 pt-16 space-y-4">
-                <div className="border border-white/20 rounded-md p-2 focus-within:border-cyan-500">
-                  <label className="text-xs text-zinc-500 block">Name</label>
-                  <input type="text" value={editData.name} onChange={(e) => setEditData({...editData, name: e.target.value})} className="bg-transparent w-full outline-none pt-1" />
-                </div>
-                <div className="border border-white/20 rounded-md p-2 focus-within:border-cyan-500">
-                  <label className="text-xs text-zinc-500 block">Bio</label>
-                  <textarea value={editData.bio} onChange={(e) => setEditData({...editData, bio: e.target.value})} className="bg-transparent w-full outline-none pt-1 h-20 resize-none" />
-                </div>
-              </div>
-
-              {/* Hidden Inputs */}
-              <input type="file" ref={coverInputRef} hidden onChange={(e) => handleImageUpload(e, "cover")} />
-              <input type="file" ref={avatarInputRef} hidden onChange={(e) => handleImageUpload(e, "avatar")} />
-            </motion.div>
-          </motion.div>
+      {/* 📰 Signals Feed */}
+      <div className="divide-y divide-zinc-900">
+        {activeTab === "Signals" && (
+          userPosts?.length > 0 ? (
+            userPosts.map((post, index) => {
+              if (userPosts.length === index + 1) {
+                return (
+                  <div ref={lastPostRef} key={post._id}>
+                    <SignalCard post={post} user={user} />
+                  </div>
+                );
+              } else {
+                return <SignalCard key={post._id} post={post} user={user} />;
+              }
+            })
+          ) : (
+            <div className="py-20 text-center text-zinc-600 font-bold uppercase tracking-widest text-xs">
+              Zero signals detected
+            </div>
+          )
         )}
-      </AnimatePresence>
+      </div>
+
+      {/* 🧬 Edit Profile Modal */}
+      <EditProfileModal
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        user={user}
+        onUpdate={onUpdate}
+      />
+
     </div>
   );
 };
 
-export default Profile;
+export default ProfilePage;

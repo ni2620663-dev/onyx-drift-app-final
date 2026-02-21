@@ -2,7 +2,15 @@ import express from 'express';
 import Post from '../models/Post.js'; 
 import User from '../models/User.js';
 import auth from '../middleware/auth.js';
-export const toggleAutopilot = async (req, res) => {
+
+const router = express.Router();
+
+/* ==========================================================
+    ১. CONTROLLER FUNCTIONS (এআই ও সিস্টেম কন্ট্রোল)
+========================================================== */
+
+// ১. এআই অটো-পাইলট টগল
+const toggleAutopilot = async (req, res) => {
   try {
     const user = await User.findOne({ auth0Id: req.user.sub });
     if (!user) return res.status(404).json({ msg: "User not found" });
@@ -17,7 +25,7 @@ export const toggleAutopilot = async (req, res) => {
 };
 
 // ২. এআই টোন (Personality) আপডেট
-export const updateAiTone = async (req, res) => {
+const updateAiTone = async (req, res) => {
   try {
     const { tone } = req.body;
     const user = await User.findOneAndUpdate(
@@ -31,37 +39,43 @@ export const updateAiTone = async (req, res) => {
   }
 };
 
-// ৩. ঘোস্ট মোড টগল (আগের লজিক থাকলে এটি আপডেট করে নিন)
-export const toggleGhostMode = async (req, res) => {
+// ৩. ঘোস্ট মোড টগল
+const toggleGhostMode = async (req, res) => {
   try {
     const user = await User.findOne({ auth0Id: req.user.sub });
+    if (!user) return res.status(404).json({ msg: "User not found" });
+
     user.ghostMode = !user.ghostMode;
     await user.save();
-    res.json({ ghostMode: user.ghostMode });
+    res.json({ ghostMode: user.ghostMode, msg: "Ghost Protocol Updated" });
   } catch (err) {
     res.status(500).json({ msg: "Ghost Protocol Error" });
   }
 };
 
-const router = express.Router();
+/* ==========================================================
+    ২. ROUTES (পাবলিক ও প্রাইভেট গেটওয়ে)
+========================================================== */
 
-// নির্দিষ্ট ইউজারের পোস্ট এবং প্রোফাইল ডাটা পাওয়া (আপনার আগের কোড)
+// --- প্রোফাইল এবং পোস্ট ডাটা পাওয়া ---
 router.get('/user/:userId', auth, async (req, res) => {
   try {
     const targetId = decodeURIComponent(req.params.userId);
     
-    const user = await User.findOne({ auth0Id: targetId }).lean();
-
-    const posts = await Post.find({ 
-      $or: [
-        { authorAuth0Id: targetId },
-        { authorId: targetId },
-        { author: targetId }
-      ]
-    }).sort({ createdAt: -1 }).lean();
+    // ইউজার এবং পোস্ট প্যারালালি খোঁজা (Performance optimization)
+    const [user, posts] = await Promise.all([
+      User.findOne({ auth0Id: targetId }).lean(),
+      Post.find({ 
+        $or: [
+          { authorAuth0Id: targetId },
+          { authorId: targetId },
+          { author: targetId }
+        ]
+      }).sort({ createdAt: -1 }).lean()
+    ]);
 
     res.json({
-      user: user || { auth0Id: targetId, name: "Unknown Drifter" },
+      user: user || { auth0Id: targetId, name: "Unknown Drifter", nickname: "drifter_unknown" },
       posts: posts || []
     });
 
@@ -72,41 +86,50 @@ router.get('/user/:userId', auth, async (req, res) => {
   }
 });
 
-// ✅ ফলো করার নতুন রাউট (এটি আপনার রিকোয়েস্ট অনুযায়ী যোগ করা হলো)
+// --- ✅ ফলো/আনফলো টগল রাউট (স্মার্ট লজিক) ---
 router.post('/follow/:id', auth, async (req, res) => {
   try {
     const targetAuth0Id = decodeURIComponent(req.params.id);
-    const followerAuth0Id = req.user.sub; // আপনার Auth0 ID (auth মিডলওয়্যার থেকে)
+    const followerAuth0Id = req.user.sub;
 
     if (followerAuth0Id === targetAuth0Id) {
-      return res.status(400).json({ message: "You cannot follow yourself." });
+      return res.status(400).json({ message: "You cannot link with your own node." });
     }
 
-    // ডাটাবেসে টার্গেট ইউজার এবং বর্তমান ইউজার খুঁজে বের করা
     const targetUser = await User.findOne({ auth0Id: targetAuth0Id });
     const currentUser = await User.findOne({ auth0Id: followerAuth0Id });
 
     if (!targetUser || !currentUser) {
-      return res.status(404).json({ message: "User not found in system." });
+      return res.status(404).json({ message: "Neural node not found in matrix." });
     }
 
-    // অলরেডি ফলো করা আছে কি না চেক
-    if (currentUser.following.includes(targetAuth0Id)) {
-      return res.status(400).json({ message: "Already established neural link (Following)." });
+    // অলরেডি ফলো করা থাকলে আনফলো হবে, না থাকলে ফলো হবে
+    const isFollowing = currentUser.following.includes(targetAuth0Id);
+
+    if (isFollowing) {
+      // আনফলো লজিক
+      currentUser.following = currentUser.following.filter(id => id !== targetAuth0Id);
+      targetUser.followers = targetUser.followers.filter(id => id !== followerAuth0Id);
+      await currentUser.save();
+      await targetUser.save();
+      return res.status(200).json({ isFollowing: false, message: "Neural link severed (Unfollowed)." });
+    } else {
+      // ফলো লজিক
+      currentUser.following.push(targetAuth0Id);
+      targetUser.followers.push(followerAuth0Id);
+      await currentUser.save();
+      await targetUser.save();
+      return res.status(200).json({ isFollowing: true, message: "Neural link established (Following)!" });
     }
-
-    // আপডেট লজিক
-    currentUser.following.push(targetAuth0Id);
-    targetUser.followers.push(followerAuth0Id);
-
-    await currentUser.save();
-    await targetUser.save();
-
-    res.status(200).json({ message: "Neural link established successfully!" });
   } catch (err) {
     console.error("Follow Error:", err);
-    res.status(500).json({ message: "Server connection failed" });
+    res.status(500).json({ message: "Neural Connection Failure" });
   }
 });
+
+// --- সিস্টেম কন্ট্রোল রাউটস ---
+router.post('/autopilot/toggle', auth, toggleAutopilot);
+router.put('/tone/update', auth, updateAiTone);
+router.post('/ghost/toggle', auth, toggleGhostMode);
 
 export default router;

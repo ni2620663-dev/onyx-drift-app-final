@@ -1,4 +1,19 @@
 import mongoose from 'mongoose';
+const postSchema = new mongoose.Schema({
+  author: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  text: { type: String, required: true },
+  energy: [{ type: String }], // User Auth0 IDs who liked
+  comments: [
+    {
+      user: { type: String }, // Auth0 ID
+      userName: String,
+      userAvatar: String,
+      text: String,
+      createdAt: { type: Date, default: Date.now }
+    }
+  ],
+}, { timestamps: true });
+
 
 const postSchema = new mongoose.Schema(
   {

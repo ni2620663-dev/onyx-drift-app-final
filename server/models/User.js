@@ -3,7 +3,7 @@ import mongoose from "mongoose";
 const userSchema = new mongoose.Schema(
   {
     /* ==========================================================
-        ১. DIGITAL IDENTITY & AUTH
+        ১. DIGITAL IDENTITY & AUTH (মূল পরিচিতি)
     ========================================================== */
     auth0Id: { 
       type: String, 
@@ -21,14 +21,12 @@ const userSchema = new mongoose.Schema(
       type: String, 
       trim: true, 
       unique: true, 
-      sparse: true 
+      sparse: true // nickname না থাকলেও সমস্যা নেই, থাকলে ইউনিক হতে হবে
     },
     email: { 
       type: String, 
       lowercase: true, 
       trim: true,
-      // sparse: true এবং unique: true একসাথে থাকলেও যদি ডাটাবেসে "" (খালি স্ট্রিং) থাকে তবে এরর দেয়।
-      // তাই ইমেইল ফিল্ডটি ঐচ্ছিক রাখতে sparse ব্যবহার করা হয়েছে।
       sparse: true, 
       unique: true,
       index: true 
@@ -37,7 +35,11 @@ const userSchema = new mongoose.Schema(
     aiTwinAvatar: { type: String, default: "" }, 
     aiPersona: { type: String, default: "Neural Drifter" }, 
     coverImg: { type: String, default: "" }, 
-    bio: { type: String, default: "System Drifter // Neural Integrity: High", maxlength: 160 }, 
+    bio: { 
+      type: String, 
+      default: "System Drifter // Neural Integrity: High", 
+      maxlength: 160 
+    }, 
     location: { type: String, default: "" },
     workplace: { type: String, default: "" },
     aiAutopilot: { 
@@ -46,7 +48,9 @@ const userSchema = new mongoose.Schema(
     },
     aiTone: { 
       type: Number, 
-      default: 50 
+      default: 50,
+      min: 0,
+      max: 100
     }, 
     ghostMode: { 
       type: Boolean, 
@@ -99,7 +103,7 @@ const userSchema = new mongoose.Schema(
     }],
 
     /* ==========================================================
-        ৫. NEURAL DEATH-SWITCH & LEGACY
+        ৫. NEURAL DEATH-SWITCH & LEGACY (Legacy System)
     ========================================================== */
     deathSwitch: {
       isActive: { type: Boolean, default: false },
@@ -174,10 +178,10 @@ const userSchema = new mongoose.Schema(
     ],
 
     /* ==========================================================
-        ৯. SOCIAL GRAPH
+        ৯. SOCIAL GRAPH (Orbit System)
     ========================================================== */
-    followers: [{ type: String, index: true }], 
-    following: [{ type: String, index: true }],
+    followers: [{ type: String, index: true }], // User IDs
+    following: [{ type: String, index: true }], // User IDs
     friends: [{ type: String }],
     blockedUsers: [{ type: String }], 
     pendingRequests: [{ type: String }], 
@@ -186,7 +190,7 @@ const userSchema = new mongoose.Schema(
 );
 
 /* ==========================================================
-    🚀 OPTIMIZED INDEXING
+    🚀 OPTIMIZED INDEXING (সার্চ স্পিড বাড়ানোর জন্য)
 ========================================================== */
 userSchema.index({ name: 1, nickname: 1 });
 userSchema.index({ createdAt: -1, isVerified: -1 });

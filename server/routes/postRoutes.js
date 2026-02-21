@@ -205,6 +205,10 @@ router.delete('/:id', authMiddleware, async (req, res) => {
         res.status(500).json({ message: "Delete failed" });
     }
 });
+const router = express.Router();
+
+router.post("/:id/energy", auth, toggleEnergy);
+router.post("/:id/comment", auth, addComment);
 
 const express = require('express');
 const router = express.Router();
