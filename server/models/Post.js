@@ -33,7 +33,7 @@ const postSchema = new mongoose.Schema(
     
     /* ==========================================================
         🎥 PRO EDITOR & RENDERING METADATA
-    ========================================================== */
+    ========================================================= */
     editMetadata: {
       filters: {
         brightness: { type: Number, default: 100 },
