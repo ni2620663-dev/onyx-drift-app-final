@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { 
   FaArrowLeft, FaMapMarkerAlt, FaLink, FaCalendarAlt, FaEllipsisH 
@@ -10,14 +10,21 @@ import SignalCard from "./SignalCard";
 const ProfilePage = ({ user, isOwnProfile, userPosts, onUpdate, currentUserId, fetchMorePosts, hasMore }) => {
   const [activeTab, setActiveTab] = useState("Signals");
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [isFollowing, setIsFollowing] = useState(user?.followers?.includes(currentUserId));
+  const [isFollowing, setIsFollowing] = useState(false);
+
+  // Sync following state when user data loads
+  useEffect(() => {
+    if (user?.followers && currentUserId) {
+      setIsFollowing(user.followers.includes(currentUserId));
+    }
+  }, [user, currentUserId]);
 
   const observer = useRef();
   const tabs = ["Signals", "Replies", "Media", "Energy"];
 
   // Default Images (Placeholder fallback)
   const defaultBanner = "https://images.unsplash.com/photo-1614850523296-d8c1af93d400?q=80&w=2070";
-  const defaultAvatar = `https://ui-avatars.com/api/?name=${user?.name || 'User'}&background=06b6d4&color=fff`;
+  const defaultAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.name || 'User')}&background=06b6d4&color=fff`;
 
   // Infinite Scroll Logic
   const lastPostRef = (node) => {
@@ -30,6 +37,7 @@ const ProfilePage = ({ user, isOwnProfile, userPosts, onUpdate, currentUserId, f
 
   const toggleFollow = () => {
     setIsFollowing(!isFollowing);
+    // Note: Here you'd typically call an API to update the backend
   };
 
   return (
@@ -80,6 +88,8 @@ const ProfilePage = ({ user, isOwnProfile, userPosts, onUpdate, currentUserId, f
               <button className="p-2 border border-zinc-800 rounded-full hover:bg-zinc-900 transition-all text-zinc-400">
                 <FaEllipsisH size={14} />
               </button>
+              
+              {/* Conditional Rendering for Edit/Follow Button */}
               {isOwnProfile ? (
                 <button 
                   onClick={() => setIsEditModalOpen(true)} 
@@ -102,9 +112,9 @@ const ProfilePage = ({ user, isOwnProfile, userPosts, onUpdate, currentUserId, f
           <div className="space-y-3 mb-4">
             <div>
               <h1 className="text-2xl font-black tracking-tighter flex items-center gap-1 text-white">
-                {user?.name} {user?.isVerified && <HiBadgeCheck className="text-cyan-400" />}
+                {user?.name || "Drifter"} {user?.isVerified && <HiBadgeCheck className="text-cyan-400" />}
               </h1>
-              <p className="text-zinc-500 font-medium">@{user?.nickname || user?.username || "drifter"}</p>
+              <p className="text-zinc-500 font-medium">@{user?.nickname || user?.username || "identity_unknown"}</p>
             </div>
             
             <p className="text-[15px] leading-relaxed text-zinc-200">
@@ -115,11 +125,16 @@ const ProfilePage = ({ user, isOwnProfile, userPosts, onUpdate, currentUserId, f
               <span className="flex items-center gap-1"><FaMapMarkerAlt size={12}/> {user?.location || "Neo-City"}</span>
               <span className="flex items-center gap-1 text-cyan-500">
                 <FaLink size={12}/> 
-                <a href={user?.website?.startsWith('http') ? user.website : `https://${user?.website}`} target="_blank" rel="noreferrer" className="hover:underline">
+                <a 
+                  href={user?.website?.startsWith('http') ? user.website : `https://${user?.website || ''}`} 
+                  target="_blank" 
+                  rel="noreferrer" 
+                  className="hover:underline"
+                >
                   {user?.website || "neural.link"}
                 </a>
               </span>
-              <span className="flex items-center gap-1"><FaCalendarAlt size={12}/> Joined Feb 2026</span>
+              <span className="flex items-center gap-1"><FaCalendarAlt size={12}/> Joined {user?.createdAt ? new Date(user.createdAt).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : "Feb 2026"}</span>
             </div>
 
             <div className="flex gap-5 pt-1">
@@ -158,15 +173,12 @@ const ProfilePage = ({ user, isOwnProfile, userPosts, onUpdate, currentUserId, f
         {activeTab === "Signals" && (
           userPosts?.length > 0 ? (
             userPosts.map((post, index) => {
-              if (userPosts.length === index + 1) {
-                return (
-                  <div ref={lastPostRef} key={post._id || index}>
-                    <SignalCard post={post} user={user} />
-                  </div>
-                );
-              } else {
-                return <SignalCard key={post._id || index} post={post} user={user} />;
-              }
+              const isLastElement = userPosts.length === index + 1;
+              return (
+                <div ref={isLastElement ? lastPostRef : null} key={post._id || index}>
+                  <SignalCard post={post} user={user} />
+                </div>
+              );
             })
           ) : (
             <div className="py-24 text-center">
@@ -186,12 +198,14 @@ const ProfilePage = ({ user, isOwnProfile, userPosts, onUpdate, currentUserId, f
       </div>
 
       {/* 🧬 Edit Profile Modal */}
-      <EditProfileModal
-        isOpen={isEditModalOpen}
-        onClose={() => setIsEditModalOpen(false)}
-        user={user}
-        onUpdate={onUpdate}
-      />
+      {isEditModalOpen && (
+        <EditProfileModal
+          isOpen={isEditModalOpen}
+          onClose={() => setIsEditModalOpen(false)}
+          user={user}
+          onUpdate={onUpdate}
+        />
+      )}
 
     </div>
   );

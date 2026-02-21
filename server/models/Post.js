@@ -1,23 +1,12 @@
 import mongoose from 'mongoose';
-const postSchema = new mongoose.Schema({
-  author: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  text: { type: String, required: true },
-  energy: [{ type: String }], // User Auth0 IDs who liked
-  comments: [
-    {
-      user: { type: String }, // Auth0 ID
-      userName: String,
-      userAvatar: String,
-      text: String,
-      createdAt: { type: Date, default: Date.now }
-    }
-  ],
-}, { timestamps: true });
 
+/* ==========================================================
+    🚀 ONYX DRIFT - OPTIMIZED POST SCHEMA
+========================================================== */
 
 const postSchema = new mongoose.Schema(
   {
-    // Auth0 Sub ID (Primary identifier)
+    // Auth0 Sub ID (Primary identifier for the author)
     author: { 
       type: String, 
       required: true, 
@@ -32,7 +21,7 @@ const postSchema = new mongoose.Schema(
 
     authorName: { type: String, default: "Drifter" },
     authorAvatar: { type: String, default: "" },
-    text: { type: String, trim: true }, 
+    text: { type: String, trim: true, required: true }, 
     
     media: { type: String, default: "" }, 
     
@@ -67,11 +56,17 @@ const postSchema = new mongoose.Schema(
       renderType: { type: String, default: "FFMPEG_CLOUD" }
     },
 
-    // ❤️ Like system - String IDs stored in array
+    // ❤️ Like system (Energy) - String IDs stored in array
     likes: { 
       type: [String], 
       default: [] 
     }, 
+
+    // ⚡ Energy/Rank system (Legacy mapping)
+    energy: {
+      type: [String],
+      default: []
+    },
 
     // ⚡ RANK UP SYSTEM FIELD
     rankClicks: { 
@@ -81,7 +76,7 @@ const postSchema = new mongoose.Schema(
     
     comments: [
       {
-        userId: { type: String, required: true }, 
+        userId: { type: String, required: true }, // Auth0 ID
         userName: { type: String, default: "Ghost Drifter" },
         userAvatar: { type: String, default: "" },
         text: { type: String, required: true },
@@ -125,16 +120,16 @@ const postSchema = new mongoose.Schema(
     🚀 OPTIMIZED INDEXING & VIRTUALS
 ========================================================== */
 
-// ১. ডাইনামিক লাইক কাউন্ট পাওয়ার জন্য ভার্চুয়াল প্রোপার্টি
+// ডাইনামিক লাইক কাউন্ট পাওয়ার জন্য ভার্চুয়াল প্রোপার্টি
 postSchema.virtual('likesCount').get(function() {
   return this.likes.length;
 });
 
-// ২. কমপাউন্ড ইনডেক্স - যাতে প্রোফাইল এবং ফিড খুব ফাস্ট লোড হয়
+// ইনডেক্সিং - পারফরম্যান্স বৃদ্ধির জন্য
 postSchema.index({ authorAuth0Id: 1, createdAt: -1 });
 postSchema.index({ createdAt: -1 });
 postSchema.index({ isAiGenerated: 1, createdAt: -1 });
-postSchema.index({ mediaType: 1 }); // ভিডিও বা রিল ফিল্টার করার জন্য
+postSchema.index({ mediaType: 1 });
 
 const Post = mongoose.model('Post', postSchema);
 export default Post;
