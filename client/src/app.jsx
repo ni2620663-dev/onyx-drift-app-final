@@ -65,9 +65,10 @@ export default function App() {
             name: user.name,
             email: user.email,
             picture: user.picture,
-            username: user.nickname || user.name?.split(' ')[0].toLowerCase(),
+            nickname: user.nickname || user.name?.split(' ')[0].toLowerCase(), // username কে nickname এ রূপান্তর
           };
 
+          // ব্যাকএন্ডে ইউজার ডাটা পাঠানো (যাতে ডাটাবেজে আপনার নাম Drifter এর বদলে আসল নাম থাকে)
           await axios.post(`${BACKEND_URL}/api/users/sync`, userData, {
             headers: { 
               Authorization: `Bearer ${token}`,
@@ -136,7 +137,6 @@ export default function App() {
   const isMessengerPage = location.pathname.includes("/messages") || location.pathname.includes("/messenger");
   const isFullWidthPage = ["/messenger", "/messages", "/settings", "/", "/join", "/reels", "/ai-twin", "/call"].some(path => location.pathname === path || location.pathname.startsWith(path + "/"));
   const isReelsPage = location.pathname.startsWith("/reels");
-  const isAuthPage = location.pathname === "/" || location.pathname === "/join";
 
   return (
     <div className="min-h-screen bg-[#020617] text-gray-200 font-sans relative overflow-x-hidden">
@@ -177,8 +177,6 @@ export default function App() {
       </AnimatePresence>
 
       <div className="flex flex-col w-full">
-        {/* 🔴 Navbar has been removed from here as per request 🔴 */}
-        
         <div className="flex justify-center w-full transition-all duration-500">
           <div className={`flex w-full ${isFullWidthPage ? "max-w-full" : "max-w-[1440px] px-0 lg:px-6"} gap-6`}>
             
@@ -198,7 +196,14 @@ export default function App() {
                       <Route path="/feed" element={<ProtectedRoute component={() => <PremiumHomeFeed searchQuery={searchQuery} isPostModalOpen={isPostModalOpen} setIsPostModalOpen={setIsPostModalOpen} />} />} />
                       <Route path="/reels" element={<ProtectedRoute component={ReelsFeed} />} />
                       <Route path="/reels-editor" element={<ProtectedRoute component={ReelsEditor} />} />
-                      <Route path="/profile/:userId" element={<ProtectedRoute component={Profile} />} />
+                      
+                      {/* 🚩 প্রোফাইল রাউটে currentUserId পাস করা হয়েছে */}
+                      <Route path="/profile/:userId" element={
+                        <ProtectedRoute component={() => (
+                          <Profile currentUserId={user?.sub} />
+                        )} />
+                      } />
+
                       <Route path="/following" element={<ProtectedRoute component={FollowingPage} />} />
                       <Route path="/messages/:userId?" element={<ProtectedRoute component={() => <Messenger socket={socket.current} />} />} />
                       <Route path="/messenger/:userId?" element={<ProtectedRoute component={() => <Messenger socket={socket.current} />} />} />

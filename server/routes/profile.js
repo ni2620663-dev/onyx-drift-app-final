@@ -13,14 +13,16 @@ router.get("/", async (req, res) => {
     const myId = req.auth?.payload?.sub;
     if (!myId) return res.status(401).json({ msg: "Neural Identity missing" });
 
+    // ডাটাবেজে ইউজার খোঁজা (auth0Id দিয়ে)
     let user = await User.findOne({ auth0Id: myId }).select("-__v").lean();
 
     if (!user) {
+      // যদি ইউজার ডাটাবেজে না থাকে, তবে নতুন প্রোফাইল তৈরি করা
       const newUser = new User({
         auth0Id: myId,
         name: req.auth.payload.name || "Drifter_" + myId.slice(-4),
         nickname: req.auth.payload.nickname || "drifter_" + Math.floor(Math.random() * 10000),
-        avatar: req.auth.payload.picture || `https://ui-avatars.com/api/?name=Drifter`,
+        avatar: req.auth.payload.picture || `https://ui-avatars.com/api/?name=Drifter&background=06b6d4&color=fff`,
         email: req.auth.payload.email || "",
         neuralRank: 1, 
         drifterLevel: "Novice Drifter",
@@ -31,17 +33,19 @@ router.get("/", async (req, res) => {
     }
     res.json(user);
   } catch (err) {
+    console.error("Profile Fetch Error:", err);
     res.status(500).json({ msg: "Neural link interrupted" });
   }
 });
 
 /* ==========================================================
-    2️⃣ GET PROFILE BY ID (With ID consistency)
+    2️⃣ GET PROFILE BY ID (URL parameter decode fixed)
 ========================================================== */
 router.get("/:id", async (req, res) => {
   try {
     const targetId = decodeURIComponent(req.params.id);
-    // targetId দিয়ে ইউজার খোঁজা
+    
+    // ডাটাবেজে ইউজার খোঁজা
     let user = await User.findOne({ auth0Id: targetId }).select("-__v").lean();
     
     if (!user) {
@@ -54,7 +58,7 @@ router.get("/:id", async (req, res) => {
 });
 
 /* ==========================================================
-    3️⃣ UPDATE PROFILE (Unified)
+    3️⃣ UPDATE PROFILE (Unified Update Logic)
 ========================================================== */
 router.put("/update-profile", upload.fields([
   { name: 'avatar', maxCount: 1 },
@@ -62,11 +66,12 @@ router.put("/update-profile", upload.fields([
 ]), async (req, res) => {
   try {
     const myId = req.auth?.payload?.sub;
-    const { nickname, name, bio, location, website } = req.body;
+    if (!myId) return res.status(401).json({ msg: "Unauthorized" });
 
+    const { nickname, name, bio, location, website } = req.body;
     let updateFields = { name, nickname, bio, location, website };
 
-    // মাল্টার ফাইল হ্যান্ডলিং
+    // মাল্টার ফাইল হ্যান্ডলিং (Cloudinary URL থাকলে সেটি আপডেট হবে)
     if (req.files) {
       if (req.files.avatar) updateFields.avatar = req.files.avatar[0].path;
       if (req.files.cover) updateFields.coverImg = req.files.cover[0].path;
@@ -85,7 +90,7 @@ router.put("/update-profile", upload.fields([
 });
 
 /* ==========================================================
-    🔗 4️⃣ ESTABLISH LINK (Follow/Unfollow logic fixed)
+    🔗 4️⃣ ESTABLISH LINK (Follow/Unfollow logic)
 ========================================================== */
 router.post("/establish-link/:targetId", async (req, res) => {
   try {
@@ -120,13 +125,11 @@ router.get("/posts/user/:userId", async (req, res) => {
   try {
     const targetUserId = decodeURIComponent(req.params.userId);
     
-    // X-এর মতো ফিচার পেতে হলে পোস্টের সাথে ইউজারের নাম, অ্যাভাটার থাকা জরুরি
-    // এখানে আমরা Post খুঁজে বের করছি যেখানে authorAuth0Id ইউজার আইডির সমান
+    // ডাটাবেজে পোস্ট খোঁজা (authorAuth0Id ফিল্ড ব্যবহার করে)
     const posts = await Post.find({ authorAuth0Id: targetUserId })
       .sort({ createdAt: -1 })
       .lean();
 
-    // ফ্রন্টএন্ডে SignalCard-এ ডাটা ঠিকমতো দেখানোর জন্য এটি রেডি
     res.json(posts);
   } catch (err) {
     res.status(500).json({ msg: "Error fetching user signals" });

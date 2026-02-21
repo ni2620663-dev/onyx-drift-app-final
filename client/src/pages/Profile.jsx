@@ -12,21 +12,27 @@ const ProfilePage = ({ user, isOwnProfile, userPosts, onUpdate, currentUserId, f
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isFollowing, setIsFollowing] = useState(false);
 
-  // Sync following state when user data loads
+  // ১. আইডি ডিকোড করা যাতে পাইপ সিম্বল (|) সঠিকভাবে চেক হয়
+  const decodedCurrentId = currentUserId ? decodeURIComponent(currentUserId) : null;
+  const decodedProfileId = user?.auth0Id ? decodeURIComponent(user.auth0Id) : null;
+  
+  // এটি নিশ্চিত করে আপনি নিজের প্রোফাইলে আছেন কি না
+  const isReallyMe = isOwnProfile || (decodedCurrentId === decodedProfileId);
+
+  // ফলোয়িং স্টেট সিঙ্ক করা
   useEffect(() => {
-    if (user?.followers && currentUserId) {
-      setIsFollowing(user.followers.includes(currentUserId));
+    if (user?.followers && decodedCurrentId) {
+      setIsFollowing(user.followers.includes(decodedCurrentId));
     }
-  }, [user, currentUserId]);
+  }, [user, decodedCurrentId]);
 
   const observer = useRef();
   const tabs = ["Signals", "Replies", "Media", "Energy"];
 
-  // Default Images (Placeholder fallback)
+  // placeholders
   const defaultBanner = "https://images.unsplash.com/photo-1614850523296-d8c1af93d400?q=80&w=2070";
   const defaultAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.name || 'User')}&background=06b6d4&color=fff`;
 
-  // Infinite Scroll Logic
   const lastPostRef = (node) => {
     if (observer.current) observer.current.disconnect();
     observer.current = new IntersectionObserver(entries => {
@@ -37,11 +43,11 @@ const ProfilePage = ({ user, isOwnProfile, userPosts, onUpdate, currentUserId, f
 
   const toggleFollow = () => {
     setIsFollowing(!isFollowing);
-    // Note: Here you'd typically call an API to update the backend
+    // API Call লজিক এখানে হবে
   };
 
   return (
-    <div className="min-h-screen bg-black text-white max-w-2xl mx-auto border-x border-zinc-800 pb-20">
+    <div className="min-h-screen bg-black text-white max-w-2xl mx-auto border-x border-zinc-800 pb-20 font-mono">
       
       {/* 🔝 Sticky Top Bar */}
       <div className="sticky top-0 z-50 bg-black/70 backdrop-blur-md p-3 flex items-center gap-6 border-b border-zinc-900">
@@ -58,9 +64,8 @@ const ProfilePage = ({ user, isOwnProfile, userPosts, onUpdate, currentUserId, f
         </div>
       </div>
 
-      {/* 🖼 Cover & 👤 Avatar Section */}
+      {/* 🖼 Cover & Avatar Section */}
       <div className="relative">
-        {/* Cover Photo */}
         <div className="h-44 md:h-52 bg-zinc-900 overflow-hidden">
           <img 
             src={user?.coverImg || defaultBanner} 
@@ -70,7 +75,6 @@ const ProfilePage = ({ user, isOwnProfile, userPosts, onUpdate, currentUserId, f
           />
         </div>
 
-        {/* Profile Info Overlay */}
         <div className="px-4">
           <div className="relative flex justify-between items-end -mt-16 mb-4">
             {/* Avatar */}
@@ -89,11 +93,11 @@ const ProfilePage = ({ user, isOwnProfile, userPosts, onUpdate, currentUserId, f
                 <FaEllipsisH size={14} />
               </button>
               
-              {/* Conditional Rendering for Edit/Follow Button */}
-              {isOwnProfile ? (
+              {/* ফিক্সড বাটন লজিক */}
+              {isReallyMe ? (
                 <button 
                   onClick={() => setIsEditModalOpen(true)} 
-                  className="border border-zinc-700 hover:bg-white/10 px-5 py-2 rounded-full font-bold text-sm transition-all"
+                  className="border border-zinc-700 hover:bg-white/10 px-5 py-2 rounded-full font-bold text-sm transition-all text-white"
                 >
                   Edit identity
                 </button>
@@ -111,7 +115,7 @@ const ProfilePage = ({ user, isOwnProfile, userPosts, onUpdate, currentUserId, f
           {/* User Details */}
           <div className="space-y-3 mb-4">
             <div>
-              <h1 className="text-2xl font-black tracking-tighter flex items-center gap-1 text-white">
+              <h1 className="text-2xl font-black tracking-tighter flex items-center gap-1 text-white uppercase italic">
                 {user?.name || "Drifter"} {user?.isVerified && <HiBadgeCheck className="text-cyan-400" />}
               </h1>
               <p className="text-zinc-500 font-medium">@{user?.nickname || user?.username || "identity_unknown"}</p>
@@ -121,7 +125,7 @@ const ProfilePage = ({ user, isOwnProfile, userPosts, onUpdate, currentUserId, f
               {user?.bio || "No bio available. System awaiting neural input..."}
             </p>
 
-            <div className="flex flex-wrap gap-x-4 gap-y-1 text-zinc-500 text-[13px] font-medium">
+            <div className="flex flex-wrap gap-x-4 gap-y-1 text-zinc-500 text-[11px] font-bold uppercase">
               <span className="flex items-center gap-1"><FaMapMarkerAlt size={12}/> {user?.location || "Neo-City"}</span>
               <span className="flex items-center gap-1 text-cyan-500">
                 <FaLink size={12}/> 
@@ -155,13 +159,13 @@ const ProfilePage = ({ user, isOwnProfile, userPosts, onUpdate, currentUserId, f
           <button 
             key={tab} 
             onClick={() => setActiveTab(tab)} 
-            className="flex-1 py-4 text-sm font-bold relative hover:bg-zinc-900/50 transition-all"
+            className="flex-1 py-4 text-xs font-black uppercase tracking-widest relative hover:bg-zinc-900/50 transition-all"
           >
-            <span className={activeTab === tab ? "text-white" : "text-zinc-500"}>{tab}</span>
+            <span className={activeTab === tab ? "text-cyan-400" : "text-zinc-600"}>{tab}</span>
             {activeTab === tab && (
               <motion.div 
                 layoutId="tab" 
-                className="absolute bottom-0 left-1/2 -translate-x-1/2 w-14 h-1 bg-cyan-500 rounded-full" 
+                className="absolute bottom-0 left-1/2 -translate-x-1/2 w-10 h-0.5 bg-cyan-400" 
               />
             )}
           </button>
@@ -189,9 +193,8 @@ const ProfilePage = ({ user, isOwnProfile, userPosts, onUpdate, currentUserId, f
           )
         )}
         
-        {/* Other tabs placeholder */}
         {activeTab !== "Signals" && (
-          <div className="py-24 text-center text-zinc-700 text-xs font-bold uppercase tracking-widest">
+          <div className="py-24 text-center text-zinc-700 text-[10px] font-black uppercase tracking-[0.5em]">
             {activeTab} module offline
           </div>
         )}
