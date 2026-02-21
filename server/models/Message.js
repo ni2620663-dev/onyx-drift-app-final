@@ -35,7 +35,7 @@ const MessageSchema = new mongoose.Schema(
       default: ""
     },
 
-    // ৩. ইউনিক আইডেন্টিফায়ার (অপ্রয়োজনীয় এরর এড়াতে sparse রাখা হয়েছে)
+    // ৩. ইউনিক আইডেন্টিফায়ার (অপ্রয়োজনীয় এরর এড়াতে sparse রাখা হয়েছে)
     tempId: { 
       type: String, 
       sparse: true  
@@ -58,9 +58,9 @@ const MessageSchema = new mongoose.Schema(
     },
 
     // 🚀 ফিচার ১: EMOTIONAL SIGNATURE
-    // ফ্রন্টএন্ডের 'Neural-Flow' এবং অন্যান্য মুড এখানে এলাউ করা হয়েছে
     neuralMood: {
       type: String,
+      // আপনার ফ্রন্টএন্ডের মুড লিস্টের সাথে সিঙ্ক করা হয়েছে
       enum: ["Neutral", "Happy", "Sad", "Enraged", "Ecstatic", "Anxious", "Neural-Flow"],
       default: "Neural-Flow"
     },
@@ -121,14 +121,25 @@ const MessageSchema = new mongoose.Schema(
 ========================================================== */
 
 // ১. TTL ইনডেক্স: expireAt ফিল্ডে ভ্যালু থাকলে অটো ডিলিট হবে
+// এটি তখনই কাজ করবে যখন expireAt এ কোনো Future Date থাকবে।
 MessageSchema.index({ expireAt: 1 }, { expireAfterSeconds: 0 });
 
 // ২. চ্যাট হিস্ট্রি দ্রুত লোড করার জন্য কম্পাউন্ড ইনডেক্সিং
+// এটি মেসেজ দ্রুত রিট্রিভ করতে সাহায্য করবে।
 MessageSchema.index({ conversationId: 1, createdAt: -1 });
 
-// ৩. ভার্চুয়াল ফিল্ড: মেসেজটি কি বর্তমানে 'লকড' (টাইম ক্যাপসুল) অবস্থায় আছে?
+// ৩. ভার্চুয়াল ফিল্ড: মেসেজটি কি বর্তমানে 'লকড' (টাইম ক্যাপসুল) অবস্থায় আছে?
 MessageSchema.virtual('isLocked').get(function() {
   return this.isTimeCapsule && new Date() < this.deliverAt;
+});
+
+// ৪. ডাটা সেভিং এর আগে ছোট প্রসেসিং (অপশনাল)
+MessageSchema.pre('save', function(next) {
+  // যদি self-destruct অন থাকে কিন্তু expireAt না থাকে, তবে ডিফল্ট ৩০ সেকেন্ড সেট করতে পারেন
+  if (this.isSelfDestruct && !this.expireAt) {
+    this.expireAt = new Date(Date.now() + 30 * 1000); 
+  }
+  next();
 });
 
 // মডেল এক্সপোর্ট

@@ -7,23 +7,23 @@ import Conversation from "../models/Conversation.js";
 import Message from "../models/Message.js";      
 import User from "../models/User.js";  
 
-// 🛡️ JWT Middleware (Issuer URL dynamic রাখা ভালো, তবে আপনারটা ফিক্সড করে দিচ্ছি)
+// 🛡️ JWT Middleware (Issuer URL অবশ্যই Server.js এর সাথে মিলতে হবে)
 const checkJwt = auth({
   audience: 'https://onyx-drift-api.com',
-  issuerBaseURL: `https://dev-6d0nxccsaycctfl1.us.auth0.com/`,
+  issuerBaseURL: 'https://dev-prxn6v2o08xp5loz.us.auth0.com/', // আপনার মেইন ডোমেইনটি এখানে দিন
   tokenSigningAlg: 'RS256'
 });
 
 /* ==========================================================
-    🔍 SEARCH USERS (For New Conversations)
+    🔍 SEARCH USERS
 ========================================================== */
 router.get("/search-users/:query", checkJwt, async (req, res) => {
   try {
     const { query } = req.params;
-    const currentUserId = req.auth?.payload.sub; 
+    const currentUserId = req.auth?.payload?.sub; 
 
     if (!query || query.length < 2) {
-      return res.status(400).json({ error: "Search query too short" });
+      return res.status(400).json({ error: "Neural query too short" });
     }
 
     const users = await User.find({
@@ -40,17 +40,17 @@ router.get("/search-users/:query", checkJwt, async (req, res) => {
 
     res.status(200).json(users);
   } catch (err) {
-    console.error("User Search Error:", err);
+    console.error("Search Error:", err);
     res.status(500).json({ error: "Failed to locate drifters" });
   }
 });
 
 /* ==========================================================
-    1️⃣ GET ALL CONVERSATIONS (Fixed & Optimized)
+    1️⃣ GET ALL CONVERSATIONS
 ========================================================== */
 router.get("/conversations", checkJwt, async (req, res) => {
   try {
-    const currentUserId = req.auth?.payload.sub;
+    const currentUserId = req.auth?.payload?.sub;
 
     if (!currentUserId) {
       return res.status(401).json({ error: "Neural identity missing" });
@@ -61,7 +61,7 @@ router.get("/conversations", checkJwt, async (req, res) => {
       members: { $in: [currentUserId] },
     }).sort({ updatedAt: -1 }).lean();
 
-    // ২. ডিটেইলস পপুলেট করা (Manually handling auth0Id mapping)
+    // ২. মেম্বার ডিটেইলস পপুলেট করা
     const detailedConversations = await Promise.all(
       conversations.map(async (conv) => {
         if (!conv.isGroup) {
@@ -81,7 +81,7 @@ router.get("/conversations", checkJwt, async (req, res) => {
 
     res.status(200).json(detailedConversations);
   } catch (err) {
-    console.error("Conversation Fetch Error:", err);
+    console.error("Fetch Conv Error:", err);
     res.status(500).json({ error: "Could not sync conversations" });
   }
 });
@@ -91,26 +91,21 @@ router.get("/conversations", checkJwt, async (req, res) => {
 ========================================================== */
 router.post("/conversation", checkJwt, async (req, res) => {
   const { receiverId, isGroup, groupName, members } = req.body;
-  const senderId = req.auth?.payload.sub;
+  const senderId = req.auth?.payload?.sub;
 
   try {
     if (isGroup) {
-      if (!groupName || !members) return res.status(400).json({ error: "Group data missing" });
-
       const newGroup = new Conversation({
-        members: [...new Set([...members, senderId])], 
+        members: [...new Set([...(members || []), senderId])], 
         isGroup: true,
-        groupName: groupName,
+        groupName: groupName || "Unnamed Nexus",
         admin: senderId
       });
-
       const savedGroup = await newGroup.save();
       return res.status(200).json(savedGroup);
     }
 
-    if (!receiverId) return res.status(400).json({ error: "Receiver ID required" });
-
-    // চেক করা হচ্ছে আগে থেকেই কনভারসেশন আছে কিনা
+    // Single Chat Logic
     let conversation = await Conversation.findOne({
       isGroup: false,
       members: { $all: [senderId, receiverId], $size: 2 },
@@ -127,33 +122,26 @@ router.post("/conversation", checkJwt, async (req, res) => {
 
     res.status(200).json(conversation);
   } catch (err) {
-    console.error("Link Init Error:", err);
     res.status(500).json({ error: "Failed to initialize link" });
   }
 });
 
 /* ==========================================================
-    3️⃣ SAVE NEW MESSAGE (Fixed for 500 Error)
+    3️⃣ SAVE NEW MESSAGE
 ========================================================== */
 router.post("/message", checkJwt, async (req, res) => {
   try {
     const { 
       conversationId, text, media, mediaType, 
-      isGroup, tempId, isSelfDestruct, neuralMood, 
-      isTimeCapsule, deliverAt 
+      isGroup, neuralMood, isSelfDestruct, deliverAt 
     } = req.body;
     
-    const senderId = req.auth?.payload.sub;
+    const senderId = req.auth?.payload?.sub;
 
-    if (!conversationId) {
-      return res.status(400).json({ error: "Conversation ID required" });
-    }
+    if (!conversationId) return res.status(400).json({ error: "Channel ID required" });
 
-    // সেলফ-ডিস্ট্রাক্ট TTL লজিক
-    let expireAt = null;
-    if (isSelfDestruct) {
-      expireAt = new Date(Date.now() + 15 * 1000); 
-    }
+    // Self-destruct logic (TTL)
+    let expireAt = isSelfDestruct ? new Date(Date.now() + 15 * 1000) : null;
 
     const newMessage = new Message({
       conversationId,
@@ -161,58 +149,51 @@ router.post("/message", checkJwt, async (req, res) => {
       text: text || "",
       media: media || null,
       mediaType: mediaType || "text",
-      tempId,
       neuralMood: neuralMood || "Neural-Flow",
       isGroup: isGroup || false,
       isSelfDestruct: isSelfDestruct || false,
-      isTimeCapsule: isTimeCapsule || false,
       deliverAt: deliverAt || Date.now(),
       expireAt 
     });
 
     const savedMessage = await newMessage.save();
 
-    // লাস্ট মেসেজ টেক্সট হ্যান্ডলিং
-    let lastMsgText = text || "Media attachment";
-    if (isSelfDestruct) lastMsgText = "👻 Self-destructing message";
-    else if (mediaType === "image") lastMsgText = "📷 Photo transmitted";
-    else if (mediaType === "voice") lastMsgText = "🎙️ Voice note";
+    // Update Last Message in Conversation
+    let previewText = text || "Attachment received";
+    if (isSelfDestruct) previewText = "👻 [Redacted Signal]";
 
-    // কনভারসেশন আপডেট (Ensure lastMessage is an object if that's what your schema expects)
     await Conversation.findByIdAndUpdate(conversationId, {
       $set: { 
         updatedAt: Date.now(),
-        lastMessage: { text: lastMsgText, senderId: senderId } 
+        lastMessage: { text: previewText, senderId: senderId } 
       },
     });
 
     res.status(200).json(savedMessage);
   } catch (err) {
-    console.error("Message Save Error:", err);
+    console.error("Sync Error:", err);
     res.status(500).json({ error: "Signal delivery failed" });
   }
 });
 
 /* ==========================================================
-    4️⃣ GET MESSAGES (With Safety Check)
+    4️⃣ GET MESSAGES
 ========================================================== */
 router.get("/:conversationId", checkJwt, async (req, res) => {
   try {
     const { conversationId } = req.params;
     
-    // Safety check for invalid IDs
     if (!conversationId || conversationId === "undefined") {
-        return res.status(400).json({ error: "Valid Conversation ID required" });
+        return res.status(400).json({ error: "Invalid Channel ID" });
     }
 
     const messages = await Message.find({
       conversationId: conversationId,
-      deliverAt: { $lte: new Date() } // টাইম ক্যাপসুল হ্যান্ডলিং
+      deliverAt: { $lte: new Date() } // Time Capsule Handling
     }).sort({ createdAt: 1 }).lean();
     
-    res.status(200).json(messages || []);
+    res.status(200).json(messages);
   } catch (err) {
-    console.error("Fetch Messages Error:", err);
     res.status(500).json({ error: "Neural history inaccessible" });
   }
 });

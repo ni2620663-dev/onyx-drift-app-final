@@ -28,10 +28,11 @@ import reelRoutes from "./routes/reels.js";
 import profileRoutes from "./routes/profile.js"; 
 import groupRoutes from "./routes/group.js"; 
 import marketRoutes from "./routes/market.js"; 
-import adminRoutes from "./routes/admin.js";          
+import adminRoutes from "./routes/admin.js";           
 import { getNeuralFeed } from "./controllers/feedController.js";
 
 // 🛡️ Auth0 JWT ভেরিফিকেশন মিডলওয়্যার
+// নিশ্চিত করুন এই Audience এবং Issuer আপনার Auth0 ড্যাশবোর্ডের সাথে হুবহু মিলছে।
 const checkJwt = auth({
   audience: 'https://onyx-drift-api.com', 
   issuerBaseURL: 'https://dev-prxn6v2o08xp5loz.us.auth0.com/', 
@@ -48,7 +49,7 @@ cloudinary.config({
 const app = express();
 const server = http.createServer(app);
 
-// ৩. CORS কনফিগারেশন
+// ৩. CORS কনফিগারেশন (উন্নত করা হয়েছে)
 const allowedOrigins = [
     "http://localhost:5173", 
     "https://onyx-drift-app-final.onrender.com",
@@ -59,7 +60,7 @@ const allowedOrigins = [
 
 const corsOptions = {
     origin: function (origin, callback) {
-        if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+        if (!origin || allowedOrigins.includes(origin)) {
             callback(null, true);
         } else {
             callback(new Error('Signal Blocked: CORS Security Policy'));
@@ -67,16 +68,16 @@ const corsOptions = {
     },
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"]
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept"]
 };
 
 app.use(cors(corsOptions));
 
 // ৪. বডি পার্সার
-app.use(express.json({ limit: "150mb" })); // Limit বাড়িয়েছি কারণ ভিডিও বড় হতে পারে
+app.use(express.json({ limit: "150mb" }));
 app.use(express.urlencoded({ limit: "150mb", extended: true }));
 
-// ৫. Static Folder (Rendered ভিডিও এক্সেস করার জন্য)
+// ৫. Static Folder
 const uploadDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadDir)){
     fs.mkdirSync(uploadDir);
@@ -84,22 +85,25 @@ if (!fs.existsSync(uploadDir)){
 app.use('/uploads', express.static(uploadDir));
 
 /* ==========================================================
-    🧠 NEURAL PULSE & SYNC MIDDLEWARE
+    🧠 NEURAL PULSE MIDDLEWARE (User Activity Sync)
 ========================================================== */
 const updateNeuralPulse = async (req, res, next) => {
-    const auth0Id = req.auth?.payload?.sub; 
-    
-    if (auth0Id) {
-        User.updateOne(
-            { auth0Id: auth0Id },
-            { $set: { "deathSwitch.lastPulseTimestamp": new Date() } }
-        ).catch(err => console.log("Pulse bypass log:", err.message));
+    try {
+        const auth0Id = req.auth?.payload?.sub; 
+        if (auth0Id) {
+            await User.updateOne(
+                { auth0Id: auth0Id },
+                { $set: { "deathSwitch.lastPulseTimestamp": new Date() } }
+            );
+        }
+    } catch (err) {
+        console.warn("Pulse bypass log (Non-critical):", err.message);
     }
     next();
 };
 
 /* ==========================================================
-    📡 এপিআই রাউটস (Order Optimized)
+    📡 এপিআই রাউটস (Authentication applied to all)
 ========================================================== */
 
 // পাবলিক রুট (Health Check)
@@ -111,7 +115,7 @@ app.get("/api/posts/neural-feed", checkJwt, updateNeuralPulse, getNeuralFeed);
 app.use("/api/user", checkJwt, updateNeuralPulse, userRoutes); 
 app.use("/api/users", checkJwt, updateNeuralPulse, userRoutes); 
 app.use("/api/profile", checkJwt, updateNeuralPulse, profileRoutes);
-app.use("/api/posts", checkJwt, updateNeuralPulse, postRoutes); // এটার ভিতরেই আমরা ভিডিও এডিটিং লজিক ইনজেক্ট করব
+app.use("/api/posts", checkJwt, updateNeuralPulse, postRoutes);
 app.use("/api/reels", checkJwt, updateNeuralPulse, reelRoutes); 
 app.use("/api/stories", checkJwt, updateNeuralPulse, storyRoute);
 app.use("/api/messages", checkJwt, updateNeuralPulse, messageRoutes); 
@@ -124,7 +128,7 @@ app.use("/api/admin", checkJwt, updateNeuralPulse, adminRoutes);
 ========================================================== */
 const io = new Server(server, {
     cors: corsOptions,
-    transports: ['polling', 'websocket'],
+    transports: ['websocket', 'polling'], // WebSocket prioritized
     path: '/socket.io/'
 });
 
@@ -132,11 +136,6 @@ const redis = process.env.REDIS_URL ? new Redis(process.env.REDIS_URL, {
     maxRetriesPerRequest: null,
     enableReadyCheck: false
 }) : null;
-
-if (redis) {
-    redis.on("error", (err) => console.error("Redis Grid Error:", err));
-    redis.on("connect", () => console.log("📡 Neural Cache Connected (Redis)"));
-}
 
 io.on("connection", (socket) => {
     socket.on("addNewUser", async (auth0Id) => { 
@@ -161,15 +160,19 @@ io.on("connection", (socket) => {
 });
 
 /* ==========================================================
-    🛡️ GLOBAL ERROR HANDLER
+    🛡️ GLOBAL ERROR HANDLER (401 Fix logic)
 ========================================================== */
 app.use((err, req, res, next) => {
+    // Auth0 বা JWT এরর হ্যান্ডলিং
     if (err.name === 'UnauthorizedError' || err.status === 401) {
+        console.error("❌ Auth Error:", err.message);
         return res.status(401).json({ 
             error: 'Identity Verification Failed', 
-            message: "Token is invalid or expired."
+            message: "Token is invalid, expired, or audience mismatch.",
+            suggestion: "Check if AUTH_AUDIENCE in frontend matches audience in backend."
         });
     }
+
     console.error("🔥 Critical System Log:", err);
     res.status(err.status || 500).json({ 
         error: "Neural Grid Breakdown", 
@@ -182,5 +185,11 @@ app.use((err, req, res, next) => {
 ========================================================== */
 const PORT = process.env.PORT || 10000;
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 ONYX CORE ACTIVE ON PORT: ${PORT}`);
+    console.log(`
+    =========================================
+    🚀 ONYX CORE ACTIVE ON PORT: ${PORT}
+    📡 ENVIRONMENT: ${process.env.NODE_ENV || 'development'}
+    🛡️ AUTH0 DOMAIN: dev-prxn6v2o08xp5loz.us.auth0.com
+    =========================================
+    `);
 });
