@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   User, Lock, Bell, Moon, LogOut, Shield, ChevronRight, 
   Palette, EyeOff, ShieldCheck, Smartphone, ArrowLeft,
-  Cpu, SlidersHorizontal, Zap // এখানে AdjustmentsHorizontal পরিবর্তন করে SlidersHorizontal করা হয়েছে
+  Cpu, SlidersHorizontal, Zap 
 } from 'lucide-react';
 import axios from 'axios';
 import { motion } from 'framer-motion';
@@ -86,8 +86,14 @@ const Settings = () => {
     }
   };
 
+  // --- LOGOUT FUNCTION ---
   const handleLogout = () => {
+    // ১. লোকাল স্টোরেজ থেকে টোকেন মোছা
     localStorage.removeItem('token');
+    // ২. সেশন ক্লিয়ার করা (যদি অন্য কোনো ডাটা থাকে)
+    localStorage.clear();
+    sessionStorage.clear();
+    // ৩. লগইন পেজে রিডাইরেক্ট করা
     navigate('/login');
   };
 
@@ -208,7 +214,7 @@ const Settings = () => {
           </div>
         </section>
 
-        {/* TERMINATION */}
+        {/* TERMINATION (LOGOUT) */}
         <motion.button 
           whileTap={{ scale: 0.95 }}
           onClick={handleLogout}
