@@ -7,10 +7,10 @@ import Conversation from "../models/Conversation.js";
 import Message from "../models/Message.js";      
 import User from "../models/User.js";  
 
-// 🛡️ JWT Middleware (Issuer URL অবশ্যই Server.js এর সাথে মিলতে হবে)
+// 🛡️ JWT Middleware
 const checkJwt = auth({
   audience: 'https://onyx-drift-api.com',
-  issuerBaseURL: 'https://dev-prxn6v2o08xp5loz.us.auth0.com/', // আপনার মেইন ডোমেইনটি এখানে দিন
+  issuerBaseURL: 'https://dev-prxn6v2o08xp5loz.us.auth0.com/', 
   tokenSigningAlg: 'RS256'
 });
 
@@ -56,12 +56,12 @@ router.get("/conversations", checkJwt, async (req, res) => {
       return res.status(401).json({ error: "Neural identity missing" });
     }
 
-    // ১. সব কনভারসেশন খুঁজে বের করা
+    // ১. মেম্বার হিসেবে যুক্ত সব কনভারসেশন খুঁজে বের করা
     const conversations = await Conversation.find({
       members: { $in: [currentUserId] },
     }).sort({ updatedAt: -1 }).lean();
 
-    // ২. মেম্বার ডিটেইলস পপুলেট করা
+    // ২. মেম্বার ডিটেইলস পপুলেট করা (যদি গ্রুপ না হয়)
     const detailedConversations = await Promise.all(
       conversations.map(async (conv) => {
         if (!conv.isGroup) {
@@ -88,7 +88,7 @@ router.get("/conversations", checkJwt, async (req, res) => {
 
 /* ==========================================================
     2️⃣ CREATE OR GET CONVERSATION
-========================================================== */
+========================================================= */
 router.post("/conversation", checkJwt, async (req, res) => {
   const { receiverId, isGroup, groupName, members } = req.body;
   const senderId = req.auth?.payload?.sub;
@@ -105,7 +105,9 @@ router.post("/conversation", checkJwt, async (req, res) => {
       return res.status(200).json(savedGroup);
     }
 
-    // Single Chat Logic
+    if (!receiverId) return res.status(400).json({ error: "Receiver ID required" });
+
+    // Single Chat Logic: চেক করা আগে থেকেই চ্যাট আছে কি না
     let conversation = await Conversation.findOne({
       isGroup: false,
       members: { $all: [senderId, receiverId], $size: 2 },
@@ -140,7 +142,7 @@ router.post("/message", checkJwt, async (req, res) => {
 
     if (!conversationId) return res.status(400).json({ error: "Channel ID required" });
 
-    // Self-destruct logic (TTL)
+    // Self-destruct logic (TTL) - ১৫ সেকেন্ড পর ডিলিট হবে
     let expireAt = isSelfDestruct ? new Date(Date.now() + 15 * 1000) : null;
 
     const newMessage = new Message({
@@ -152,19 +154,21 @@ router.post("/message", checkJwt, async (req, res) => {
       neuralMood: neuralMood || "Neural-Flow",
       isGroup: isGroup || false,
       isSelfDestruct: isSelfDestruct || false,
-      deliverAt: deliverAt || Date.now(),
+      deliverAt: deliverAt ? new Date(deliverAt) : new Date(), // টাইম ক্যাপসুল হ্যান্ডলিং
       expireAt 
     });
 
     const savedMessage = await newMessage.save();
 
-    // Update Last Message in Conversation
+    // Conversation আপডেট করা
     let previewText = text || "Attachment received";
     if (isSelfDestruct) previewText = "👻 [Redacted Signal]";
+    if (mediaType === "image") previewText = "🖼️ Visual Signal";
+    if (mediaType === "voice") previewText = "🎙️ Audio Signal";
 
     await Conversation.findByIdAndUpdate(conversationId, {
       $set: { 
-        updatedAt: Date.now(),
+        updatedAt: new Date(),
         lastMessage: { text: previewText, senderId: senderId } 
       },
     });
@@ -187,9 +191,10 @@ router.get("/:conversationId", checkJwt, async (req, res) => {
         return res.status(400).json({ error: "Invalid Channel ID" });
     }
 
+    // টাইম ক্যাপসুল লজিক: শুধু সেই মেসেজ আসবে যেগুলো ডেলিভারি টাইম পার হয়ে গেছে
     const messages = await Message.find({
       conversationId: conversationId,
-      deliverAt: { $lte: new Date() } // Time Capsule Handling
+      deliverAt: { $lte: new Date() } 
     }).sort({ createdAt: 1 }).lean();
     
     res.status(200).json(messages);
