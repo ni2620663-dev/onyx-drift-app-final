@@ -66,13 +66,15 @@ export default function App() {
       const cleanUserId = user.sub.replace(/[^a-zA-Z0-9]/g, "_");
       
       try {
-        // সেফটি চেক: devToken মেথডটি আছে কি না তা যাচাই করা
-        const token = typeof StreamVideoClient.devToken === 'function' 
-          ? StreamVideoClient.devToken(cleanUserId) 
-          : null;
-
-        if (!token) {
-          console.warn("⚠️ Stream devToken failed. If in production, ensure 'Disable Auth Checks' is ON in Stream Dashboard.");
+        // ফিক্স: প্রোডাকশনে devToken না থাকলে একটি ডামি টোকেন ব্যবহার করা
+        // এবং মেথডটি আছে কি না তা আগে চেক করা (Co.devToken error সমাধান)
+        let token = "";
+        if (typeof StreamVideoClient.devToken === 'function') {
+          token = StreamVideoClient.devToken(cleanUserId);
+        } else {
+          // যদি devToken ফাংশন না পাওয়া যায়, তবে একটি হার্ডকোডেড স্ট্রিং 
+          // (আপনার ড্যাশবোর্ডে Disable Auth Checks অন থাকলে এটি কাজ করবে)
+          token = "production_fallback_token_" + cleanUserId;
         }
 
         client = new StreamVideoClient({
@@ -82,17 +84,17 @@ export default function App() {
             name: user.name || "Drifter",
             image: user.picture,
           },
-          token: token || "", // যদি টোকেন না থাকে তবে খালি স্ট্রিং (Dashboard-এ Auth অফ থাকলে কাজ করবে)
+          token: token,
         });
         
         setVideoClient(client);
       } catch (err) {
-        console.error("❌ Stream Client Init Error:", err);
+        console.error("❌ Stream Client Neural Link Failed:", err);
       }
 
       return () => {
         if (client) {
-          client.disconnectUser();
+          client.disconnectUser().catch(console.error);
         }
         setVideoClient(null);
       };
@@ -197,11 +199,12 @@ export default function App() {
   const isFullWidthPage = ["/messenger", "/messages", "/settings", "/", "/join", "/reels", "/ai-twin", "/call"].some(path => location.pathname === path || location.pathname.startsWith(path + "/"));
   const isReelsPage = location.pathname.startsWith("/reels");
 
-  if (isLoading) return <div className="h-screen bg-[#020617]" />;
+  // ডাটা লোড হওয়ার সময় ব্ল্যাঙ্ক স্ক্রিন না দেখিয়ে একটি ডিফল্ট স্টাইল
+  if (isLoading) return <div className="h-screen bg-[#020617] flex items-center justify-center text-cyan-500">Connecting to Onyx Grid...</div>;
 
   return (
     <div className="min-h-screen bg-[#020617] text-gray-200 font-sans relative overflow-x-hidden">
-      {/* যদি videoClient রেডি থাকে তবেই StreamVideo র‍্যাপার ইউজ হবে */}
+      {/* যদি videoClient রেডি থাকে তবেই StreamVideo র‍্যাপার ইউজ হবে, নয়তো সাধারণ UI */}
       {videoClient ? (
         <StreamVideo client={videoClient}>
           <Toaster position="top-center" />
@@ -270,14 +273,17 @@ export default function App() {
           )}
         </StreamVideo>
       ) : (
-        /* যখন ইউজার লগইন নেই বা ক্লায়েন্ট লোড হচ্ছে না তখন সাধারণ রাউট */
-        <Suspense fallback={null}>
-          <Routes>
-            <Route path="/" element={isLoading ? <div className="h-screen bg-[#020617]" /> : <Landing />} />
-            <Route path="/join" element={<JoinPage />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </Suspense>
+        /* যখন Stream Client তৈরি হচ্ছে না বা ইউজার লগইন নেই */
+        <div className="w-full">
+          <Toaster position="top-center" />
+          <Suspense fallback={<div className="h-screen bg-[#020617]" />}>
+            <Routes>
+              <Route path="/" element={<Landing />} />
+              <Route path="/join" element={<JoinPage />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </Suspense>
+        </div>
       )}
     </div>
   );
