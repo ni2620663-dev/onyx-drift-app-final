@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth0 } from "@auth0/auth0-react";
 import { 
@@ -13,10 +13,10 @@ import { HiOutlineXMark } from "react-icons/hi2";
 import { FaClock, FaMicrophone } from "react-icons/fa";
 import { motion } from "framer-motion";
 
-// Stream CSS অবশ্যই ইমপোর্ট করতে হবে
+// Stream SDK styles
 import '@stream-io/video-react-sdk/dist/css/styles.css';
 
-const apiKey = 'aw5bpt4vfj56'; // আপনার ড্যাশবোর্ড থেকে পাওয়া কী
+const apiKey = 'aw5bpt4vfj56'; 
 
 const CallPage = () => {
   const { roomId } = useParams();
@@ -38,7 +38,9 @@ const CallPage = () => {
     if (isCallStarted) {
       interval = setInterval(() => setDuration((prev) => prev + 1), 1000);
     }
-    return () => clearInterval(interval);
+    return () => {
+      if (interval) clearInterval(interval);
+    };
   }, [isCallStarted]);
 
   const formatTime = (seconds) => {
@@ -51,46 +53,66 @@ const CallPage = () => {
   useEffect(() => {
     if (isAuthLoading || !isAuthenticated || !user || !roomId) return;
 
+    let videoClient;
+    let videoCall;
+
     const initStream = async () => {
-      // ১. ইউজার আইডি ফরম্যাটিং (Stream শুধু আন্ডারস্কোর সাপোর্ট করে স্পেশাল ক্যারেক্টার হিসেবে)
       const cleanUserId = user.sub.replace(/[^a-zA-Z0-9]/g, "_");
 
-      // ২. ক্লায়েন্ট তৈরি
-      const videoClient = new StreamVideoClient({
-        apiKey,
-        user: {
-          id: cleanUserId,
-          name: user.name || 'Drifter',
-          image: user.picture,
-        },
-        // ডেভেলপমেন্ট মোডের জন্য টোকেন জেনারেটর (Production-এ ব্যাকএন্ড থেকে আনতে হবে)
-        token: StreamVideoClient.devToken(cleanUserId), 
-      });
-
-      // ৩. কল অবজেক্ট তৈরি
-      const videoCall = videoClient.call('default', roomId);
-      
       try {
+        // Fix: Call devToken as a static method correctly
+        const token = StreamVideoClient.devToken(cleanUserId);
+
+        videoClient = new StreamVideoClient({
+          apiKey,
+          user: {
+            id: cleanUserId,
+            name: user.name || 'Drifter',
+            image: user.picture,
+          },
+          token,
+        });
+
+        videoCall = videoClient.call('default', roomId);
+        
         await videoCall.join({ create: true });
+        
+        // Handle Audio Only mode camera state
+        if (callMode === 'audio') {
+          await videoCall.camera.disable();
+        }
+
         setClient(videoClient);
         setCall(videoCall);
         setIsCallStarted(true);
+
       } catch (err) {
-        console.error("Failed to join call", err);
+        console.error("❌ Neural Link Connection Failed:", err);
+        navigate('/messages');
       }
     };
 
     initStream();
 
+    // Cleanup: Leave call and disconnect user when component unmounts
     return () => {
-      if (call) call.leave();
-      if (client) client.disconnectUser();
+      if (videoCall) {
+        videoCall.leave().catch(e => console.error("Call leave error:", e));
+      }
+      if (videoClient) {
+        videoClient.disconnectUser().catch(e => console.error("Client disconnect error:", e));
+      }
     };
-  }, [user, isAuthenticated, isAuthLoading, roomId]);
+  }, [user, isAuthenticated, isAuthLoading, roomId, callMode, navigate]);
 
+  /* =================🖼️ UI HANDLER ================= */
   if (isAuthLoading || !client || !call) return (
-    <div className="h-screen bg-[#020617] flex items-center justify-center text-cyan-500 font-mono animate-pulse uppercase tracking-widest">
-      Establishing Neural Link...
+    <div className="h-screen bg-[#020617] flex flex-col items-center justify-center text-cyan-500 font-mono overflow-hidden">
+      <div className="relative w-24 h-24 mb-8">
+        <div className="absolute inset-0 border-4 border-cyan-500/10 rounded-full" />
+        <div className="absolute inset-0 border-4 border-t-cyan-500 rounded-full animate-spin" />
+      </div>
+      <p className="animate-pulse uppercase tracking-[0.5em] text-xs">Establishing Neural Link...</p>
     </div>
   );
 
@@ -141,7 +163,11 @@ const CallPage = () => {
                 <div className="absolute inset-0 flex flex-col items-center justify-center">
                    <div className="relative">
                       <div className="absolute inset-0 bg-cyan-500/20 blur-[100px] rounded-full animate-pulse" />
-                      <img src={user?.picture} className="w-32 h-32 rounded-full border-2 border-cyan-500/50 p-1 grayscale" alt="Caller" />
+                      <img 
+                        src={user?.picture || "https://api.dicebear.com/7.x/avataaars/svg?seed=Onyx"} 
+                        className="w-32 h-32 rounded-full border-2 border-cyan-500/50 p-1 grayscale object-cover" 
+                        alt="Caller" 
+                      />
                       <div className="mt-8 flex flex-col items-center gap-2">
                          <FaMicrophone className="text-cyan-500 animate-bounce" />
                          <p className="text-cyan-400 text-[10px] font-black uppercase tracking-[0.4em]">Audio Only Mode</p>
@@ -170,6 +196,8 @@ const CallPage = () => {
               background-color: #020617 !important;
             }
             .str-video__notification { display: none !important; }
+            .str-video__participant-details { color: #06b6d4 !important; font-family: monospace !important; }
+            .str-video__video-placeholder { background: #020617 !important; }
           `}</style>
         </div>
       </StreamTheme>
