@@ -66,22 +66,28 @@ export default function App() {
       const cleanUserId = user.sub.replace(/[^a-zA-Z0-9]/g, "_");
       
       try {
-        // Fix: Static method usage from the class
-        const token = StreamVideoClient.devToken(cleanUserId);
-        
+        // সেফটি চেক: devToken মেথডটি আছে কি না তা যাচাই করা
+        const token = typeof StreamVideoClient.devToken === 'function' 
+          ? StreamVideoClient.devToken(cleanUserId) 
+          : null;
+
+        if (!token) {
+          console.warn("⚠️ Stream devToken failed. If in production, ensure 'Disable Auth Checks' is ON in Stream Dashboard.");
+        }
+
         client = new StreamVideoClient({
           apiKey,
           user: {
             id: cleanUserId,
-            name: user.name || "User",
+            name: user.name || "Drifter",
             image: user.picture,
           },
-          token,
+          token: token || "", // যদি টোকেন না থাকে তবে খালি স্ট্রিং (Dashboard-এ Auth অফ থাকলে কাজ করবে)
         });
         
         setVideoClient(client);
       } catch (err) {
-        console.error("Stream Client Error:", err);
+        console.error("❌ Stream Client Init Error:", err);
       }
 
       return () => {
@@ -194,8 +200,8 @@ export default function App() {
   if (isLoading) return <div className="h-screen bg-[#020617]" />;
 
   return (
-    /* Fix: Handle case when videoClient is null with a conditional check or loading state */
     <div className="min-h-screen bg-[#020617] text-gray-200 font-sans relative overflow-x-hidden">
+      {/* যদি videoClient রেডি থাকে তবেই StreamVideo র‍্যাপার ইউজ হবে */}
       {videoClient ? (
         <StreamVideo client={videoClient}>
           <Toaster position="top-center" />
@@ -264,10 +270,10 @@ export default function App() {
           )}
         </StreamVideo>
       ) : (
-        /* Fallback for unauthenticated users or during client init */
+        /* যখন ইউজার লগইন নেই বা ক্লায়েন্ট লোড হচ্ছে না তখন সাধারণ রাউট */
         <Suspense fallback={null}>
           <Routes>
-            <Route path="/" element={<Landing />} />
+            <Route path="/" element={isLoading ? <div className="h-screen bg-[#020617]" /> : <Landing />} />
             <Route path="/join" element={<JoinPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
