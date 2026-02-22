@@ -22,7 +22,7 @@ const CallPage = () => {
   const queryParams = new URLSearchParams(location.search);
   const callMode = queryParams.get('mode') || 'video'; 
 
-  // ZegoCloud Credentials (পাবলিকলি রাখা রিস্কি, পরে .env তে নিয়ে যাবেন)
+  // ZegoCloud Credentials
   const appID = 1086315716;
   const serverSecret = "faa9451e78f290d4a11ff8eb53c79bea"; 
 
@@ -45,7 +45,6 @@ const CallPage = () => {
 
   /* =================🛰️ NEURAL LINK ENGINE ================= */
   useEffect(() => {
-    // Auth লোড না হওয়া পর্যন্ত ওয়েট করা
     if (isAuthLoading || !isAuthenticated || !user || !roomId) return;
 
     const callAudio = new Audio("https://assets.mixkit.co/active_storage/sfx/1359/1359-preview.mp3");
@@ -54,28 +53,25 @@ const CallPage = () => {
 
     const initMeeting = async () => {
       try {
-        // ১. ইউজার আইডি ফরম্যাটিং (ZegoCloud শুধুমাত্র আলফানিউমেরিক সাপোর্ট করে)
-        // sub আইডি থেকে শুধু লেটার আর নাম্বার রেখে বাকিটা ছেঁটে ফেলা হয়েছে
-        const cleanUserId = user.sub.replace(/[^a-zA-Z0-9]/g, "");
-        const userName = user.name?.split(' ')[0] || "Drifter";
+        // 🛡️ ইউজার আইডি ক্লিন করা (Strict Regex: শুধু সংখ্যা বা লেটার থাকবে)
+        // google-oauth2|123456 -> 123456 (বা শুধু শেষ ১০টি ক্যারেক্টার)
+        const cleanUserId = user.sub.replace(/[^a-zA-Z0-9]/g, "").slice(-10);
+        const cleanUserName = (user.name || "Drifter").split(' ')[0].replace(/[^a-zA-Z0-9]/g, "");
 
-        // ২. টোকেন জেনারেট (generateKitTokenForTest ব্যবহার করা হয়েছে)
+        // ২. টোকেন জেনারেট (AppID কে অবশ্যই Number হতে হবে)
         const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(
-          appID, 
+          Number(appID), 
           serverSecret, 
           roomId, 
           cleanUserId, 
-          userName
+          cleanUserName
         );
 
-        // ৩. Zego ইনসট্যান্স তৈরি
         const zp = ZegoUIKitPrebuilt.create(kitToken);
         zpRef.current = zp;
 
-        // ৪. রিংটোন প্লে
-        callAudio.play().catch(() => console.log("Audio waiting for user link..."));
+        callAudio.play().catch(() => console.log("Waiting for interaction..."));
 
-        // ৫. রুমে জয়েন
         zp.joinRoom({
           container: containerRef.current,
           scenario: {
@@ -94,11 +90,8 @@ const CallPage = () => {
           turnOnMicrophoneWhenJoining: true, 
           useFrontFacingCamera: true,
 
-          onUserJoin: (users) => {
-            console.log("👤 Neural Member Joined");
-            if (ringtoneRef.current) {
-              ringtoneRef.current.pause();
-            }
+          onUserJoin: () => {
+            if (ringtoneRef.current) ringtoneRef.current.pause();
             setIsCallStarted(true); 
           },
           onUserLeave: () => navigate('/messages'),
@@ -106,21 +99,16 @@ const CallPage = () => {
         });
 
       } catch (error) {
-        console.error("Zego Initialization Error:", error);
-        setErrorMsg(`Neural sync failed: ${error.message || "Unknown error"}`);
+        console.error("Zego Error:", error);
+        setErrorMsg("Neural link failed. AppID or Token invalid.");
       }
     };
 
-    const timer = setTimeout(() => {
-      initMeeting();
-    }, 800);
+    const timer = setTimeout(initMeeting, 1000);
 
     return () => {
       clearTimeout(timer);
-      if (zpRef.current) {
-        zpRef.current.destroy();
-        zpRef.current = null;
-      }
+      if (zpRef.current) zpRef.current.destroy();
       if (ringtoneRef.current) {
         ringtoneRef.current.pause();
         ringtoneRef.current.src = "";
@@ -129,8 +117,8 @@ const CallPage = () => {
   }, [roomId, user, isAuthenticated, isAuthLoading, navigate, callMode]);
 
   if (isAuthLoading) return (
-    <div className="h-screen bg-[#020617] flex items-center justify-center text-cyan-500 font-mono animate-pulse uppercase tracking-widest">
-      Verifying Identity...
+    <div className="h-screen bg-[#020617] flex items-center justify-center text-cyan-500 font-mono animate-pulse uppercase">
+      Scanning Identity...
     </div>
   );
 
@@ -139,10 +127,10 @@ const CallPage = () => {
       <div className="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center text-red-500 mb-4 border border-red-500/20">
         <HiOutlineXMark size={32} />
       </div>
-      <h2 className="text-xl font-black text-white mb-2 uppercase tracking-tighter">Sync Terminated</h2>
+      <h2 className="text-xl font-black text-white mb-2 uppercase tracking-tighter">Link Error</h2>
       <p className="text-gray-400 text-sm max-w-xs">{errorMsg}</p>
       <button onClick={() => navigate('/messages')} className="mt-8 px-8 py-3 bg-white/5 border border-white/10 rounded-2xl text-white text-xs font-black uppercase tracking-widest">
-        Return to Nexus
+        Back to Nexus
       </button>
     </div>
   );
@@ -150,7 +138,7 @@ const CallPage = () => {
   return (
     <div className="fixed inset-0 z-[99999] w-full h-screen bg-[#020617] flex flex-col overflow-hidden">
       
-      {/* --- 🛰️ NEURAL HUD OVERLAY --- */}
+      {/* HUD OVERLAY */}
       <div className="absolute top-0 left-0 w-full p-6 z-[100] flex justify-between items-start pointer-events-none">
         <div className="flex flex-col gap-3 pointer-events-auto">
           <div className="flex items-center gap-3 bg-black/40 backdrop-blur-xl px-4 py-2 rounded-2xl border border-cyan-500/20">
@@ -159,7 +147,7 @@ const CallPage = () => {
               <div className="w-full h-full bg-cyan-400 rounded-full relative" />
             </div>
             <h2 className="text-cyan-400 font-black uppercase tracking-[0.2em] text-[10px]">
-              {isCallStarted ? `Neural ${callMode} Active` : `Initializing Link...`}
+              {isCallStarted ? `Neural ${callMode} Active` : `Initializing...`}
             </h2>
           </div>
 
@@ -167,7 +155,7 @@ const CallPage = () => {
             <motion.div initial={{ x: -20, opacity: 0 }} animate={{ x: 0, opacity: 1 }}
               className="flex items-center gap-2 bg-white/5 backdrop-blur-lg px-4 py-1.5 rounded-xl border border-white/10 w-fit"
             >
-              <FaClock className="text-cyan-500 text-[10px] animate-pulse" />
+              <FaClock className="text-cyan-500 text-[10px]" />
               <span className="text-white font-mono text-sm font-bold tracking-widest">
                 {formatTime(duration)}
               </span>
@@ -180,13 +168,13 @@ const CallPage = () => {
             if (zpRef.current) zpRef.current.destroy();
             navigate('/messages');
           }}
-          className="w-14 h-14 bg-red-500/10 backdrop-blur-2xl rounded-2xl flex items-center justify-center border border-red-500/30 text-red-500 pointer-events-auto hover:bg-red-500 hover:text-white transition-all active:scale-90"
+          className="w-14 h-14 bg-red-500/10 backdrop-blur-2xl rounded-2xl flex items-center justify-center border border-red-500/30 text-red-500 pointer-events-auto hover:bg-red-500 transition-all active:scale-90"
         >
           <HiOutlineXMark size={28} />
         </button>
       </div>
 
-      {/* --- 🎙️ AUDIO MODE UI (Background) --- */}
+      {/* AUDIO MODE UI */}
       {callMode === 'audio' && (
         <div className="absolute inset-0 flex flex-col items-center justify-center z-10 pointer-events-none">
           <div className="relative">
@@ -198,51 +186,38 @@ const CallPage = () => {
             </motion.div>
             <div className="mt-8 flex flex-col items-center gap-2">
                <FaMicrophone className="text-cyan-500 animate-bounce" />
-               <p className="text-cyan-400 text-[10px] font-black uppercase tracking-[0.4em]">Encrypted Voice Only</p>
+               <p className="text-cyan-400 text-[10px] font-black uppercase tracking-[0.4em]">Encrypted Pulse</p>
             </div>
           </div>
         </div>
       )}
 
-      {/* --- 🎥 ZEGO UI CONTAINER --- */}
+      {/* ZEGO CONTAINER */}
       <div 
         ref={containerRef} 
         className={`zego-container w-full h-full ${callMode === 'audio' ? 'opacity-0 invisible' : 'opacity-100 visible'}`}
       ></div>
 
-      {/* --- 💅 CUSTOM UI OVERRIDES --- */}
       <style>{`
         .zego-container { background-color: #020617 !important; }
-        
-        /* কন্ট্রোল বার ডিজাইন */
         .ZEGO_V_W_CONTROL_BAR {
-          bottom: 40px !important;
-          background: rgba(2, 6, 23, 0.85) !important;
-          backdrop-filter: blur(24px) !important;
+          bottom: 30px !important;
+          background: rgba(2, 6, 23, 0.8) !important;
+          backdrop-filter: blur(20px) !important;
           border-radius: 30px !important;
-          border: 1px solid rgba(34, 211, 238, 0.15) !important;
-          padding: 10px 20px !important;
-          box-shadow: 0 20px 50px rgba(0,0,0,0.5) !important;
+          border: 1px solid rgba(34, 211, 238, 0.1) !important;
+          padding: 8px 15px !important;
         }
-
-        /* অপ্রয়োজনীয় এলিমেন্ট হাইড করা */
-        .ZEGO_V_W_LOGO, .ZEGO_V_W_TOP_BAR, .ZEGO_V_W_USER_LIST, .ZEGO_V_W_SETTING_MODEL_TITLE { 
-          display: none !important; 
-        }
-
-        /* লোকাল ভিডিও প্রিভিউ পজিশনিং */
+        .ZEGO_V_W_LOGO, .ZEGO_V_W_TOP_BAR, .ZEGO_V_W_USER_LIST { display: none !important; }
         ${isCallStarted && callMode === 'video' ? `
           .ZEGO_V_W_LOCAL_VIDEO {
             position: absolute !important;
             right: 20px !important;
             top: 100px !important;
-            width: 110px !important;
-            height: 160px !important;
-            border-radius: 20px !important;
-            border: 2px solid rgba(6, 182, 212, 0.3) !important;
-            overflow: hidden !important;
-            z-index: 50 !important;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5) !important;
+            width: 100px !important;
+            height: 150px !important;
+            border-radius: 15px !important;
+            border: 1px solid rgba(6, 182, 212, 0.3) !important;
           }
         ` : ""}
       `}</style>
