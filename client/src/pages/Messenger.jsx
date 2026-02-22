@@ -11,7 +11,7 @@ import {
 } from "react-icons/hi2";
 import { FaPhone } from "react-icons/fa";
 import { AnimatePresence, motion } from "framer-motion";
-import { useNavigate } from "react-router-dom"; // ✅ নেভিগেশনের জন্য যোগ করা হয়েছে
+import { useNavigate } from "react-router-dom";
 
 // Neural Components
 import MoodSelector from "./MoodSelector";
@@ -19,9 +19,8 @@ import GroupMessenger from "./GroupMessenger";
 import GroupCallScreen from "./GroupCallScreen"; 
 import Notification from "./Notifications";
 import Settings from "./Settings";
-import CallPage from "./CallPage"; // ✅ ইমপোর্ট ঠিক করা হয়েছে
 
-/* =================🌀 NEURAL NEON SPINNER COMPONENT ================= */
+/* =================🌀 NEURAL NEON SPINNER ================= */
 const NeonSpinner = () => (
   <div className="flex flex-col items-center justify-center py-10 space-y-4">
     <div className="relative w-12 h-12">
@@ -36,13 +35,11 @@ const NeonSpinner = () => (
         className="absolute inset-2 border-2 border-transparent border-b-purple-500 rounded-full shadow-[0_0_10px_#a855f7]"
       />
     </div>
-    <p className="text-[10px] font-mono text-cyan-500 uppercase tracking-[0.2em] animate-pulse">
-      Syncing Neural Buffer...
-    </p>
+    <p className="text-[10px] font-mono text-cyan-500 uppercase tracking-[0.2em] animate-pulse">Syncing Neural Buffer...</p>
   </div>
 );
 
-/* =================🎙️ NEURAL AUDIO PLAYER COMPONENT ================= */
+/* =================🎙️ NEURAL AUDIO PLAYER ================= */
 const NeuralAudioPlayer = ({ url }) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const audioRef = useRef(new Audio(url));
@@ -82,7 +79,7 @@ const NeuralAudioPlayer = ({ url }) => {
 /* =================🛸 MAIN MESSENGER COMPONENT ================= */
 const Messenger = ({ socket }) => {
   const { user, getAccessTokenSilently, isAuthenticated, isLoading: authLoading } = useAuth0();
-  const navigate = useNavigate(); // ✅ পেজ চেঞ্জ করার জন্য
+  const navigate = useNavigate();
 
   const [conversations, setConversations] = useState([]);
   const [currentChat, setCurrentChat] = useState(null);
@@ -94,16 +91,11 @@ const Messenger = ({ socket }) => {
   const [activeCall, setActiveCall] = useState(null); 
   const [showNotification, setShowNotification] = useState(false);
   const [typingUser, setTypingUser] = useState(null);
-
-  // Media & Search States
-  const [searchQuery, setSearchQuery] = useState("");
-  const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
-  
-  // Voice Recording States
   const [isRecording, setIsRecording] = useState(false);
-  const mediaRecorderRef = useRef(null);
+  const [isLoadingMessages, setIsLoadingMessages] = useState(false);
 
+  const mediaRecorderRef = useRef(null);
   const scrollRef = useRef();
   const fileInputRef = useRef(null);
   const tokenCache = useRef(null);
@@ -113,8 +105,7 @@ const Messenger = ({ socket }) => {
   const CLOUDINARY_URL = "https://api.cloudinary.com/v1_1/YOUR_CLOUD_NAME/upload";
   const UPLOAD_PRESET = "onyx_drift_presets";
 
-  /* =================🔒 NEURAL AUTH & API CORE ================= */
-  
+  /* =================🔒 AUTH CORE ================= */
   const getAuthToken = useCallback(async () => {
     try {
       if (tokenCache.current) return tokenCache.current;
@@ -137,8 +128,32 @@ const Messenger = ({ socket }) => {
     });
   }, [getAuthToken]);
 
-  /* =================🎙️ VOICE RECORDING ENGINE ================= */
+  /* =================📞 CALLING ENGINE (Audio/Video) ================= */
+  const initiateCall = (type) => {
+    if (!currentChat || !user) return;
 
+    // Generate Unique Room ID
+    const prefix = type === 'audio' ? 'aud' : 'vid';
+    const roomId = `${prefix}_${Date.now()}_${user.sub.slice(-5)}`;
+    const receiverId = currentChat.members?.find(m => m !== user.sub);
+    
+    const s = socket?.current || socket;
+    if (s && receiverId) {
+      s.emit("makeCall", {
+        to: receiverId,
+        from: user.sub,
+        callerName: user.name || "Onyx Drifter",
+        callerPic: user.picture,
+        roomId: roomId,
+        callType: type // 'audio' or 'video'
+      });
+      
+      // Navigate to Call Page with Type Query
+      navigate(`/call/${roomId}?mode=${type}`);
+    }
+  };
+
+  /* =================🎙️ VOICE RECORDING ================= */
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -165,8 +180,7 @@ const Messenger = ({ socket }) => {
     setIsRecording(false);
   };
 
-  /* =================📁 MEDIA HANDLING (Image & Voice) ================= */
-
+  /* =================📁 MEDIA HANDLING ================= */
   const handleFileUpload = async (e, blob = null, type = "image") => {
     const file = blob || e.target.files[0];
     if (!file) return;
@@ -178,8 +192,7 @@ const Messenger = ({ socket }) => {
 
     try {
       const res = await axios.post(CLOUDINARY_URL, formData);
-      const mediaUrl = res.data.secure_url;
-      handleSend(mediaUrl, type);
+      handleSend(res.data.secure_url, type);
     } catch (err) {
       console.error("Media Transmission Failed:", err);
     } finally {
@@ -188,12 +201,9 @@ const Messenger = ({ socket }) => {
   };
 
   /* =================📡 SIGNAL TRANSMISSION ================= */
-  
   const handleSend = async (mediaUrl = null, type = "text") => {
     if ((!newMessage.trim() && !mediaUrl) || !currentChat || !user) return;
     
-    if (navigator.vibrate) navigator.vibrate(10);
-
     const msgData = {
       senderId: user.sub,
       senderName: isIncognito ? "Ghost-Drifter" : (user.name || user.nickname),
@@ -221,24 +231,17 @@ const Messenger = ({ socket }) => {
         const api = await neuralApi();
         await api.post("/api/messages/message", msgData);
       }
-    } catch (err) { 
-      console.error("Signal Lost in Void:", err); 
-    }
+    } catch (err) { console.error("Signal Lost:", err); }
   };
 
-  /* =================⚡ REAL-TIME ENGINE ================= */
-  
+  /* =================⚡ REAL-TIME SYNC ================= */
   useEffect(() => {
     const s = socket?.current || socket;
     if (!s || !user) return;
-
     s.on("getMessage", (data) => {
-      if(currentChat?._id === data.conversationId) {
-        setMessages(prev => [...prev, data]);
-      }
+      if(currentChat?._id === data.conversationId) setMessages(prev => [...prev, data]);
       fetchConversations();
     });
-
     return () => { s.off("getMessage"); };
   }, [socket, currentChat, user]);
 
@@ -265,14 +268,13 @@ const Messenger = ({ socket }) => {
   useEffect(() => { if (currentChat) fetchMessages(currentChat._id); }, [currentChat]);
   useEffect(() => { scrollRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
-  if (authLoading) return <div className="h-screen bg-[#02040a] flex items-center justify-center text-cyan-500 font-mono italic animate-pulse tracking-widest">BOOTING NEURAL INTERFACE...</div>;
+  if (authLoading) return <div className="h-screen bg-[#02040a] flex items-center justify-center text-cyan-500 font-mono animate-pulse">BOOTING NEURAL INTERFACE...</div>;
 
   return (
     <div className={`fixed inset-0 text-white h-[100dvh] overflow-hidden transition-all duration-700 ${isIncognito ? 'bg-[#0a0010]' : 'bg-[#02040a]'}`}>
       
-      {/* Notifications & Calls */}
       <AnimatePresence>
-        {activeCall && <GroupCallScreen roomId={activeCall.roomId} callerName={activeCall.name} onHangup={() => setActiveCall(null)} />}
+        {activeCall && <GroupCallScreen roomId={activeCall.roomId} onHangup={() => setActiveCall(null)} />}
         {showNotification && (
           <motion.div initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }} className="fixed inset-0 z-[300] bg-[#02040a] flex flex-col">
             <header className="p-4 pt-12 flex items-center gap-4 border-b border-white/5 bg-black/50 backdrop-blur-xl">
@@ -347,7 +349,7 @@ const Messenger = ({ socket }) => {
       {/* 💬 Chat Interface */}
       <AnimatePresence>
         {currentChat && (
-          <motion.div initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }} transition={{ type: "spring", damping: 30 }} className="fixed inset-0 z-[200] flex flex-col bg-[#02040a]">
+          <motion.div initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }} className="fixed inset-0 z-[200] flex flex-col bg-[#02040a]">
             <header className="p-3 pt-12 flex justify-between items-center border-b border-white/5 bg-black/80 backdrop-blur-xl">
                 <div className="flex items-center gap-2">
                   <button onClick={() => setCurrentChat(null)} className="text-zinc-400 p-2"><HiOutlineChevronLeft size={28}/></button>
@@ -360,12 +362,18 @@ const Messenger = ({ socket }) => {
                     </div>
                   </div>
                 </div>
-                <div className="flex gap-1">
-                  <button className="text-zinc-400 p-2.5"><FaPhone size={16}/></button>
-                  {/* 🎥 ভিডিও কল বাটন - এখন কাজ করবে */}
+                
+                {/* 📞 Call Controls (Audio & Video) */}
+                <div className="flex gap-1 pr-2">
                   <button 
-                    onClick={() => navigate(`/call/${currentChat._id}`)} 
-                    className="text-zinc-400 p-2.5 active:text-cyan-500"
+                    onClick={() => initiateCall('audio')}
+                    className="p-2.5 text-zinc-400 hover:text-cyan-500 hover:bg-white/5 rounded-xl transition-all active:scale-90"
+                  >
+                    <FaPhone size={16}/>
+                  </button>
+                  <button 
+                    onClick={() => initiateCall('video')}
+                    className="p-2.5 text-zinc-400 hover:text-cyan-500 hover:bg-white/5 rounded-xl transition-all active:scale-90"
                   >
                     <HiOutlineVideoCamera size={22}/>
                   </button>
@@ -373,45 +381,33 @@ const Messenger = ({ socket }) => {
             </header>
             
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              {isLoadingMessages ? (
-                <NeonSpinner />
-              ) : (
-                messages.map((m, i) => (
-                  <div key={m._id || i} className={`flex flex-col ${m.senderId === user?.sub ? 'items-end' : 'items-start'}`}>
-                    <div className={`px-4 py-2.5 rounded-2xl max-w-[85%] border transition-all duration-500 ${m.senderId === user?.sub ? "bg-cyan-500/10 border-cyan-500/20 shadow-[0_0_15px_rgba(6,182,212,0.1)]" : "bg-white/5 border-white/10"}`}>
-                      {m.mediaType === "image" && <img src={m.media} alt="Neural" className="rounded-lg mb-2 max-h-60 w-full object-cover" />}
-                      {m.mediaType === "voice" && <NeuralAudioPlayer url={m.media} />}
-                      {m.text && <p className="text-[13px] leading-relaxed">{m.text}</p>}
-                    </div>
-                    <span className="text-[7px] text-zinc-600 mt-1 uppercase font-mono">{new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+              {isLoadingMessages ? <NeonSpinner /> : messages.map((m, i) => (
+                <div key={m._id || i} className={`flex flex-col ${m.senderId === user?.sub ? 'items-end' : 'items-start'}`}>
+                  <div className={`px-4 py-2.5 rounded-2xl max-w-[85%] border transition-all duration-500 ${m.senderId === user?.sub ? "bg-cyan-500/10 border-cyan-500/20" : "bg-white/5 border-white/10"}`}>
+                    {m.mediaType === "image" && <img src={m.media} alt="Neural" className="rounded-lg mb-2 max-h-60 w-full object-cover" />}
+                    {m.mediaType === "voice" && <NeuralAudioPlayer url={m.media} />}
+                    {m.text && <p className="text-[13px] leading-relaxed">{m.text}</p>}
                   </div>
-                ))
-              )}
+                  <span className="text-[7px] text-zinc-600 mt-1 uppercase font-mono">{new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                </div>
+              ))}
               <div ref={scrollRef} />
             </div>
 
             <div className="p-4 pb-10 bg-black/90 backdrop-blur-2xl border-t border-white/5">
               <MoodSelector currentMood={selectedMood} onSelectMood={setSelectedMood} />
-              <div className="flex items-center gap-2 mt-4 bg-white/5 p-1.5 pl-4 rounded-3xl border border-white/10 shadow-[0_0_20px_rgba(0,0,0,0.5)]">
+              <div className="flex items-center gap-2 mt-4 bg-white/5 p-1.5 pl-4 rounded-3xl border border-white/10">
                 <input type="file" ref={fileInputRef} onChange={(e) => handleFileUpload(e, null, "image")} className="hidden" accept="image/*" />
-                <button onClick={() => fileInputRef.current.click()} className="text-zinc-500 p-2 hover:text-cyan-500 transition-colors">
+                <button onClick={() => fileInputRef.current.click()} className="text-zinc-500 p-2 hover:text-cyan-500">
                   <HiOutlinePhoto size={22} className={isUploading ? "animate-spin" : ""} />
                 </button>
-                
-                <input value={newMessage} onChange={(e) => setNewMessage(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSend()} placeholder="Transmit signal..." className="bg-transparent flex-1 outline-none text-white text-[13px] placeholder:text-zinc-600" />
-                
+                <input value={newMessage} onChange={(e) => setNewMessage(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSend()} placeholder="Transmit signal..." className="bg-transparent flex-1 outline-none text-white text-[13px]" />
                 {newMessage.trim() === "" ? (
-                  <button 
-                    onMouseDown={startRecording} 
-                    onMouseUp={stopRecording}
-                    onTouchStart={startRecording}
-                    onTouchEnd={stopRecording}
-                    className={`p-3 rounded-full transition-all ${isRecording ? 'bg-red-500 animate-pulse shadow-[0_0_20px_#ef4444]' : 'bg-white/5 text-zinc-400 hover:text-cyan-400'}`}
-                  >
+                  <button onMouseDown={startRecording} onMouseUp={stopRecording} onTouchStart={startRecording} onTouchEnd={stopRecording} className={`p-3 rounded-full ${isRecording ? 'bg-red-500 animate-pulse' : 'bg-white/5 text-zinc-400'}`}>
                     {isRecording ? <HiOutlineStopCircle size={20} /> : <HiOutlineMicrophone size={20} />}
                   </button>
                 ) : (
-                  <button onClick={() => handleSend()} className="p-3 rounded-full bg-cyan-500 text-black active:scale-90 shadow-[0_0_15px_rgba(6,182,212,0.4)] transition-all">
+                  <button onClick={() => handleSend()} className="p-3 rounded-full bg-cyan-500 text-black active:scale-90">
                     <HiOutlinePaperAirplane size={18} className="-rotate-45" />
                   </button>
                 )}

@@ -28,11 +28,10 @@ import reelRoutes from "./routes/reels.js";
 import profileRoutes from "./routes/profile.js"; 
 import groupRoutes from "./routes/group.js"; 
 import marketRoutes from "./routes/market.js"; 
-import adminRoutes from "./routes/admin.js";           
+import adminRoutes from "./routes/admin.js";            
 import { getNeuralFeed } from "./controllers/feedController.js";
 
 // 🛡️ Auth0 JWT ভেরিফিকেশন মিডলওয়্যার
-// নিশ্চিত করুন এই Audience এবং Issuer আপনার Auth0 ড্যাশবোর্ডের সাথে হুবহু মিলছে।
 const checkJwt = auth({
   audience: 'https://onyx-drift-api.com', 
   issuerBaseURL: 'https://dev-prxn6v2o08xp5loz.us.auth0.com/', 
@@ -49,7 +48,7 @@ cloudinary.config({
 const app = express();
 const server = http.createServer(app);
 
-// ৩. CORS কনফিগারেশন (উন্নত করা হয়েছে)
+// ৩. CORS কনফিগারেশন
 const allowedOrigins = [
     "http://localhost:5173", 
     "https://onyx-drift-app-final.onrender.com",
@@ -103,15 +102,12 @@ const updateNeuralPulse = async (req, res, next) => {
 };
 
 /* ==========================================================
-    📡 এপিআই রাউটস (Authentication applied to all)
+    📡 এপিআই রাউটস
 ========================================================== */
 
-// পাবলিক রুট (Health Check)
 app.get("/", (req, res) => res.status(200).send("🚀 OnyxDrift Neural Core is Online!"));
 
-// প্রোটেক্টড রুটস
 app.get("/api/posts/neural-feed", checkJwt, updateNeuralPulse, getNeuralFeed);
-
 app.use("/api/user", checkJwt, updateNeuralPulse, userRoutes); 
 app.use("/api/users", checkJwt, updateNeuralPulse, userRoutes); 
 app.use("/api/profile", checkJwt, updateNeuralPulse, profileRoutes);
@@ -124,11 +120,11 @@ app.use("/api/market", checkJwt, updateNeuralPulse, marketRoutes);
 app.use("/api/admin", checkJwt, updateNeuralPulse, adminRoutes);
 
 /* ==========================================================
-    📡 REAL-TIME ENGINE (Socket.io)
+    📡 REAL-TIME ENGINE (Socket.io) + CALLING LOGIC
 ========================================================== */
 const io = new Server(server, {
     cors: corsOptions,
-    transports: ['websocket', 'polling'], // WebSocket prioritized
+    transports: ['websocket', 'polling'],
     path: '/socket.io/'
 });
 
@@ -138,38 +134,79 @@ const redis = process.env.REDIS_URL ? new Redis(process.env.REDIS_URL, {
 }) : null;
 
 io.on("connection", (socket) => {
+    
+    // ১. ইউজার কানেকশন ও অনলাইন স্ট্যাটাস
     socket.on("addNewUser", async (auth0Id) => { 
         if (!auth0Id) return;
         socket.userId = auth0Id; 
-        socket.join(auth0Id); 
+        socket.join(auth0Id); // ইউজার আইডি অনুযায়ী রুমে জয়েন করানো যাতে io.to(userId) কাজ করে
         
         if (redis) {
             await redis.hset("online_users", auth0Id, socket.id);
             const allUsers = await redis.hgetall("online_users");
             io.emit("getOnlineUsers", Object.keys(allUsers).map(id => ({ userId: id })));
         }
+        console.log(`📡 Node linked: ${auth0Id}`);
     });
 
+    /* --- 📞 VIDEO CALL SIGNALS --- */
+
+    // কলার যখন কল শুরু করবে
+    socket.on("makeCall", (data) => {
+        const { to, from, callerName, callerPic, roomId } = data;
+        console.log(`🎥 Call Request: From ${callerName} to Node ${to}`);
+        
+        // রিসিভারের রুমে সিগন্যাল পাঠানো
+        socket.to(to).emit("incomingCall", {
+            from,
+            callerName,
+            callerPic,
+            roomId,
+        });
+    });
+
+    // রিসিভার যখন কল রিজেক্ট করবে
+    socket.on("rejectCall", (data) => {
+        const { to } = data;
+        console.log(`🚫 Call Rejected for Node: ${to}`);
+        socket.to(to).emit("callRejected", { 
+            message: "The drifter declined the neural link." 
+        });
+    });
+
+    // কল একসেপ্ট সিগন্যাল (Optional - Zego can handle connection)
+    socket.on("answerCall", (data) => {
+        const { to } = data;
+        socket.to(to).emit("callAccepted");
+    });
+
+    /* --- 💬 MESSAGE SIGNALS --- */
+    socket.on("sendMessage", (message) => {
+        const { receiverId } = message;
+        if (receiverId) {
+            socket.to(receiverId).emit("getMessage", message);
+        }
+    });
+
+    // ডিসকানেকশন লজিক
     socket.on("disconnect", async () => {
         if (redis && socket.userId) {
             await redis.hdel("online_users", socket.userId);
             const allUsers = await redis.hgetall("online_users");
             io.emit("getOnlineUsers", Object.keys(allUsers).map(id => ({ userId: id })));
+            console.log(`🔌 Node unlinked: ${socket.userId}`);
         }
     });
 });
 
 /* ==========================================================
-    🛡️ GLOBAL ERROR HANDLER (401 Fix logic)
+    🛡️ GLOBAL ERROR HANDLER
 ========================================================== */
 app.use((err, req, res, next) => {
-    // Auth0 বা JWT এরর হ্যান্ডলিং
     if (err.name === 'UnauthorizedError' || err.status === 401) {
-        console.error("❌ Auth Error:", err.message);
         return res.status(401).json({ 
             error: 'Identity Verification Failed', 
-            message: "Token is invalid, expired, or audience mismatch.",
-            suggestion: "Check if AUTH_AUDIENCE in frontend matches audience in backend."
+            message: err.message
         });
     }
 
@@ -190,6 +227,7 @@ server.listen(PORT, '0.0.0.0', () => {
     🚀 ONYX CORE ACTIVE ON PORT: ${PORT}
     📡 ENVIRONMENT: ${process.env.NODE_ENV || 'development'}
     🛡️ AUTH0 DOMAIN: dev-prxn6v2o08xp5loz.us.auth0.com
+    📞 CALLING ENGINE: ENABLED (Socket.io)
     =========================================
     `);
 });

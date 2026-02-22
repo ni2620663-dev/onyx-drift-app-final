@@ -5,7 +5,7 @@ import { io } from "socket.io-client";
 import { motion, AnimatePresence } from "framer-motion";
 import toast, { Toaster } from 'react-hot-toast';
 import axios from 'axios'; 
-import { HiOutlineVideoCamera, HiXMark } from "react-icons/hi2";
+import { HiXMark } from "react-icons/hi2";
 import { FaPhone } from "react-icons/fa";
 
 // Components & Pages
@@ -24,7 +24,7 @@ import CustomCursor from "./components/CustomCursor";
 import MobileNav from "./components/MobileNav";
 import AITwinSync from './components/AITwinSync';
 
-// --- 🔊 RINGTONE CONFIG (Global) ---
+// --- 🔊 RINGTONE CONFIG ---
 const callSound = new Audio("https://assets.mixkit.co/active_storage/sfx/1359/1359-preview.mp3");
 callSound.loop = true;
 
@@ -101,25 +101,29 @@ export default function App() {
 
         socket.current.on("connect", () => {
           socket.current.emit("addNewUser", user.sub);
+          console.log("🔌 Connected to Neural Socket");
         });
 
-        // ইনকামিং কল লজিক
+        // ১. ইনকামিং কল সিগন্যাল হ্যান্ডলিং
         socket.current.on("incomingCall", (data) => {
           setIncomingCall(data);
-          // ব্রাউজার পারমিশন থাকলে রিংটোন বাজবে
-          ringtoneRef.current.play().catch(() => console.log("Audio play blocked"));
+          // ব্রাউজার পলিসি অনুযায়ী ইউজার ইন্টারঅ্যাকশন ছাড়া অডিও প্লে নাও হতে পারে
+          ringtoneRef.current.play().catch(() => console.log("Audio waiting for user link..."));
           
-          toast.success(`Incoming Call: ${data.callerName}`, { 
+          if (navigator.vibrate) navigator.vibrate([500, 200, 500]);
+
+          toast(`Neural link from ${data.callerName}`, { 
             icon: '📞', 
-            duration: 8000,
+            duration: 6000,
             style: { background: '#020617', color: '#06b6d4', border: '1px solid rgba(6,182,212,0.3)' } 
           });
         });
 
-        // কল রিজেক্ট বা এন্ড হলে রিংটোন বন্ধ
-        socket.current.on("callEnded", () => {
+        // ২. কল রিজেক্ট বা ক্যান্সেল হলে
+        socket.current.on("callRejected", () => {
           stopRingtone();
           setIncomingCall(null);
+          toast.error("Neural Connection Terminated");
         });
 
         socket.current.on("connect_error", (err) => console.error("Socket Error:", err.message));
@@ -129,7 +133,7 @@ export default function App() {
     return () => {
       if (socket.current) {
         socket.current.off("incomingCall");
-        socket.current.off("callEnded");
+        socket.current.off("callRejected");
         socket.current.disconnect();
         socket.current = null;
       }
@@ -138,8 +142,10 @@ export default function App() {
   }, [isAuthenticated, user?.sub]);
 
   const stopRingtone = () => {
-    ringtoneRef.current.pause();
-    ringtoneRef.current.currentTime = 0;
+    if (ringtoneRef.current) {
+      ringtoneRef.current.pause();
+      ringtoneRef.current.currentTime = 0;
+    }
   };
 
   const handleAcceptCall = () => {
@@ -150,9 +156,10 @@ export default function App() {
   };
 
   const handleRejectCall = () => {
+    if (socket.current && incomingCall) {
+        socket.current.emit("rejectCall", { to: incomingCall.from }); // 'from' is caller's ID
+    }
     stopRingtone();
-    // সকেটে রিজেক্ট ইভেন্ট পাঠাতে পারেন যাতে ওপাশে 'Call Rejected' দেখায়
-    socket.current?.emit("rejectCall", { to: incomingCall.callerId });
     setIncomingCall(null);
   };
 
@@ -176,34 +183,48 @@ export default function App() {
       <Toaster position="top-center" reverseOrder={false} />
       <CustomCursor />
 
-      {/* --- 📞 NEURAL INCOMING CALL MODAL --- */}
+      {/* --- 📞 GLOBAL INCOMING CALL UI (WhatsApp Style) --- */}
       <AnimatePresence>
         {incomingCall && (
           <motion.div 
-            initial={{ y: -100, opacity: 0 }}
-            animate={{ y: 30, opacity: 1 }}
-            exit={{ y: -100, opacity: 0 }}
-            className="fixed top-0 left-1/2 -translate-x-1/2 z-[9999] w-[92%] max-w-md backdrop-blur-3xl border border-cyan-500/30 p-6 rounded-[2rem] shadow-[0_0_50px_rgba(6,182,212,0.25)] bg-black/90"
+            initial={{ y: -150, opacity: 0, scale: 0.8 }}
+            animate={{ y: 20, opacity: 1, scale: 1 }}
+            exit={{ y: -150, opacity: 0, scale: 0.8 }}
+            className="fixed top-0 left-1/2 -translate-x-1/2 z-[100000] w-[92%] max-w-md backdrop-blur-3xl border border-cyan-500/40 p-5 rounded-[2.5rem] shadow-[0_30px_70px_rgba(0,0,0,0.9)] bg-black/80"
           >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="relative">
-                  <div className="absolute inset-0 bg-cyan-500 rounded-2xl animate-ping opacity-20" />
-                  <div className="relative w-14 h-14 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center">
-                    <HiOutlineVideoCamera className="text-cyan-500" size={28} />
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-4 flex-1 min-w-0">
+                <div className="relative shrink-0">
+                  <div className="absolute inset-0 bg-cyan-500 rounded-2xl animate-ping opacity-30" />
+                  <img 
+                    src={incomingCall.callerPic || "https://api.dicebear.com/7.x/avataaars/svg?seed=Onyx"} 
+                    className="relative w-14 h-14 rounded-2xl border-2 border-cyan-500/50 object-cover shadow-lg shadow-cyan-500/20" 
+                    alt="caller"
+                  />
+                </div>
+                <div className="min-w-0">
+                  <h4 className="text-[13px] font-black text-white uppercase tracking-widest truncate">
+                    {incomingCall.callerName || "Unknown Drifter"}
+                  </h4>
+                  <div className="flex items-center gap-1.5 mt-1">
+                    <span className="flex h-1.5 w-1.5 rounded-full bg-cyan-500 animate-pulse"></span>
+                    <p className="text-[9px] text-cyan-500 font-black tracking-[0.2em] uppercase">Incoming Neural Link...</p>
                   </div>
                 </div>
-                <div>
-                  <h4 className="text-sm font-black text-white uppercase tracking-widest">{incomingCall.callerName || "Unknown Drifter"}</h4>
-                  <p className="text-[10px] text-cyan-500 font-bold animate-pulse tracking-tighter">NEURAL LINK REQUEST...</p>
-                </div>
               </div>
-              <div className="flex gap-3">
-                <button onClick={handleRejectCall} className="w-12 h-12 rounded-full bg-red-500/10 text-red-500 border border-red-500/20 flex items-center justify-center hover:bg-red-500 hover:text-white transition-all shadow-lg shadow-red-500/10">
-                  <HiXMark size={24} />
+              
+              <div className="flex gap-2.5">
+                <button 
+                  onClick={handleRejectCall} 
+                  className="w-12 h-12 rounded-2xl bg-red-500/10 text-red-500 border border-red-500/20 flex items-center justify-center hover:bg-red-500 hover:text-white transition-all shadow-lg active:scale-90"
+                >
+                  <HiXMark size={26} />
                 </button>
-                <button onClick={handleAcceptCall} className="w-12 h-12 rounded-full bg-cyan-500 text-black flex items-center justify-center hover:scale-110 transition-all shadow-[0_0_20px_rgba(6,182,212,0.4)]">
-                  <FaPhone size={20} />
+                <button 
+                  onClick={handleAcceptCall} 
+                  className="w-12 h-12 rounded-2xl bg-cyan-500 text-[#020617] flex items-center justify-center hover:bg-cyan-400 hover:scale-105 transition-all shadow-[0_0_30px_rgba(6,182,212,0.4)] active:scale-90"
+                >
+                  <FaPhone size={18} className="animate-pulse" />
                 </button>
               </div>
             </div>
@@ -231,19 +252,12 @@ export default function App() {
                       <Route path="/feed" element={<ProtectedRoute component={() => <PremiumHomeFeed searchQuery={searchQuery} isPostModalOpen={isPostModalOpen} setIsPostModalOpen={setIsPostModalOpen} />} />} />
                       <Route path="/reels" element={<ProtectedRoute component={ReelsFeed} />} />
                       <Route path="/reels-editor" element={<ProtectedRoute component={ReelsEditor} />} />
-                      
-                      <Route path="/profile/:userId" element={
-                        <ProtectedRoute component={() => <Profile currentUserId={user?.sub} />} />
-                      } />
-
+                      <Route path="/profile/:userId" element={<ProtectedRoute component={() => <Profile currentUserId={user?.sub} />} />} />
                       <Route path="/following" element={<ProtectedRoute component={FollowingPage} />} />
                       <Route path="/messages/:userId?" element={<ProtectedRoute component={() => <Messenger socket={socket.current} />} />} />
                       <Route path="/messenger/:userId?" element={<ProtectedRoute component={() => <Messenger socket={socket.current} />} />} />
                       <Route path="/settings" element={<ProtectedRoute component={Settings} />} />
-                      
-                      {/* কল পেজ রাউট - আইডি অনুযায়ী */}
                       <Route path="/call/:roomId" element={<ProtectedRoute component={CallPage} />} />
-                      
                       <Route path="/ai-twin" element={<ProtectedRoute component={AITwinSync} />} />
                       <Route path="*" element={<Navigate to="/" replace />} />
                     </Routes>
@@ -255,10 +269,13 @@ export default function App() {
             {isAuthenticated && !isFullWidthPage && !isReelsPage && (
               <aside className="hidden xl:block w-[320px] sticky top-0 h-screen mt-0 py-6">
                 <div className="bg-white/5 border border-white/10 rounded-3xl p-6 h-full backdrop-blur-md">
-                   <h3 className="text-xs font-black uppercase tracking-widest text-cyan-500 mb-4">Neural Suggestions</h3>
+                   <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-cyan-500 mb-6 flex items-center gap-2">
+                     <span className="w-2 h-2 bg-cyan-500 rounded-full animate-pulse" />
+                     Neural Suggestions
+                   </h3>
                    <div className="space-y-4">
-                      <div className="h-20 w-full bg-white/5 rounded-xl animate-pulse" />
-                      <div className="h-20 w-full bg-white/5 rounded-xl animate-pulse" />
+                      <div className="h-24 w-full bg-white/5 rounded-2xl border border-white/5 animate-pulse" />
+                      <div className="h-24 w-full bg-white/5 rounded-2xl border border-white/5 animate-pulse" />
                    </div>
                 </div>
               </aside>
@@ -267,7 +284,9 @@ export default function App() {
         </div>
       </div>
 
-      {isAuthenticated && !isReelsPage && <MobileNav userAuth0Id={user?.sub} />}
+      {isAuthenticated && !isReelsPage && !location.pathname.startsWith("/call") && (
+        <MobileNav userAuth0Id={user?.sub} />
+      )}
     </div>
   );
 }
