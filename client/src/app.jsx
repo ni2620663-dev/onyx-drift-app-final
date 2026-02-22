@@ -101,38 +101,36 @@ export default function App() {
 
         socket.current.on("connect", () => {
           socket.current.emit("addNewUser", user.sub);
-          console.log("🔌 Connected to Neural Socket");
+          console.log("🔌 Connected to Neural Socket ID:", socket.current.id);
         });
 
-        // ১. ইনকামিং কল সিগন্যাল হ্যান্ডলিং
-        socket.current.on("incomingCall", (data) => {
+        // ১. ইনকামিং কল রিসিভ
+        socket.current.on("getCall", (data) => {
+          console.log("📞 Incoming Signal:", data);
           setIncomingCall(data);
-          // ব্রাউজার পলিসি অনুযায়ী ইউজার ইন্টারঅ্যাকশন ছাড়া অডিও প্লে নাও হতে পারে
-          ringtoneRef.current.play().catch(() => console.log("Audio waiting for user link..."));
+          ringtoneRef.current.play().catch(() => console.log("Audio waiting for interaction..."));
           
-          if (navigator.vibrate) navigator.vibrate([500, 200, 500]);
+          if (navigator.vibrate) navigator.vibrate([500, 200, 500, 200, 500]);
 
           toast(`Neural link from ${data.callerName}`, { 
             icon: '📞', 
-            duration: 6000,
+            duration: 8000,
             style: { background: '#020617', color: '#06b6d4', border: '1px solid rgba(6,182,212,0.3)' } 
           });
         });
 
-        // ২. কল রিজেক্ট বা ক্যান্সেল হলে
+        // ২. কল ক্যান্সেল বা রিজেক্ট হলে
         socket.current.on("callRejected", () => {
           stopRingtone();
           setIncomingCall(null);
-          toast.error("Neural Connection Terminated");
+          toast.error("Neural Connection Terminated", { id: 'call-toast' });
         });
-
-        socket.current.on("connect_error", (err) => console.error("Socket Error:", err.message));
       }
     }
 
     return () => {
       if (socket.current) {
-        socket.current.off("incomingCall");
+        socket.current.off("getCall");
         socket.current.off("callRejected");
         socket.current.disconnect();
         socket.current = null;
@@ -149,21 +147,25 @@ export default function App() {
   };
 
   const handleAcceptCall = () => {
+    if (!incomingCall) return;
     stopRingtone();
-    const roomId = incomingCall.roomId;
+    const { roomId, callType } = incomingCall;
     setIncomingCall(null);
-    navigate(`/call/${roomId}`);
+    navigate(`/call/${roomId}?mode=${callType || 'video'}`);
   };
 
   const handleRejectCall = () => {
     if (socket.current && incomingCall) {
-        socket.current.emit("rejectCall", { to: incomingCall.from }); // 'from' is caller's ID
+      socket.current.emit("rejectCall", { to: incomingCall.from });
     }
     stopRingtone();
     setIncomingCall(null);
   };
 
-  /* =================⌛ LOADING STATE ================= */
+  /* =================📏 LAYOUT LOGIC ================= */
+  const isFullWidthPage = ["/messenger", "/messages", "/settings", "/", "/join", "/reels", "/ai-twin", "/call"].some(path => location.pathname === path || location.pathname.startsWith(path + "/"));
+  const isReelsPage = location.pathname.startsWith("/reels");
+
   if (isLoading) return (
     <div className="h-screen flex items-center justify-center bg-[#020617]">
       <div className="relative w-20 h-20">
@@ -173,17 +175,13 @@ export default function App() {
     </div>
   );
 
-  /* =================📏 LAYOUT LOGIC ================= */
-  const isFullWidthPage = ["/messenger", "/messages", "/settings", "/", "/join", "/reels", "/ai-twin", "/call"].some(path => location.pathname === path || location.pathname.startsWith(path + "/"));
-  const isReelsPage = location.pathname.startsWith("/reels");
-
   return (
     <div className="min-h-screen bg-[#020617] text-gray-200 font-sans relative overflow-x-hidden">
       <div className="bg-grainy" />
       <Toaster position="top-center" reverseOrder={false} />
       <CustomCursor />
 
-      {/* --- 📞 GLOBAL INCOMING CALL UI (WhatsApp Style) --- */}
+      {/* --- 📞 GLOBAL INCOMING CALL UI --- */}
       <AnimatePresence>
         {incomingCall && (
           <motion.div 
@@ -197,7 +195,7 @@ export default function App() {
                 <div className="relative shrink-0">
                   <div className="absolute inset-0 bg-cyan-500 rounded-2xl animate-ping opacity-30" />
                   <img 
-                    src={incomingCall.callerPic || "https://api.dicebear.com/7.x/avataaars/svg?seed=Onyx"} 
+                    src={incomingCall.callerPic || "https://ui-avatars.com/api/?name=Onyx"} 
                     className="relative w-14 h-14 rounded-2xl border-2 border-cyan-500/50 object-cover shadow-lg shadow-cyan-500/20" 
                     alt="caller"
                   />
@@ -214,16 +212,10 @@ export default function App() {
               </div>
               
               <div className="flex gap-2.5">
-                <button 
-                  onClick={handleRejectCall} 
-                  className="w-12 h-12 rounded-2xl bg-red-500/10 text-red-500 border border-red-500/20 flex items-center justify-center hover:bg-red-500 hover:text-white transition-all shadow-lg active:scale-90"
-                >
+                <button onClick={handleRejectCall} className="w-12 h-12 rounded-2xl bg-red-500/10 text-red-500 border border-red-500/20 flex items-center justify-center hover:bg-red-500 hover:text-white transition-all shadow-lg active:scale-90">
                   <HiXMark size={26} />
                 </button>
-                <button 
-                  onClick={handleAcceptCall} 
-                  className="w-12 h-12 rounded-2xl bg-cyan-500 text-[#020617] flex items-center justify-center hover:bg-cyan-400 hover:scale-105 transition-all shadow-[0_0_30px_rgba(6,182,212,0.4)] active:scale-90"
-                >
+                <button onClick={handleAcceptCall} className="w-12 h-12 rounded-2xl bg-cyan-500 text-[#020617] flex items-center justify-center hover:bg-cyan-400 hover:scale-105 transition-all shadow-[0_0_30px_rgba(6,182,212,0.4)] active:scale-90">
                   <FaPhone size={18} className="animate-pulse" />
                 </button>
               </div>
@@ -233,11 +225,11 @@ export default function App() {
       </AnimatePresence>
 
       <div className="flex flex-col w-full">
-        <div className="flex justify-center w-full transition-all duration-500">
+        <div className="flex justify-center w-full">
           <div className={`flex w-full ${isFullWidthPage ? "max-w-full" : "max-w-[1440px] px-0 lg:px-6"} gap-6`}>
             
             {isAuthenticated && !isFullWidthPage && !isReelsPage && (
-              <aside className="hidden lg:block w-[280px] sticky top-0 h-screen mt-0 py-6">
+              <aside className="hidden lg:block w-[280px] sticky top-0 h-screen py-6">
                 <Sidebar />
               </aside>
             )}
@@ -254,8 +246,8 @@ export default function App() {
                       <Route path="/reels-editor" element={<ProtectedRoute component={ReelsEditor} />} />
                       <Route path="/profile/:userId" element={<ProtectedRoute component={() => <Profile currentUserId={user?.sub} />} />} />
                       <Route path="/following" element={<ProtectedRoute component={FollowingPage} />} />
-                      <Route path="/messages/:userId?" element={<ProtectedRoute component={() => <Messenger socket={socket.current} />} />} />
-                      <Route path="/messenger/:userId?" element={<ProtectedRoute component={() => <Messenger socket={socket.current} />} />} />
+                      <Route path="/messages/:userId?" element={<ProtectedRoute component={() => <Messenger socket={socket} />} />} />
+                      <Route path="/messenger/:userId?" element={<ProtectedRoute component={() => <Messenger socket={socket} />} />} />
                       <Route path="/settings" element={<ProtectedRoute component={Settings} />} />
                       <Route path="/call/:roomId" element={<ProtectedRoute component={CallPage} />} />
                       <Route path="/ai-twin" element={<ProtectedRoute component={AITwinSync} />} />
@@ -267,7 +259,7 @@ export default function App() {
             </main>
 
             {isAuthenticated && !isFullWidthPage && !isReelsPage && (
-              <aside className="hidden xl:block w-[320px] sticky top-0 h-screen mt-0 py-6">
+              <aside className="hidden xl:block w-[320px] sticky top-0 h-screen py-6">
                 <div className="bg-white/5 border border-white/10 rounded-3xl p-6 h-full backdrop-blur-md">
                    <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-cyan-500 mb-6 flex items-center gap-2">
                      <span className="w-2 h-2 bg-cyan-500 rounded-full animate-pulse" />
