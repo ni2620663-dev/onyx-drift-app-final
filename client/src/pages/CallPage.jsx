@@ -14,7 +14,7 @@ import { FaClock, FaMicrophone } from "react-icons/fa";
 import { motion } from "framer-motion";
 
 // Stream SDK styles
-import '@stream-io/video-react-sdk/dist/css/styles.css';
+import '@stream-io/video-react-sdk';
 
 const apiKey = 'aw5bpt4vfj56'; 
 
