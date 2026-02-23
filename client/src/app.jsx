@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState, Suspense } from "react";
 import { Routes, Route, useLocation, Navigate, useNavigate } from "react-router-dom";
 import { useAuth0, withAuthenticationRequired } from "@auth0/auth0-react";
-import { io } from "socket.io-client"; 
 import { motion, AnimatePresence } from "framer-motion";
 import toast, { Toaster } from 'react-hot-toast';
 import axios from 'axios'; 
@@ -14,9 +13,7 @@ import Messenger from "./pages/Messenger";
 import PremiumHomeFeed from "./pages/PremiumHomeFeed";
 import Profile from "./pages/Profile";
 import Settings from "./pages/Settings"; 
-import FollowingPage from "./pages/FollowingPage";
 import ReelsFeed from "./pages/ReelsFeed";
-import ReelsEditor from "./pages/ReelsEditor";     
 import Landing from "./pages/Landing"; 
 import JoinPage from "./pages/JoinPage";
 import CallPage from "./pages/CallPage";
@@ -47,14 +44,12 @@ export default function App() {
   const location = useLocation();
   const navigate = useNavigate();
   
-  // Call Context থেকে ডাটা নেওয়া
+  // Call Context থেকে সঠিক ডাটা নেওয়া (আপনার CallContext.jsx অনুযায়ী)
   const { 
-    socket, 
-    receivingCall, 
-    callerData, 
+    call, 
+    callAccepted, 
     answerCall, 
-    setReceivingCall, 
-    completeEndCall 
+    leaveCall 
   } = useCall();
 
   const ringtoneRef = useRef(callSound);
@@ -100,13 +95,14 @@ export default function App() {
 
   /* =================📡 RINGTONE & VIBRATION ================= */
   useEffect(() => {
-    if (receivingCall) {
+    // call.isReceivingCall এবং কল রিসিভ না হওয়া পর্যন্ত রিংটোন বাজবে
+    if (call.isReceivingCall && !callAccepted) {
       ringtoneRef.current.play().catch(() => {});
       if (navigator.vibrate) navigator.vibrate([500, 200, 500]);
     } else {
       stopRingtone();
     }
-  }, [receivingCall]);
+  }, [call.isReceivingCall, callAccepted]);
 
   const stopRingtone = () => {
     if (ringtoneRef.current) {
@@ -115,11 +111,15 @@ export default function App() {
     }
   };
 
+  const handleAnswerCall = () => {
+    answerCall(); // Context এর answerCall ফাংশন
+    stopRingtone();
+    // কল এক্সেপ্ট করলে কল পেজে নিয়ে যাবে
+    navigate(`/call/${call.from || 'room'}`); 
+  };
+
   const handleRejectCall = () => {
-    if (socket && callerData.from) {
-      socket.emit("endCall", { to: callerData.from });
-    }
-    setReceivingCall(false);
+    leaveCall(); // Context এর leaveCall ফাংশন
     stopRingtone();
   };
 
@@ -133,9 +133,9 @@ export default function App() {
       <Toaster position="top-center" />
       <CustomCursor />
 
-      {/* =================📞 INCOMING CALL UI (WhatsApp Style) ================= */}
+      {/* =================📞 INCOMING CALL UI ================= */}
       <AnimatePresence>
-        {receivingCall && (
+        {call.isReceivingCall && !callAccepted && (
           <motion.div 
             initial={{ y: -150, opacity: 0 }}
             animate={{ y: 20, opacity: 1 }}
@@ -146,23 +146,22 @@ export default function App() {
               <div className="flex items-center gap-4">
                 <div className="relative">
                   <div className="absolute inset-0 bg-cyan-500 rounded-2xl animate-ping opacity-20" />
-                  <img src={callerData.pic || "https://api.dicebear.com/7.x/avataaars/svg?seed=Onyx"} className="w-14 h-14 rounded-2xl border border-cyan-500/30 object-cover" alt="caller" />
+                  <img src={call.pic || "https://api.dicebear.com/7.x/avataaars/svg?seed=Onyx"} className="w-14 h-14 rounded-2xl border border-cyan-500/30 object-cover" alt="caller" />
                 </div>
                 <div>
-                  <h4 className="text-[13px] font-black text-white uppercase tracking-tighter truncate">{callerData.name}</h4>
-                  <p className="text-[9px] text-cyan-500 font-black tracking-widest uppercase animate-pulse">Neural Link Incoming...</p>
+                  <h4 className="text-[13px] font-black text-white uppercase tracking-tighter truncate">{call.name || "Unknown Link"}</h4>
+                  <p className="text-[9px] text-cyan-500 font-black tracking-widest uppercase animate-pulse">Incoming Connection...</p>
                 </div>
               </div>
               <div className="flex gap-2">
                 <button onClick={handleRejectCall} className="w-12 h-12 rounded-2xl bg-red-500/10 text-red-500 border border-red-500/20 flex items-center justify-center active:scale-90"><HiXMark size={26} /></button>
-                <button onClick={answerCall} className="w-12 h-12 rounded-2xl bg-cyan-500 text-[#020617] flex items-center justify-center shadow-lg shadow-cyan-500/20 active:scale-90"><FaPhone size={18} /></button>
+                <button onClick={handleAnswerCall} className="w-12 h-12 rounded-2xl bg-cyan-500 text-[#020617] flex items-center justify-center shadow-lg shadow-cyan-500/20 active:scale-90"><FaPhone size={18} /></button>
               </div>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* =================🌐 MAIN LAYOUT ================= */}
       <div className="flex flex-col w-full">
         <div className="flex justify-center w-full">
           <div className={`flex w-full ${isFullWidthPage ? "max-w-full" : "max-w-[1440px] px-0 lg:px-6"} gap-6`}>
@@ -176,26 +175,22 @@ export default function App() {
             <main className={`flex-1 flex justify-center mt-0 ${isFullWidthPage ? "" : "pb-24 lg:pb-10 pt-6"}`}>
               <div className={`${isFullWidthPage ? "w-full" : "w-full lg:max-w-[650px]"}`}>
                 <Suspense fallback={<div className="h-screen bg-[#020617]" />}>
-                  <Routes location={location} key={location.pathname}>
+                  <Routes>
                     <Route path="/" element={isAuthenticated ? <Navigate to="/feed" replace /> : <Landing />} />
                     <Route path="/join" element={<JoinPage />} /> 
-                    
-                    <Route path="/feed" element={<ProtectedRoute component={() => <PremiumHomeFeed searchQuery={searchQuery} isPostModalOpen={isPostModalOpen} setIsPostModalOpen={setIsPostModalOpen} />} />} />
+                    <Route path="/feed" element={<ProtectedRoute component={PremiumHomeFeed} />} />
                     <Route path="/reels" element={<ProtectedRoute component={ReelsFeed} />} />
-                    <Route path="/profile/:userId" element={<ProtectedRoute component={() => <Profile currentUserId={user?.sub} />} />} />
-                    <Route path="/messages/:userId?" element={<ProtectedRoute component={() => <Messenger socket={{current: socket}} />} />} />
-                    <Route path="/messenger/:userId?" element={<ProtectedRoute component={() => <Messenger socket={{current: socket}} />} />} />
-                    
+                    <Route path="/profile/:userId" element={<ProtectedRoute component={Profile} />} />
+                    <Route path="/messages/:userId?" element={<ProtectedRoute component={Messenger} />} />
+                    <Route path="/messenger/:userId?" element={<ProtectedRoute component={Messenger} />} />
                     <Route path="/settings" element={<ProtectedRoute component={Settings} />} />
                     <Route path="/call/:roomId" element={<ProtectedRoute component={CallPage} />} />
                     <Route path="/ai-twin" element={<ProtectedRoute component={AITwinSync} />} />
-                    
                     <Route path="*" element={<Navigate to="/" replace />} />
                   </Routes>
                 </Suspense>
               </div>
             </main>
-
           </div>
         </div>
       </div>
