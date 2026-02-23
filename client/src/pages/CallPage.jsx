@@ -6,7 +6,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { FaMicrophone, FaVideo, FaPhoneSlash, FaMicrophoneSlash, FaVideoSlash } from 'react-icons/fa';
 import { useAuth0 } from "@auth0/auth0-react";
 
-// সকেট কানেকশন
 const socket = io("https://onyx-drift-app-final-u29m.onrender.com", {
   transports: ["websocket"],
 });
@@ -17,7 +16,6 @@ const CallPage = () => {
   const location = useLocation();
   const { user } = useAuth0();
 
-  // ইউআরএল প্যারামিটার থেকে ডাটা সংগ্রহ
   const queryParams = new URLSearchParams(location.search);
   const isAudioOnly = queryParams.get('mode') === 'audio';
   const remoteUserId = queryParams.get('to'); 
@@ -33,21 +31,30 @@ const CallPage = () => {
   const connectionRef = useRef();
 
   useEffect(() => {
-    // ১. মিডিয়া পারমিশন নেওয়া
-    navigator.mediaDevices.getUserMedia({ 
-      video: !isAudioOnly, 
-      audio: true 
-    }).then((currentStream) => {
-      setStream(currentStream);
-      if (myVideo.current) {
-        myVideo.current.srcObject = currentStream;
-      }
+    // ১. মিডিয়া পারমিশন এবং কল সেটআপ
+    const setupMedia = async () => {
+      try {
+        const currentStream = await navigator.mediaDevices.getUserMedia({ 
+          video: !isAudioOnly, 
+          audio: true 
+        });
+        
+        setStream(currentStream);
+        if (myVideo.current) {
+          myVideo.current.srcObject = currentStream;
+        }
 
-      // যদি ইউজার কলার হয় (কল শুরু করছে)
-      if (remoteUserId) {
-        startCall(currentStream, remoteUserId);
+        // যদি কল রিসিভার হয় (signalData URL এ আছে কিনা চেক করা যেতে পারে, অথবা সকেটের মাধ্যমে)
+        // তবে আপনার লজিক অনুযায়ী যদি remoteUserId থাকে তবেই কল শুরু হবে (Caller)
+        if (remoteUserId) {
+          startCall(currentStream, remoteUserId);
+        }
+      } catch (err) {
+        console.error("Media Error:", err);
       }
-    }).catch(err => console.error("Media Error:", err));
+    };
+
+    setupMedia();
 
     // ২. সকেট লিসেনারস
     socket.on("callAccepted", (signal) => {
@@ -57,27 +64,39 @@ const CallPage = () => {
       }
     });
 
+    // ইনকামিং সিগন্যাল হ্যান্ডেল করা (Answerer এর জন্য)
+    socket.on("incomingSignal", (signal) => {
+        if (connectionRef.current) {
+            connectionRef.current.signal(signal);
+        }
+    });
+
     socket.on("callEnded", () => {
       endCallLocally();
     });
 
     return () => {
       socket.off("callAccepted");
+      socket.off("incomingSignal");
       socket.off("callEnded");
-      // কম্পোনেন্ট আনমাউন্ট হলে ট্রাক বন্ধ করা
+      // কম্পোনেন্ট আনমাউন্ট হলে সব ট্র্যাক বন্ধ করা
       if (stream) {
         stream.getTracks().forEach(track => track.stop());
       }
     };
   }, [remoteUserId, isAudioOnly]);
 
-  // ⚡ কল শুরু করার লজিক (Simple-Peer)
   const startCall = (myStream, targetId) => {
     const peer = new Peer({
       initiator: true,
       trickle: false,
       stream: myStream,
-      config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] }
+      config: { 
+        iceServers: [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' }
+        ] 
+      }
     });
 
     peer.on('signal', (data) => {
@@ -101,8 +120,8 @@ const CallPage = () => {
     connectionRef.current = peer;
   };
 
-  // ⚡ লোকাল কল টার্মিনেশন
   const endCallLocally = () => {
+    if (callEnded) return; // ডাবল কল রোধে
     setCallEnded(true);
     if (connectionRef.current) connectionRef.current.destroy();
     if (stream) stream.getTracks().forEach(track => track.stop());
@@ -116,28 +135,37 @@ const CallPage = () => {
 
   const toggleMic = () => {
     if (stream) {
-      stream.getAudioTracks()[0].enabled = !isMicOn;
-      setIsMicOn(!isMicOn);
+      const audioTrack = stream.getAudioTracks()[0];
+      if (audioTrack) {
+        audioTrack.enabled = !isMicOn;
+        setIsMicOn(!isMicOn);
+      }
     }
   };
 
   const toggleVideo = () => {
     if (stream && !isAudioOnly) {
-      stream.getVideoTracks()[0].enabled = !isCamOn;
-      setIsCamOn(!isCamOn);
+      const videoTrack = stream.getVideoTracks()[0];
+      if (videoTrack) {
+        videoTrack.enabled = !isCamOn;
+        setIsCamOn(!isCamOn);
+      }
     }
   };
 
   return (
     <div className="fixed inset-0 bg-[#020617] overflow-hidden flex flex-col items-center justify-center font-mono">
       
-      {/* 📸 Remote Video / Call UI */}
+      {/* 📸 Remote Video */}
       <AnimatePresence>
         {callAccepted && !callEnded ? (
           <motion.video 
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-            playsInline ref={userVideo} autoPlay 
-            className="absolute inset-0 w-full h-full object-cover opacity-80" 
+            initial={{ opacity: 0 }} 
+            animate={{ opacity: 1 }}
+            playsInline 
+            ref={userVideo} 
+            autoPlay 
+            className="absolute inset-0 w-full h-full object-cover" 
           />
         ) : (
           <div className="flex flex-col items-center gap-6">
@@ -145,7 +173,7 @@ const CallPage = () => {
                 <div className="w-32 h-32 rounded-full border-4 border-cyan-500/30 border-t-cyan-500 animate-spin" />
                 <img src={user?.picture} className="w-24 h-24 rounded-full absolute top-4 left-4 object-cover" alt="caller" />
             </div>
-            <div className="text-cyan-500 animate-pulse text-sm tracking-[0.3em] font-black uppercase">
+            <div className="text-cyan-500 animate-pulse text-sm tracking-[0.3em] font-black uppercase text-center px-4">
               Establishing Neural Link...
             </div>
           </div>
@@ -156,9 +184,15 @@ const CallPage = () => {
       <motion.div 
         drag 
         dragConstraints={{ left: -300, right: 300, top: -400, bottom: 400 }}
-        className="absolute top-10 right-10 w-32 h-44 md:w-40 md:h-56 rounded-3xl border-2 border-cyan-500 overflow-hidden z-50 bg-black shadow-2xl cursor-move"
+        className="absolute top-10 right-10 w-32 h-44 md:w-40 md:h-56 rounded-3xl border-2 border-cyan-500 overflow-hidden z-50 bg-black shadow-2xl cursor-move shadow-cyan-500/20"
       >
-        <video playsInline muted ref={myVideo} autoPlay className={`w-full h-full object-cover ${!isCamOn ? 'hidden' : ''}`} />
+        <video 
+           playsInline 
+           muted 
+           ref={myVideo} 
+           autoPlay 
+           className={`w-full h-full object-cover ${!isCamOn ? 'hidden' : ''}`} 
+        />
         {!isCamOn && (
            <div className="w-full h-full flex items-center justify-center bg-zinc-900">
              <img src={user?.picture} className="w-12 h-12 rounded-full opacity-30" alt="avatar" />
@@ -168,7 +202,8 @@ const CallPage = () => {
 
       {/* 🛠️ Modern Controls */}
       <motion.div 
-        initial={{ y: 100 }} animate={{ y: 0 }}
+        initial={{ y: 100 }} 
+        animate={{ y: 0 }}
         className="absolute bottom-10 flex gap-4 md:gap-6 items-center bg-black/60 backdrop-blur-2xl px-6 py-4 rounded-[35px] border border-white/10 z-[60]"
       >
         <button 

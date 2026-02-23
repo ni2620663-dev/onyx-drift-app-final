@@ -4,7 +4,7 @@ import Peer from 'simple-peer';
 
 const SocketContext = createContext();
 
-// সকেট কানেকশন কনফিগারেশন
+// সকেট কানেকশন
 const socket = io('https://onyx-drift-app-final-u29m.onrender.com', {
   transports: ['websocket'],
 });
@@ -21,7 +21,7 @@ const ContextProvider = ({ children }) => {
   const userVideo = useRef();
   const connectionRef = useRef();
 
-  // 🌐 STUN Servers যোগ করা হয়েছে যাতে গ্লোবাল নেটওয়ার্কে (যেমন ফোন-টু-পিসি) কল কানেক্ট হয়
+  // গ্লোবাল আইপি খুঁজে পাওয়ার জন্য STUN সার্ভার
   const iceServers = {
     iceServers: [
       { urls: 'stun:stun.l.google.com:19302' },
@@ -52,7 +52,7 @@ const ContextProvider = ({ children }) => {
       }
       return currentStream;
     } catch (err) {
-      console.error("Media Access Denied:", err);
+      console.error("Camera Access Error:", err);
       return null;
     }
   };
@@ -60,15 +60,15 @@ const ContextProvider = ({ children }) => {
   // ✅ কল রিসিভ করা (Answer Call)
   const answerCall = async () => {
     setCallAccepted(true);
-    
     const userStream = await getMediaStream();
     if (!userStream) return;
 
+    // simple-peer initialization ফিক্স
     const peer = new Peer({ 
       initiator: false, 
       trickle: false, 
       stream: userStream,
-      config: iceServers // STUN সার্ভার কনফিগারেশন যোগ করা হয়েছে
+      config: iceServers 
     });
 
     peer.on('signal', (data) => {
@@ -81,7 +81,9 @@ const ContextProvider = ({ children }) => {
       }
     });
 
-    peer.signal(call.signal);
+    if (call.signal) {
+      peer.signal(call.signal);
+    }
     connectionRef.current = peer;
   };
 
@@ -94,7 +96,7 @@ const ContextProvider = ({ children }) => {
       initiator: true, 
       trickle: false, 
       stream: userStream,
-      config: iceServers // STUN সার্ভার কনফিগারেশন যোগ করা হয়েছে
+      config: iceServers 
     });
 
     peer.on('signal', (data) => {
@@ -122,31 +124,19 @@ const ContextProvider = ({ children }) => {
 
   const leaveCall = () => {
     setCallEnded(true);
-
     if (connectionRef.current) {
       connectionRef.current.destroy();
     }
-
     if (stream) {
       stream.getTracks().forEach(track => track.stop());
     }
-
     window.location.reload();
   };
 
   return (
     <SocketContext.Provider value={{ 
-      call, 
-      callAccepted, 
-      myVideo, 
-      userVideo, 
-      stream, 
-      name, 
-      setName, 
-      answerCall, 
-      leaveCall, 
-      callUser,
-      me 
+      call, callAccepted, myVideo, userVideo, stream, 
+      name, setName, answerCall, leaveCall, callUser, me 
     }}>
       {children}
     </SocketContext.Provider>
