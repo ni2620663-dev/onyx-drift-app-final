@@ -28,7 +28,7 @@ import reelRoutes from "./routes/reels.js";
 import profileRoutes from "./routes/profile.js"; 
 import groupRoutes from "./routes/group.js"; 
 import marketRoutes from "./routes/market.js"; 
-import adminRoutes from "./routes/admin.js";            
+import adminRoutes from "./routes/admin.js";               
 import { getNeuralFeed } from "./controllers/feedController.js";
 
 // 🛡️ Auth0 JWT ভেরিফিকেশন মিডলওয়্যার
@@ -71,12 +71,9 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-
-// ৪. বডি পার্সার
 app.use(express.json({ limit: "150mb" }));
 app.use(express.urlencoded({ limit: "150mb", extended: true }));
 
-// ৫. Static Folder
 const uploadDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadDir)){
     fs.mkdirSync(uploadDir);
@@ -84,7 +81,7 @@ if (!fs.existsSync(uploadDir)){
 app.use('/uploads', express.static(uploadDir));
 
 /* ==========================================================
-    🧠 NEURAL PULSE MIDDLEWARE (User Activity Sync)
+    🧠 NEURAL PULSE (User Activity Sync)
 ========================================================== */
 const updateNeuralPulse = async (req, res, next) => {
     try {
@@ -96,17 +93,15 @@ const updateNeuralPulse = async (req, res, next) => {
             );
         }
     } catch (err) {
-        console.warn("Pulse bypass log (Non-critical):", err.message);
+        console.warn("Pulse bypass log:", err.message);
     }
     next();
 };
 
 /* ==========================================================
-    📡 এপিআই রাউটস
+    📡 API ROUTES
 ========================================================== */
-
-app.get("/", (req, res) => res.status(200).send("🚀 OnyxDrift Neural Core is Online!"));
-
+app.get("/", (req, res) => res.status(200).send("🚀 OnyxDrift Neural Core Online!"));
 app.get("/api/posts/neural-feed", checkJwt, updateNeuralPulse, getNeuralFeed);
 app.use("/api/user", checkJwt, updateNeuralPulse, userRoutes); 
 app.use("/api/users", checkJwt, updateNeuralPulse, userRoutes); 
@@ -120,7 +115,7 @@ app.use("/api/market", checkJwt, updateNeuralPulse, marketRoutes);
 app.use("/api/admin", checkJwt, updateNeuralPulse, adminRoutes);
 
 /* ==========================================================
-    📡 REAL-TIME ENGINE (Socket.io) + CALLING LOGIC
+    📡 REAL-TIME ENGINE (Socket.io) + ULTRA CALLING LOGIC
 ========================================================== */
 const io = new Server(server, {
     cors: corsOptions,
@@ -135,49 +130,45 @@ const redis = process.env.REDIS_URL ? new Redis(process.env.REDIS_URL, {
 
 io.on("connection", (socket) => {
     
-    // ১. ইউজার কানেকশন ও অনলাইন স্ট্যাটাস
     socket.on("addNewUser", async (auth0Id) => { 
         if (!auth0Id) return;
         socket.userId = auth0Id; 
-        socket.join(auth0Id); // ইউজার আইডি অনুযায়ী রুমে জয়েন করানো যাতে io.to(userId) কাজ করে
+        socket.join(auth0Id); 
         
         if (redis) {
             await redis.hset("online_users", auth0Id, socket.id);
             const allUsers = await redis.hgetall("online_users");
             io.emit("getOnlineUsers", Object.keys(allUsers).map(id => ({ userId: id })));
         }
-        console.log(`📡 Node linked: ${auth0Id}`);
     });
 
-    /* --- 📞 VIDEO CALL SIGNALS --- */
+    /* --- 📞 ULTRA-SECURE CUSTOM CALLING (WebRTC Signaling) --- */
 
-    // কলার যখন কল শুরু করবে
-    socket.on("makeCall", (data) => {
-        const { to, from, callerName, callerPic, roomId } = data;
-        console.log(`🎥 Call Request: From ${callerName} to Node ${to}`);
-        
-        // রিসিভারের রুমে সিগন্যাল পাঠানো
-        socket.to(to).emit("incomingCall", {
-            from,
-            callerName,
-            callerPic,
-            roomId,
+    // ১. কলার থেকে রিসিভারকে কল অফার পাঠানো
+    socket.on("callUser", (data) => {
+        const { userToCall, signalData, from, name, pic, type } = data;
+        io.to(userToCall).emit("incomingCall", { 
+            signal: signalData, 
+            from, 
+            name, 
+            pic,
+            type 
         });
     });
 
-    // রিসিভার যখন কল রিজেক্ট করবে
-    socket.on("rejectCall", (data) => {
-        const { to } = data;
-        console.log(`🚫 Call Rejected for Node: ${to}`);
-        socket.to(to).emit("callRejected", { 
-            message: "The drifter declined the neural link." 
-        });
-    });
-
-    // কল একসেপ্ট সিগন্যাল (Optional - Zego can handle connection)
+    // ২. রিসিভার যখন কল রিসিভ করবে (Answer)
     socket.on("answerCall", (data) => {
-        const { to } = data;
-        socket.to(to).emit("callAccepted");
+        io.to(data.to).emit("callAccepted", data.signal);
+    });
+
+    // ৩. ICE Candidate এক্সচেঞ্জ (নেটওয়ার্ক হ্যান্ডশেক - Ultra Lag-free এর জন্য জরুরি)
+    socket.on("iceCandidate", (data) => {
+        io.to(data.to).emit("iceCandidate", data.candidate);
+    });
+
+    // ৪. কল এন্ড বা রিজেক্ট করা
+    socket.on("endCall", (data) => {
+        io.to(data.to).emit("callEnded");
     });
 
     /* --- 💬 MESSAGE SIGNALS --- */
@@ -188,13 +179,11 @@ io.on("connection", (socket) => {
         }
     });
 
-    // ডিসকানেকশন লজিক
     socket.on("disconnect", async () => {
         if (redis && socket.userId) {
             await redis.hdel("online_users", socket.userId);
             const allUsers = await redis.hgetall("online_users");
             io.emit("getOnlineUsers", Object.keys(allUsers).map(id => ({ userId: id })));
-            console.log(`🔌 Node unlinked: ${socket.userId}`);
         }
     });
 });
@@ -204,17 +193,9 @@ io.on("connection", (socket) => {
 ========================================================== */
 app.use((err, req, res, next) => {
     if (err.name === 'UnauthorizedError' || err.status === 401) {
-        return res.status(401).json({ 
-            error: 'Identity Verification Failed', 
-            message: err.message
-        });
+        return res.status(401).json({ error: 'Identity Verification Failed' });
     }
-
-    console.error("🔥 Critical System Log:", err);
-    res.status(err.status || 500).json({ 
-        error: "Neural Grid Breakdown", 
-        message: err.message || "Internal Server Error"
-    });
+    res.status(err.status || 500).json({ error: "Neural Grid Breakdown", message: err.message });
 });
 
 /* ==========================================================
@@ -222,12 +203,5 @@ app.use((err, req, res, next) => {
 ========================================================== */
 const PORT = process.env.PORT || 10000;
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`
-    =========================================
-    🚀 ONYX CORE ACTIVE ON PORT: ${PORT}
-    📡 ENVIRONMENT: ${process.env.NODE_ENV || 'development'}
-    🛡️ AUTH0 DOMAIN: dev-prxn6v2o08xp5loz.us.auth0.com
-    📞 CALLING ENGINE: ENABLED (Socket.io)
-    =========================================
-    `);
+    console.log(`🚀 ONYX CORE ACTIVE ON PORT: ${PORT} | CALLING: WebRTC ENABLED`);
 });

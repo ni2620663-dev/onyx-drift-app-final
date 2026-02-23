@@ -76,7 +76,7 @@ const NeuralAudioPlayer = ({ url }) => {
   );
 };
 
-/* =================🛸 MAIN MESSENGER COMPONENT ================= */
+/* ================= UFO MAIN MESSENGER COMPONENT ================= */
 const Messenger = ({ socket }) => {
   const { user, getAccessTokenSilently, isAuthenticated, isLoading: authLoading } = useAuth0();
   const navigate = useNavigate();
@@ -88,7 +88,6 @@ const Messenger = ({ socket }) => {
   const [activeTab, setActiveTab] = useState("chats"); 
   const [selectedMood, setSelectedMood] = useState("Neural-Flow");
   const [isIncognito, setIsIncognito] = useState(false);
-  const [activeCall, setActiveCall] = useState(null); 
   const [showNotification, setShowNotification] = useState(false);
   const [typingUser, setTypingUser] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -102,7 +101,7 @@ const Messenger = ({ socket }) => {
 
   const API_URL = "https://onyx-drift-app-final-u29m.onrender.com";
   const AUTH_AUDIENCE = "https://onyx-drift-api.com";
-  const CLOUDINARY_URL = "https://api.cloudinary.com/v1_1/YOUR_CLOUD_NAME/upload";
+  const CLOUDINARY_URL = "https://api.cloudinary.com/v1_1/dofp85tq4/upload";
   const UPLOAD_PRESET = "onyx_drift_presets";
 
   /* =================🔒 AUTH CORE ================= */
@@ -128,28 +127,13 @@ const Messenger = ({ socket }) => {
     });
   }, [getAuthToken]);
 
-  /* =================📞 CALLING ENGINE (Audio/Video) ================= */
+  /* =================📞 CALLING ENGINE (WebRTC Trigger) ================= */
   const initiateCall = (type) => {
     if (!currentChat || !user) return;
-
-    // Generate Unique Room ID
-    const prefix = type === 'audio' ? 'aud' : 'vid';
-    const roomId = `${prefix}_${Date.now()}_${user.sub.slice(-5)}`;
     const receiverId = currentChat.members?.find(m => m !== user.sub);
-    
-    const s = socket?.current || socket;
-    if (s && receiverId) {
-      s.emit("makeCall", {
-        to: receiverId,
-        from: user.sub,
-        callerName: user.name || "Onyx Drifter",
-        callerPic: user.picture,
-        roomId: roomId,
-        callType: type // 'audio' or 'video'
-      });
-      
-      // Navigate to Call Page with Type Query
-      navigate(`/call/${roomId}?mode=${type}`);
+    const roomId = `room_${user.sub.slice(-5)}_${receiverId.slice(-5)}_${Date.now()}`;
+    if (receiverId) {
+      navigate(`/call/${roomId}?to=${receiverId}&mode=${type}`);
     }
   };
 
@@ -238,11 +222,21 @@ const Messenger = ({ socket }) => {
   useEffect(() => {
     const s = socket?.current || socket;
     if (!s || !user) return;
+    
     s.on("getMessage", (data) => {
       if(currentChat?._id === data.conversationId) setMessages(prev => [...prev, data]);
       fetchConversations();
     });
-    return () => { s.off("getMessage"); };
+
+    s.on("typing", (data) => {
+       if(currentChat?._id === data.conversationId) setTypingUser(data.senderName);
+       setTimeout(() => setTypingUser(null), 3000);
+    });
+
+    return () => { 
+      s.off("getMessage"); 
+      s.off("typing");
+    };
   }, [socket, currentChat, user]);
 
   const fetchConversations = useCallback(async () => {
@@ -274,7 +268,6 @@ const Messenger = ({ socket }) => {
     <div className={`fixed inset-0 text-white h-[100dvh] overflow-hidden transition-all duration-700 ${isIncognito ? 'bg-[#0a0010]' : 'bg-[#02040a]'}`}>
       
       <AnimatePresence>
-        {activeCall && <GroupCallScreen roomId={activeCall.roomId} onHangup={() => setActiveCall(null)} />}
         {showNotification && (
           <motion.div initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }} className="fixed inset-0 z-[300] bg-[#02040a] flex flex-col">
             <header className="p-4 pt-12 flex items-center gap-4 border-b border-white/5 bg-black/50 backdrop-blur-xl">
@@ -313,9 +306,9 @@ const Messenger = ({ socket }) => {
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-2">
+        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-2 pb-32">
           {activeTab === "chats" && conversations.map(c => (
-            <motion.div whileTap={{ scale: 0.98 }} key={c._id} onClick={() => setCurrentChat(c)} className="p-3.5 flex items-center gap-4 bg-white/[0.02] border border-white/5 rounded-2xl cursor-pointer">
+            <motion.div whileTap={{ scale: 0.98 }} key={c._id} onClick={() => setCurrentChat(c)} className="p-3.5 flex items-center gap-4 bg-white/[0.02] border border-white/5 rounded-2xl cursor-pointer hover:bg-white/[0.05] transition-all">
               <img src={c.userDetails?.avatar || `https://ui-avatars.com/api/?name=${c.userDetails?.name}`} className="w-12 h-12 rounded-xl object-cover border border-white/10" alt="Avatar" />
               <div className="flex-1 min-w-0">
                 <div className="flex justify-between items-center">
@@ -326,11 +319,21 @@ const Messenger = ({ socket }) => {
               </div>
             </motion.div>
           ))}
-          {activeTab === "groups" && <GroupMessenger />}
+          
+          {/* GroupMessenger add kora holo ekhane */}
+          {activeTab === "groups" && (
+            <GroupMessenger 
+              socket={socket} 
+              API_URL={API_URL} 
+              getAuthToken={getAuthToken} 
+              onSelectGroup={(group) => setCurrentChat({ ...group, isGroup: true, userDetails: { name: group.name, avatar: "https://ui-avatars.com/api/?name=Group" } })}
+            />
+          )}
+          
           {activeTab === "settings" && <Settings />}
         </div>
 
-        <nav className="p-4 pb-10 flex justify-around items-center bg-black/80 backdrop-blur-2xl border-t border-white/5">
+        <nav className="fixed bottom-0 left-0 right-0 p-4 pb-10 flex justify-around items-center bg-black/80 backdrop-blur-2xl border-t border-white/5 z-50">
           <button onClick={() => setActiveTab("chats")} className={`p-3 flex flex-col items-center gap-1 ${activeTab === "chats" ? 'text-cyan-500' : 'text-zinc-600'}`}>
             <HiChatBubbleLeftRight size={24} />
             <span className="text-[8px] font-black uppercase">Channels</span>
@@ -363,30 +366,23 @@ const Messenger = ({ socket }) => {
                   </div>
                 </div>
                 
-                {/* 📞 Call Controls (Audio & Video) */}
                 <div className="flex gap-1 pr-2">
-                  <button 
-                    onClick={() => initiateCall('audio')}
-                    className="p-2.5 text-zinc-400 hover:text-cyan-500 hover:bg-white/5 rounded-xl transition-all active:scale-90"
-                  >
+                  <button onClick={() => initiateCall('audio')} className="p-2.5 text-zinc-400 hover:text-cyan-500 hover:bg-white/5 rounded-xl active:scale-90 transition-all">
                     <FaPhone size={16}/>
                   </button>
-                  <button 
-                    onClick={() => initiateCall('video')}
-                    className="p-2.5 text-zinc-400 hover:text-cyan-500 hover:bg-white/5 rounded-xl transition-all active:scale-90"
-                  >
+                  <button onClick={() => initiateCall('video')} className="p-2.5 text-zinc-400 hover:text-cyan-500 hover:bg-white/5 rounded-xl active:scale-90 transition-all">
                     <HiOutlineVideoCamera size={22}/>
                   </button>
                 </div>
             </header>
             
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 pb-32">
               {isLoadingMessages ? <NeonSpinner /> : messages.map((m, i) => (
                 <div key={m._id || i} className={`flex flex-col ${m.senderId === user?.sub ? 'items-end' : 'items-start'}`}>
-                  <div className={`px-4 py-2.5 rounded-2xl max-w-[85%] border transition-all duration-500 ${m.senderId === user?.sub ? "bg-cyan-500/10 border-cyan-500/20" : "bg-white/5 border-white/10"}`}>
-                    {m.mediaType === "image" && <img src={m.media} alt="Neural" className="rounded-lg mb-2 max-h-60 w-full object-cover" />}
+                  <div className={`px-4 py-2.5 rounded-2xl max-w-[85%] border transition-all duration-500 ${m.senderId === user?.sub ? "bg-cyan-500/10 border-cyan-500/20 text-white" : "bg-white/5 border-white/10 text-zinc-300"}`}>
+                    {m.mediaType === "image" && <img src={m.media} alt="Neural" className="rounded-lg mb-2 max-h-60 w-full object-cover shadow-lg border border-white/10" />}
                     {m.mediaType === "voice" && <NeuralAudioPlayer url={m.media} />}
-                    {m.text && <p className="text-[13px] leading-relaxed">{m.text}</p>}
+                    {m.text && <p className="text-[13px] leading-relaxed break-words">{m.text}</p>}
                   </div>
                   <span className="text-[7px] text-zinc-600 mt-1 uppercase font-mono">{new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                 </div>
@@ -394,16 +390,26 @@ const Messenger = ({ socket }) => {
               <div ref={scrollRef} />
             </div>
 
-            <div className="p-4 pb-10 bg-black/90 backdrop-blur-2xl border-t border-white/5">
+            <div className="fixed bottom-0 left-0 right-0 p-4 pb-10 bg-black/90 backdrop-blur-2xl border-t border-white/5">
               <MoodSelector currentMood={selectedMood} onSelectMood={setSelectedMood} />
               <div className="flex items-center gap-2 mt-4 bg-white/5 p-1.5 pl-4 rounded-3xl border border-white/10">
                 <input type="file" ref={fileInputRef} onChange={(e) => handleFileUpload(e, null, "image")} className="hidden" accept="image/*" />
                 <button onClick={() => fileInputRef.current.click()} className="text-zinc-500 p-2 hover:text-cyan-500">
                   <HiOutlinePhoto size={22} className={isUploading ? "animate-spin" : ""} />
                 </button>
-                <input value={newMessage} onChange={(e) => setNewMessage(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSend()} placeholder="Transmit signal..." className="bg-transparent flex-1 outline-none text-white text-[13px]" />
+                <input 
+                  value={newMessage} 
+                  onChange={(e) => {
+                    setNewMessage(e.target.value);
+                    const s = socket?.current || socket;
+                    if(s && currentChat) s.emit("typing", { conversationId: currentChat._id, senderName: user.name });
+                  }} 
+                  onKeyDown={(e) => e.key === 'Enter' && handleSend()} 
+                  placeholder="Transmit signal..." 
+                  className="bg-transparent flex-1 outline-none text-white text-[13px]" 
+                />
                 {newMessage.trim() === "" ? (
-                  <button onMouseDown={startRecording} onMouseUp={stopRecording} onTouchStart={startRecording} onTouchEnd={stopRecording} className={`p-3 rounded-full ${isRecording ? 'bg-red-500 animate-pulse' : 'bg-white/5 text-zinc-400'}`}>
+                  <button onMouseDown={startRecording} onMouseUp={stopRecording} onTouchStart={startRecording} onTouchEnd={stopRecording} className={`p-3 rounded-full ${isRecording ? 'bg-red-500 animate-pulse text-white' : 'bg-white/5 text-zinc-400'}`}>
                     {isRecording ? <HiOutlineStopCircle size={20} /> : <HiOutlineMicrophone size={20} />}
                   </button>
                 ) : (

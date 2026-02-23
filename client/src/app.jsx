@@ -8,10 +8,6 @@ import axios from 'axios';
 import { HiXMark } from "react-icons/hi2";
 import { FaPhone } from "react-icons/fa";
 
-// Stream Video SDK 
-import { StreamVideoClient, StreamVideo } from '@stream-io/video-react-sdk';
-import '@stream-io/video-react-sdk/dist/css/styles.css';
-
 // Components & Pages
 import Sidebar from "./components/Sidebar";
 import Messenger from "./pages/Messenger";
@@ -28,11 +24,12 @@ import CustomCursor from "./components/CustomCursor";
 import MobileNav from "./components/MobileNav";
 import AITwinSync from './components/AITwinSync';
 
+// --- 📞 CUSTOM CALL CONTEXT IMPORT ---
+import { useCall } from './context/CallContext';
+
 // --- 🔊 RINGTONE CONFIG ---
 const callSound = new Audio("https://assets.mixkit.co/active_storage/sfx/1359/1359-preview.mp3");
 callSound.loop = true;
-
-const apiKey = 'aw5bpt4vfj56'; 
 
 const ProtectedRoute = ({ component: Component, ...props }) => {
   const AuthenticatedComponent = withAuthenticationRequired(Component, {
@@ -49,56 +46,23 @@ export default function App() {
   const { isAuthenticated, isLoading, user, getAccessTokenSilently } = useAuth0();
   const location = useLocation();
   const navigate = useNavigate();
-  const socket = useRef(null); 
+  
+  // Call Context থেকে ডাটা নেওয়া
+  const { 
+    socket, 
+    receivingCall, 
+    callerData, 
+    answerCall, 
+    setReceivingCall, 
+    completeEndCall 
+  } = useCall();
+
   const ringtoneRef = useRef(callSound);
   const [searchQuery, setSearchQuery] = useState("");
   const [isPostModalOpen, setIsPostModalOpen] = useState(false);
-  const [incomingCall, setIncomingCall] = useState(null);
-  const [videoClient, setVideoClient] = useState(null);
 
   const API_AUDIENCE = "https://onyx-drift-api.com";
   const BACKEND_URL = "https://onyx-drift-app-final-u29m.onrender.com";
-
-  /* =================📡 STREAM VIDEO CLIENT SETUP ================= */
-  useEffect(() => {
-    let client;
-    if (isAuthenticated && user) {
-      const cleanUserId = user.sub.replace(/[^a-zA-Z0-9]/g, "_");
-      
-      try {
-        // ফিক্স: StreamVideoClient থেকে সরাসরি devToken কল করা (Co.devToken error সমাধান)
-        // প্রোডাকশনে এটি কাজ না করলে আমরা একটি ম্যানুয়াল টোকেন ফরম্যাট ব্যবহার করছি
-        let token = "";
-        try {
-          token = StreamVideoClient.devToken(cleanUserId);
-        } catch (e) {
-          console.warn("Static devToken failed, using fallback string");
-          token = `dev_${cleanUserId}`; 
-        }
-
-        client = new StreamVideoClient({
-          apiKey,
-          user: {
-            id: cleanUserId,
-            name: user.name || "Drifter",
-            image: user.picture,
-          },
-          token: token,
-        });
-        
-        setVideoClient(client);
-      } catch (err) {
-        console.error("❌ Stream Client Neural Link Failed:", err);
-      }
-
-      return () => {
-        if (client) {
-          client.disconnectUser().catch(console.error);
-        }
-        setVideoClient(null);
-      };
-    }
-  }, [isAuthenticated, user]);
 
   /* =================📡 USER DATA SYNC ================= */
   useEffect(() => {
@@ -134,43 +98,15 @@ export default function App() {
     syncUserWithDB();
   }, [isAuthenticated, user, getAccessTokenSilently]);
 
-  /* =================📡 SOCKET ENGINE ================= */
+  /* =================📡 RINGTONE & VIBRATION ================= */
   useEffect(() => {
-    if (isAuthenticated && user?.sub) {
-      if (!socket.current) {
-        socket.current = io(BACKEND_URL, {
-          transports: ["websocket", "polling"],
-          withCredentials: true,
-          path: '/socket.io/',
-        });
-
-        socket.current.on("connect", () => {
-          socket.current.emit("addNewUser", user.sub);
-        });
-
-        socket.current.on("getCall", (data) => {
-          setIncomingCall(data);
-          ringtoneRef.current.play().catch(() => {});
-          if (navigator.vibrate) navigator.vibrate([500, 200, 500]);
-        });
-
-        socket.current.on("callRejected", () => {
-          stopRingtone();
-          setIncomingCall(null);
-        });
-      }
-    }
-
-    return () => {
-      if (socket.current) {
-        socket.current.off("getCall");
-        socket.current.off("callRejected");
-        socket.current.disconnect();
-        socket.current = null;
-      }
+    if (receivingCall) {
+      ringtoneRef.current.play().catch(() => {});
+      if (navigator.vibrate) navigator.vibrate([500, 200, 500]);
+    } else {
       stopRingtone();
-    };
-  }, [isAuthenticated, user?.sub]);
+    }
+  }, [receivingCall]);
 
   const stopRingtone = () => {
     if (ringtoneRef.current) {
@@ -179,20 +115,12 @@ export default function App() {
     }
   };
 
-  const handleAcceptCall = () => {
-    if (!incomingCall) return;
-    stopRingtone();
-    const { roomId, callType } = incomingCall;
-    setIncomingCall(null);
-    navigate(`/call/${roomId}?mode=${callType || 'video'}`);
-  };
-
   const handleRejectCall = () => {
-    if (socket.current && incomingCall) {
-      socket.current.emit("rejectCall", { to: incomingCall.from });
+    if (socket && callerData.from) {
+      socket.emit("endCall", { to: callerData.from });
     }
+    setReceivingCall(false);
     stopRingtone();
-    setIncomingCall(null);
   };
 
   const isFullWidthPage = ["/messenger", "/messages", "/settings", "/", "/join", "/reels", "/ai-twin", "/call"].some(path => location.pathname === path || location.pathname.startsWith(path + "/"));
@@ -202,83 +130,78 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#020617] text-gray-200 font-sans relative overflow-x-hidden">
-      {videoClient ? (
-        <StreamVideo client={videoClient}>
-          <Toaster position="top-center" />
-          <CustomCursor />
+      <Toaster position="top-center" />
+      <CustomCursor />
 
-          <AnimatePresence>
-            {incomingCall && (
-              <motion.div 
-                initial={{ y: -150, opacity: 0 }}
-                animate={{ y: 20, opacity: 1 }}
-                exit={{ y: -150, opacity: 0 }}
-                className="fixed top-0 left-1/2 -translate-x-1/2 z-[100000] w-[92%] max-w-md backdrop-blur-3xl border border-cyan-500/40 p-5 rounded-[2.5rem] bg-black/80 shadow-2xl shadow-cyan-500/10"
-              >
-                <div className="flex items-center justify-between gap-4">
-                  <div className="flex items-center gap-4">
-                    <div className="relative">
-                      <div className="absolute inset-0 bg-cyan-500 rounded-2xl animate-ping opacity-20" />
-                      <img src={incomingCall.callerPic || "https://api.dicebear.com/7.x/avataaars/svg?seed=Onyx"} className="w-14 h-14 rounded-2xl border border-cyan-500/30 object-cover" alt="caller" />
-                    </div>
-                    <div>
-                      <h4 className="text-[13px] font-black text-white uppercase tracking-tighter truncate">{incomingCall.callerName}</h4>
-                      <p className="text-[9px] text-cyan-500 font-black tracking-widest uppercase animate-pulse">Neural Link Incoming...</p>
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <button onClick={handleRejectCall} className="w-12 h-12 rounded-2xl bg-red-500/10 text-red-500 border border-red-500/20 flex items-center justify-center active:scale-90"><HiXMark size={26} /></button>
-                    <button onClick={handleAcceptCall} className="w-12 h-12 rounded-2xl bg-cyan-500 text-[#020617] flex items-center justify-center shadow-lg shadow-cyan-500/20 active:scale-90"><FaPhone size={18} /></button>
-                  </div>
+      {/* =================📞 INCOMING CALL UI (WhatsApp Style) ================= */}
+      <AnimatePresence>
+        {receivingCall && (
+          <motion.div 
+            initial={{ y: -150, opacity: 0 }}
+            animate={{ y: 20, opacity: 1 }}
+            exit={{ y: -150, opacity: 0 }}
+            className="fixed top-0 left-1/2 -translate-x-1/2 z-[100000] w-[92%] max-w-md backdrop-blur-3xl border border-cyan-500/40 p-5 rounded-[2.5rem] bg-black/80 shadow-2xl shadow-cyan-500/10"
+          >
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <div className="relative">
+                  <div className="absolute inset-0 bg-cyan-500 rounded-2xl animate-ping opacity-20" />
+                  <img src={callerData.pic || "https://api.dicebear.com/7.x/avataaars/svg?seed=Onyx"} className="w-14 h-14 rounded-2xl border border-cyan-500/30 object-cover" alt="caller" />
                 </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          <div className="flex flex-col w-full">
-            <div className="flex justify-center w-full">
-              <div className={`flex w-full ${isFullWidthPage ? "max-w-full" : "max-w-[1440px] px-0 lg:px-6"} gap-6`}>
-                {isAuthenticated && !isFullWidthPage && !isReelsPage && (
-                  <aside className="hidden lg:block w-[280px] sticky top-0 h-screen py-6"><Sidebar /></aside>
-                )}
-                <main className={`flex-1 flex justify-center mt-0 ${isFullWidthPage ? "" : "pb-24 lg:pb-10 pt-6"}`}>
-                  <div className={`${isFullWidthPage ? "w-full" : "w-full lg:max-w-[650px]"}`}>
-                    <Suspense fallback={<div className="h-screen bg-[#020617]" />}>
-                      <Routes location={location} key={location.pathname}>
-                        <Route path="/" element={isAuthenticated ? <Navigate to="/feed" replace /> : <Landing />} />
-                        <Route path="/join" element={<JoinPage />} /> 
-                        <Route path="/feed" element={<ProtectedRoute component={() => <PremiumHomeFeed searchQuery={searchQuery} isPostModalOpen={isPostModalOpen} setIsPostModalOpen={setIsPostModalOpen} />} />} />
-                        <Route path="/reels" element={<ProtectedRoute component={ReelsFeed} />} />
-                        <Route path="/profile/:userId" element={<ProtectedRoute component={() => <Profile currentUserId={user?.sub} />} />} />
-                        <Route path="/messages/:userId?" element={<ProtectedRoute component={() => <Messenger socket={socket} />} />} />
-                        <Route path="/messenger/:userId?" element={<ProtectedRoute component={() => <Messenger socket={socket} />} />} />
-                        <Route path="/settings" element={<ProtectedRoute component={Settings} />} />
-                        <Route path="/call/:roomId" element={<ProtectedRoute component={CallPage} />} />
-                        <Route path="/ai-twin" element={<ProtectedRoute component={AITwinSync} />} />
-                        <Route path="*" element={<Navigate to="/" replace />} />
-                      </Routes>
-                    </Suspense>
-                  </div>
-                </main>
+                <div>
+                  <h4 className="text-[13px] font-black text-white uppercase tracking-tighter truncate">{callerData.name}</h4>
+                  <p className="text-[9px] text-cyan-500 font-black tracking-widest uppercase animate-pulse">Neural Link Incoming...</p>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button onClick={handleRejectCall} className="w-12 h-12 rounded-2xl bg-red-500/10 text-red-500 border border-red-500/20 flex items-center justify-center active:scale-90"><HiXMark size={26} /></button>
+                <button onClick={answerCall} className="w-12 h-12 rounded-2xl bg-cyan-500 text-[#020617] flex items-center justify-center shadow-lg shadow-cyan-500/20 active:scale-90"><FaPhone size={18} /></button>
               </div>
             </div>
-          </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-          {isAuthenticated && !isReelsPage && !location.pathname.startsWith("/call") && (
-            <MobileNav userAuth0Id={user?.sub} />
-          )}
-        </StreamVideo>
-      ) : (
-        <div className="w-full">
-          <Toaster position="top-center" />
-          <Suspense fallback={<div className="h-screen bg-[#020617]" />}>
-            <Routes>
-              <Route path="/" element={<Landing />} />
-              <Route path="/join" element={<JoinPage />} />
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
-          </Suspense>
+      {/* =================🌐 MAIN LAYOUT ================= */}
+      <div className="flex flex-col w-full">
+        <div className="flex justify-center w-full">
+          <div className={`flex w-full ${isFullWidthPage ? "max-w-full" : "max-w-[1440px] px-0 lg:px-6"} gap-6`}>
+            
+            {isAuthenticated && !isFullWidthPage && !isReelsPage && (
+              <aside className="hidden lg:block w-[280px] sticky top-0 h-screen py-6">
+                <Sidebar />
+              </aside>
+            )}
+
+            <main className={`flex-1 flex justify-center mt-0 ${isFullWidthPage ? "" : "pb-24 lg:pb-10 pt-6"}`}>
+              <div className={`${isFullWidthPage ? "w-full" : "w-full lg:max-w-[650px]"}`}>
+                <Suspense fallback={<div className="h-screen bg-[#020617]" />}>
+                  <Routes location={location} key={location.pathname}>
+                    <Route path="/" element={isAuthenticated ? <Navigate to="/feed" replace /> : <Landing />} />
+                    <Route path="/join" element={<JoinPage />} /> 
+                    
+                    <Route path="/feed" element={<ProtectedRoute component={() => <PremiumHomeFeed searchQuery={searchQuery} isPostModalOpen={isPostModalOpen} setIsPostModalOpen={setIsPostModalOpen} />} />} />
+                    <Route path="/reels" element={<ProtectedRoute component={ReelsFeed} />} />
+                    <Route path="/profile/:userId" element={<ProtectedRoute component={() => <Profile currentUserId={user?.sub} />} />} />
+                    <Route path="/messages/:userId?" element={<ProtectedRoute component={() => <Messenger socket={{current: socket}} />} />} />
+                    <Route path="/messenger/:userId?" element={<ProtectedRoute component={() => <Messenger socket={{current: socket}} />} />} />
+                    
+                    <Route path="/settings" element={<ProtectedRoute component={Settings} />} />
+                    <Route path="/call/:roomId" element={<ProtectedRoute component={CallPage} />} />
+                    <Route path="/ai-twin" element={<ProtectedRoute component={AITwinSync} />} />
+                    
+                    <Route path="*" element={<Navigate to="/" replace />} />
+                  </Routes>
+                </Suspense>
+              </div>
+            </main>
+
+          </div>
         </div>
+      </div>
+
+      {isAuthenticated && !isReelsPage && !location.pathname.startsWith("/call") && (
+        <MobileNav userAuth0Id={user?.sub} />
       )}
     </div>
   );
