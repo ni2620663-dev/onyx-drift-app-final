@@ -1,4 +1,4 @@
-import React, { createContext, useState, useRef, useEffect } from 'react';
+import React, { createContext, useState, useRef, useEffect, useContext } from 'react';
 import { io } from 'socket.io-client';
 import Peer from 'simple-peer';
 
@@ -11,7 +11,6 @@ const ContextProvider = ({ children }) => {
   const [stream, setStream] = useState(null);
   const [call, setCall] = useState({});
   const [me, setMe] = useState('');
-  // name স্টেটটি যোগ করা হয়েছে যা আগে missing ছিল
   const [name, setName] = useState(''); 
 
   const myVideo = useRef();
@@ -19,7 +18,6 @@ const ContextProvider = ({ children }) => {
   const connectionRef = useRef();
 
   useEffect(() => {
-    // ক্যামেরা এবং অডিও পারমিশন
     navigator.mediaDevices.getUserMedia({ video: true, audio: true })
       .then((currentStream) => {
         setStream(currentStream);
@@ -27,7 +25,7 @@ const ContextProvider = ({ children }) => {
           myVideo.current.srcObject = currentStream;
         }
       })
-      .catch((err) => console.error("Media Error:", err));
+      .catch((err) => console.error("Media Access Denied:", err));
 
     socket.on('me', (id) => setMe(id));
 
@@ -67,7 +65,7 @@ const ContextProvider = ({ children }) => {
         userToCall: id, 
         signalData: data, 
         from: me, 
-        name: name // setName এর মাধ্যমে প্রাপ্ত নাম
+        name: name 
       });
     });
 
@@ -101,7 +99,7 @@ const ContextProvider = ({ children }) => {
       userVideo, 
       stream, 
       name, 
-      setName, // এটি যোগ করা হয়েছে যাতে অন্য পেজ থেকে নাম সেট করা যায়
+      setName, 
       answerCall, 
       leaveCall, 
       callUser 
@@ -109,6 +107,15 @@ const ContextProvider = ({ children }) => {
       {children}
     </SocketContext.Provider>
   );
+};
+
+// এই অংশটি যোগ করা হয়েছে যা আপনার এরর ফিক্স করবে
+export const useCall = () => {
+  const context = useContext(SocketContext);
+  if (!context) {
+    throw new Error('useCall must be used within a ContextProvider');
+  }
+  return context;
 };
 
 export { ContextProvider, SocketContext };
