@@ -25,8 +25,8 @@ import AITwinSync from './components/AITwinSync';
 import { useCall } from './context/CallContext';
 
 // --- 🔊 RINGTONE CONFIG ---
-const callSound = new Audio("https://assets.mixkit.co/active_storage/sfx/1359/1359-preview.mp3");
-callSound.loop = true;
+const INCOMING_SOUND_URL = "https://assets.mixkit.co/active_storage/sfx/1359/1359-preview.mp3";
+const OUTGOING_SOUND_URL = "https://www.soundjay.com/phone/phone-calling-1.mp3";
 
 const ProtectedRoute = ({ component: Component, ...props }) => {
   const AuthenticatedComponent = withAuthenticationRequired(Component, {
@@ -44,15 +44,17 @@ export default function App() {
   const location = useLocation();
   const navigate = useNavigate();
   
-  // Call Context থেকে সঠিক ডাটা নেওয়া (আপনার CallContext.jsx অনুযায়ী)
+  // Call Context থেকে ডাটা নেওয়া
   const { 
     call, 
     callAccepted, 
     answerCall, 
-    leaveCall 
+    leaveCall,
+    stream 
   } = useCall();
 
-  const ringtoneRef = useRef(callSound);
+  const incomingAudio = useRef(new Audio(INCOMING_SOUND_URL));
+  const outgoingAudio = useRef(new Audio(OUTGOING_SOUND_URL));
   const [searchQuery, setSearchQuery] = useState("");
   const [isPostModalOpen, setIsPostModalOpen] = useState(false);
 
@@ -93,40 +95,36 @@ export default function App() {
     syncUserWithDB();
   }, [isAuthenticated, user, getAccessTokenSilently]);
 
-  /* =================📡 RINGTONE & VIBRATION ================= */
+  /* =================📡 RINGTONE LOGIC ================= */
   useEffect(() => {
-    // call.isReceivingCall এবং কল রিসিভ না হওয়া পর্যন্ত রিংটোন বাজবে
+    // ইনকামিং কল রিংটোন
     if (call.isReceivingCall && !callAccepted) {
-      ringtoneRef.current.play().catch(() => {});
+      incomingAudio.current.loop = true;
+      incomingAudio.current.play().catch(() => {});
       if (navigator.vibrate) navigator.vibrate([500, 200, 500]);
     } else {
-      stopRingtone();
+      incomingAudio.current.pause();
+      incomingAudio.current.currentTime = 0;
     }
+
+    return () => {
+      incomingAudio.current.pause();
+    };
   }, [call.isReceivingCall, callAccepted]);
 
-  const stopRingtone = () => {
-    if (ringtoneRef.current) {
-      ringtoneRef.current.pause();
-      ringtoneRef.current.currentTime = 0;
-    }
-  };
-
   const handleAnswerCall = () => {
-    answerCall(); // Context এর answerCall ফাংশন
-    stopRingtone();
-    // কল এক্সেপ্ট করলে কল পেজে নিয়ে যাবে
+    answerCall(); // Context ফাংশন
     navigate(`/call/${call.from || 'room'}`); 
   };
 
   const handleRejectCall = () => {
-    leaveCall(); // Context এর leaveCall ফাংশন
-    stopRingtone();
+    leaveCall(); // Context ফাংশন (ক্যামেরা অফ করবে ও রিলোড দিবে)
   };
 
   const isFullWidthPage = ["/messenger", "/messages", "/settings", "/", "/join", "/reels", "/ai-twin", "/call"].some(path => location.pathname === path || location.pathname.startsWith(path + "/"));
   const isReelsPage = location.pathname.startsWith("/reels");
 
-  if (isLoading) return <div className="h-screen bg-[#020617] flex items-center justify-center text-cyan-500">Connecting to Onyx Grid...</div>;
+  if (isLoading) return <div className="h-screen bg-[#020617] flex items-center justify-center text-cyan-500 font-mono">Connecting to Onyx Grid...</div>;
 
   return (
     <div className="min-h-screen bg-[#020617] text-gray-200 font-sans relative overflow-x-hidden">
@@ -150,12 +148,12 @@ export default function App() {
                 </div>
                 <div>
                   <h4 className="text-[13px] font-black text-white uppercase tracking-tighter truncate">{call.name || "Unknown Link"}</h4>
-                  <p className="text-[9px] text-cyan-500 font-black tracking-widest uppercase animate-pulse">Incoming Connection...</p>
+                  <p className="text-[9px] text-cyan-500 font-black tracking-widest uppercase animate-pulse">Incoming Neural Link...</p>
                 </div>
               </div>
               <div className="flex gap-2">
-                <button onClick={handleRejectCall} className="w-12 h-12 rounded-2xl bg-red-500/10 text-red-500 border border-red-500/20 flex items-center justify-center active:scale-90"><HiXMark size={26} /></button>
-                <button onClick={handleAnswerCall} className="w-12 h-12 rounded-2xl bg-cyan-500 text-[#020617] flex items-center justify-center shadow-lg shadow-cyan-500/20 active:scale-90"><FaPhone size={18} /></button>
+                <button onClick={handleRejectCall} className="w-12 h-12 rounded-2xl bg-red-500/10 text-red-500 border border-red-500/20 flex items-center justify-center active:scale-90 transition-transform"><HiXMark size={26} /></button>
+                <button onClick={handleAnswerCall} className="w-12 h-12 rounded-2xl bg-cyan-500 text-[#020617] flex items-center justify-center shadow-lg shadow-cyan-500/20 active:scale-90 transition-transform"><FaPhone size={18} /></button>
               </div>
             </div>
           </motion.div>

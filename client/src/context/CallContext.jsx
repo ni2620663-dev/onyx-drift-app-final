@@ -3,7 +3,11 @@ import { io } from 'socket.io-client';
 import Peer from 'simple-peer';
 
 const SocketContext = createContext();
-const socket = io('https://onyx-drift-app-final-u29m.onrender.com');
+
+// সকেট কানেকশন
+const socket = io('https://onyx-drift-app-final-u29m.onrender.com', {
+  transports: ['websocket'],
+});
 
 const ContextProvider = ({ children }) => {
   const [callAccepted, setCallAccepted] = useState(false);
@@ -11,22 +15,14 @@ const ContextProvider = ({ children }) => {
   const [stream, setStream] = useState(null);
   const [call, setCall] = useState({});
   const [me, setMe] = useState('');
-  const [name, setName] = useState(''); 
+  const [name, setName] = useState('');
 
   const myVideo = useRef();
   const userVideo = useRef();
   const connectionRef = useRef();
 
   useEffect(() => {
-    navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-      .then((currentStream) => {
-        setStream(currentStream);
-        if (myVideo.current) {
-          myVideo.current.srcObject = currentStream;
-        }
-      })
-      .catch((err) => console.error("Media Access Denied:", err));
-
+    // অ্যাপ ওপেন হলে শুধু সকেট আইডি এবং ইনকামিং কল লিসেন করবে
     socket.on('me', (id) => setMe(id));
 
     socket.on('incomingCall', ({ from, name: callerName, signal, pic }) => {
@@ -39,9 +35,29 @@ const ContextProvider = ({ children }) => {
     };
   }, []);
 
-  const answerCall = () => {
+  // 📹 ক্যামেরা এবং মাইক্রোফোন চালু করার ফাংশন (শুধুমাত্র কলের সময় চলবে)
+  const getMediaStream = async () => {
+    try {
+      const currentStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      setStream(currentStream);
+      if (myVideo.current) {
+        myVideo.current.srcObject = currentStream;
+      }
+      return currentStream;
+    } catch (err) {
+      console.error("Media Access Denied:", err);
+      return null;
+    }
+  };
+
+  // ✅ কল রিসিভ করা (Answer Call)
+  const answerCall = async () => {
     setCallAccepted(true);
-    const peer = new Peer({ initiator: false, trickle: false, stream });
+    
+    const userStream = await getMediaStream(); // এখানে ক্যামেরা অন হবে
+    if (!userStream) return;
+
+    const peer = new Peer({ initiator: false, trickle: false, stream: userStream });
 
     peer.on('signal', (data) => {
       socket.emit('answerCall', { signal: data, to: call.from });
@@ -57,8 +73,12 @@ const ContextProvider = ({ children }) => {
     connectionRef.current = peer;
   };
 
-  const callUser = (id) => {
-    const peer = new Peer({ initiator: true, trickle: false, stream });
+  // 📞 কল করা (Initiate Call)
+  const callUser = async (id) => {
+    const userStream = await getMediaStream(); // এখানে ক্যামেরা অন হবে
+    if (!userStream) return;
+
+    const peer = new Peer({ initiator: true, trickle: false, stream: userStream });
 
     peer.on('signal', (data) => {
       socket.emit('callUser', { 
@@ -83,11 +103,20 @@ const ContextProvider = ({ children }) => {
     connectionRef.current = peer;
   };
 
+  // ❌ কল শেষ করা (Leave Call)
   const leaveCall = () => {
     setCallEnded(true);
+
     if (connectionRef.current) {
       connectionRef.current.destroy();
     }
+
+    // ক্যামেরা এবং অডিও ট্রাকগুলো বন্ধ করা যাতে ল্যাপটপের আলো নিভে যায়
+    if (stream) {
+      stream.getTracks().forEach(track => track.stop());
+    }
+
+    // পেজ রিলোড না করে স্টেট রিসেট করা ভালো, তবে আপনার রিলোড প্রয়োজন হলে রাখতে পারেন
     window.location.reload();
   };
 
@@ -102,14 +131,15 @@ const ContextProvider = ({ children }) => {
       setName, 
       answerCall, 
       leaveCall, 
-      callUser 
+      callUser,
+      me 
     }}>
       {children}
     </SocketContext.Provider>
   );
 };
 
-// এই অংশটি যোগ করা হয়েছে যা আপনার এরর ফিক্স করবে
+// কাস্টম হুক
 export const useCall = () => {
   const context = useContext(SocketContext);
   if (!context) {
