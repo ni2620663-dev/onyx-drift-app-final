@@ -66,15 +66,14 @@ export default function App() {
       const cleanUserId = user.sub.replace(/[^a-zA-Z0-9]/g, "_");
       
       try {
-        // ফিক্স: প্রোডাকশনে devToken না থাকলে একটি ডামি টোকেন ব্যবহার করা
-        // এবং মেথডটি আছে কি না তা আগে চেক করা (Co.devToken error সমাধান)
+        // ফিক্স: StreamVideoClient থেকে সরাসরি devToken কল করা (Co.devToken error সমাধান)
+        // প্রোডাকশনে এটি কাজ না করলে আমরা একটি ম্যানুয়াল টোকেন ফরম্যাট ব্যবহার করছি
         let token = "";
-        if (typeof StreamVideoClient.devToken === 'function') {
+        try {
           token = StreamVideoClient.devToken(cleanUserId);
-        } else {
-          // যদি devToken ফাংশন না পাওয়া যায়, তবে একটি হার্ডকোডেড স্ট্রিং 
-          // (আপনার ড্যাশবোর্ডে Disable Auth Checks অন থাকলে এটি কাজ করবে)
-          token = "production_fallback_token_" + cleanUserId;
+        } catch (e) {
+          console.warn("Static devToken failed, using fallback string");
+          token = `dev_${cleanUserId}`; 
         }
 
         client = new StreamVideoClient({
@@ -199,18 +198,15 @@ export default function App() {
   const isFullWidthPage = ["/messenger", "/messages", "/settings", "/", "/join", "/reels", "/ai-twin", "/call"].some(path => location.pathname === path || location.pathname.startsWith(path + "/"));
   const isReelsPage = location.pathname.startsWith("/reels");
 
-  // ডাটা লোড হওয়ার সময় ব্ল্যাঙ্ক স্ক্রিন না দেখিয়ে একটি ডিফল্ট স্টাইল
   if (isLoading) return <div className="h-screen bg-[#020617] flex items-center justify-center text-cyan-500">Connecting to Onyx Grid...</div>;
 
   return (
     <div className="min-h-screen bg-[#020617] text-gray-200 font-sans relative overflow-x-hidden">
-      {/* যদি videoClient রেডি থাকে তবেই StreamVideo র‍্যাপার ইউজ হবে, নয়তো সাধারণ UI */}
       {videoClient ? (
         <StreamVideo client={videoClient}>
           <Toaster position="top-center" />
           <CustomCursor />
 
-          {/* --- 📞 INCOMING CALL UI --- */}
           <AnimatePresence>
             {incomingCall && (
               <motion.div 
@@ -273,7 +269,6 @@ export default function App() {
           )}
         </StreamVideo>
       ) : (
-        /* যখন Stream Client তৈরি হচ্ছে না বা ইউজার লগইন নেই */
         <div className="w-full">
           <Toaster position="top-center" />
           <Suspense fallback={<div className="h-screen bg-[#020617]" />}>

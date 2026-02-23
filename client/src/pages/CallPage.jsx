@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth0 } from "@auth0/auth0-react";
 import { 
@@ -14,7 +14,7 @@ import { FaClock, FaMicrophone } from "react-icons/fa";
 import { motion } from "framer-motion";
 
 // Stream SDK styles
-import '@stream-io/video-react-sdk';
+import '@stream-io/video-react-sdk/dist/css/styles.css';
 
 const apiKey = 'aw5bpt4vfj56'; 
 
@@ -60,8 +60,17 @@ const CallPage = () => {
       const cleanUserId = user.sub.replace(/[^a-zA-Z0-9]/g, "_");
 
       try {
-        // Fix: Call devToken as a static method correctly
-        const token = StreamVideoClient.devToken(cleanUserId);
+        // ফিক্স: প্রোডাকশন মোডে এরর এড়াতে নিরাপদভাবে টোকেন জেনারেট করা
+        let token = "";
+        try {
+          if (typeof StreamVideoClient.devToken === 'function') {
+            token = StreamVideoClient.devToken(cleanUserId);
+          } else {
+            token = `dev_${cleanUserId}`;
+          }
+        } catch (e) {
+          token = `dev_${cleanUserId}`;
+        }
 
         videoClient = new StreamVideoClient({
           apiKey,
@@ -73,13 +82,16 @@ const CallPage = () => {
           token,
         });
 
-        videoCall = videoClient.call('default', roomId);
+        // পরিবর্তন: এখানে 'default' এর বদলে আপনার তৈরি করা 'onyxdrift123' ব্যবহার করা হয়েছে
+        videoCall = videoClient.call('onyxdrift123', roomId);
         
         await videoCall.join({ create: true });
         
-        // Handle Audio Only mode camera state
+        // অডিও মোড হলে ক্যামেরা অফ করা
         if (callMode === 'audio') {
           await videoCall.camera.disable();
+        } else {
+          await videoCall.camera.enable();
         }
 
         setClient(videoClient);
@@ -94,7 +106,6 @@ const CallPage = () => {
 
     initStream();
 
-    // Cleanup: Leave call and disconnect user when component unmounts
     return () => {
       if (videoCall) {
         videoCall.leave().catch(e => console.error("Call leave error:", e));
@@ -176,14 +187,12 @@ const CallPage = () => {
                 </div>
               )}
               
-              {/* কন্ট্রোল বার */}
               <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[100]">
                 <CallControls onLeave={() => navigate('/messages')} />
               </div>
             </div>
           </StreamCall>
 
-          {/* --- 💅 CUSTOM CSS OVERRIDES --- */}
           <style>{`
             .str-video__call-controls {
               background: rgba(2, 6, 23, 0.8) !important;
