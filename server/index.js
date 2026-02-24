@@ -28,7 +28,7 @@ import reelRoutes from "./routes/reels.js";
 import profileRoutes from "./routes/profile.js"; 
 import groupRoutes from "./routes/group.js"; 
 import marketRoutes from "./routes/market.js"; 
-import adminRoutes from "./routes/admin.js";                
+import adminRoutes from "./routes/admin.js";                 
 import { getNeuralFeed } from "./controllers/feedController.js";
 
 // 🛡️ Auth0 JWT ভেরিফিকেশন মিডলওয়্যার
@@ -48,7 +48,7 @@ cloudinary.config({
 const app = express();
 const server = http.createServer(app);
 
-// ৩. CORS কনফিগারেশন
+// ৩. CORS কনফিগারেশন (উন্নত সুরক্ষা)
 const allowedOrigins = [
     "http://localhost:5173", 
     "https://onyx-drift-app-final.onrender.com",
@@ -71,9 +71,10 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-app.use(express.json({ limit: "50mb" })); // লমিট কিছুটা কমানো হয়েছে সার্ভার স্ট্যাবিলিটির জন্য
+app.use(express.json({ limit: "50mb" })); 
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
+// স্ট্যাটিক ফাইল ফোল্ডার সেটআপ
 const uploadDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadDir)){
     fs.mkdirSync(uploadDir);
@@ -87,10 +88,11 @@ const updateNeuralPulse = async (req, res, next) => {
     try {
         const auth0Id = req.auth?.payload?.sub; 
         if (auth0Id) {
-            await User.updateOne(
+            // Background update - Don't wait (await) to improve response time
+            User.updateOne(
                 { auth0Id: auth0Id },
                 { $set: { "deathSwitch.lastPulseTimestamp": new Date() } }
-            );
+            ).catch(err => console.error("Pulse error:", err));
         }
     } catch (err) {
         // Pulse bypass quietly
@@ -102,7 +104,11 @@ const updateNeuralPulse = async (req, res, next) => {
     📡 API ROUTES
 ========================================================== */
 app.get("/", (req, res) => res.status(200).send("🚀 OnyxDrift Neural Core Online!"));
+
+// Public Feed with Pulse
 app.get("/api/posts/neural-feed", checkJwt, updateNeuralPulse, getNeuralFeed);
+
+// Modular Routes
 app.use("/api/user", checkJwt, updateNeuralPulse, userRoutes); 
 app.use("/api/users", checkJwt, updateNeuralPulse, userRoutes); 
 app.use("/api/profile", checkJwt, updateNeuralPulse, profileRoutes);
@@ -115,7 +121,7 @@ app.use("/api/market", checkJwt, updateNeuralPulse, marketRoutes);
 app.use("/api/admin", checkJwt, updateNeuralPulse, adminRoutes);
 
 /* ==========================================================
-    📡 REAL-TIME ENGINE (Socket.io) + WebRTC Signaling
+    📡 REAL-TIME ENGINE (Socket.io) + WebRTC
 ========================================================== */
 const io = new Server(server, {
     cors: corsOptions,
@@ -126,6 +132,7 @@ const io = new Server(server, {
     pingInterval: 25000
 });
 
+// Redis Connection
 const redis = process.env.REDIS_URL ? new Redis(process.env.REDIS_URL, {
     maxRetriesPerRequest: null,
     enableReadyCheck: false
@@ -133,14 +140,18 @@ const redis = process.env.REDIS_URL ? new Redis(process.env.REDIS_URL, {
 
 if (redis) {
     redis.on("error", (err) => console.log("Redis Connection Error:", err));
+    redis.on("connect", () => console.log("🧠 Neural Redis Cache Synced"));
 }
+
+
 
 io.on("connection", (socket) => {
     
+    // ইউজার কানেক্ট হলে অনলাইন স্ট্যাটাস আপডেট
     socket.on("addNewUser", async (auth0Id) => { 
         if (!auth0Id) return;
         socket.userId = auth0Id; 
-        socket.join(auth0Id); 
+        socket.join(auth0Id); // প্রতিটি ইউজারকে নিজস্ব রুমে জয়েন করানো
         
         if (redis) {
             await redis.hset("online_users", auth0Id, socket.id);
@@ -150,8 +161,6 @@ io.on("connection", (socket) => {
     });
 
     /* --- 📞 WebRTC CALLING SIGNALS --- */
-
-    // কলার সিগন্যাল পাঠাচ্ছে
     socket.on("callUser", (data) => {
         const { userToCall, signalData, from, name, pic, type } = data;
         io.to(userToCall).emit("incomingCall", { 
@@ -163,19 +172,16 @@ io.on("connection", (socket) => {
         });
     });
 
-    // রিসিভার কল একসেপ্ট করছে
     socket.on("answerCall", (data) => {
         io.to(data.to).emit("callAccepted", data.signal);
     });
 
-    // ICE Candidate বিনিময় (Lag কমানোর জন্য)
     socket.on("iceCandidate", (data) => {
         if (data.to) {
             io.to(data.to).emit("iceCandidate", data.candidate);
         }
     });
 
-    // কল এন্ড সিগন্যাল
     socket.on("endCall", (data) => {
         if (data.to) {
             io.to(data.to).emit("callEnded");
@@ -186,25 +192,34 @@ io.on("connection", (socket) => {
     socket.on("sendMessage", (message) => {
         const { receiverId } = message;
         if (receiverId) {
-            // ইউজারের নিজস্ব রুম (ID) এ মেসেজ পাঠানো
+            // receiverId হচ্ছে ওই ইউজারের রুমের নাম
             io.to(receiverId).emit("getMessage", message);
         }
     });
 
-    // টাইপিং সিগন্যাল
+    // টাইপিং সিগন্যাল (ইমপ্রুভড লজিক)
     socket.on("typing", (data) => {
-        const { conversationId, receiverId, senderName } = data;
+        const { receiverId, conversationId, senderName } = data;
         if (receiverId) {
             socket.to(receiverId).emit("typing", { conversationId, senderName });
         }
     });
 
+    socket.on("stopTyping", (data) => {
+        const { receiverId } = data;
+        if (receiverId) {
+            socket.to(receiverId).emit("stopTyping");
+        }
+    });
+
+    // ডিসকানেক্ট হ্যান্ডলার
     socket.on("disconnect", async () => {
         if (redis && socket.userId) {
             await redis.hdel("online_users", socket.userId);
             const allUsers = await redis.hgetall("online_users");
             io.emit("getOnlineUsers", Object.keys(allUsers).map(id => ({ userId: id })));
         }
+        console.log("📡 Signal Lost: Node Disconnected");
     });
 });
 
@@ -212,10 +227,16 @@ io.on("connection", (socket) => {
     🛡️ GLOBAL ERROR HANDLER
 ========================================================== */
 app.use((err, req, res, next) => {
+    console.error("Critical Error:", err.stack);
+    
     if (err.name === 'UnauthorizedError' || err.status === 401) {
-        return res.status(401).json({ error: 'Identity Verification Failed' });
+        return res.status(401).json({ error: 'Identity Verification Failed', message: "Invalid or expired token" });
     }
-    res.status(err.status || 500).json({ error: "Neural Grid Breakdown", message: err.message });
+    
+    res.status(err.status || 500).json({ 
+        error: "Neural Grid Breakdown", 
+        message: process.env.NODE_ENV === 'production' ? "Internal Server Error" : err.message 
+    });
 });
 
 /* ==========================================================
@@ -223,5 +244,11 @@ app.use((err, req, res, next) => {
 ========================================================== */
 const PORT = process.env.PORT || 10000;
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 ONYX CORE ACTIVE ON PORT: ${PORT} | MODE: WebRTC ENABLED`);
+    console.log(`
+    ================================================
+    🚀 ONYX CORE ACTIVE ON PORT: ${PORT}
+    📡 MODE: WebRTC & Socket.io ENABLED
+    🛡️ SECURITY: Auth0 JWT PROTECTED
+    ================================================
+    `);
 });

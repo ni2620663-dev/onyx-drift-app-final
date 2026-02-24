@@ -38,13 +38,13 @@ const NeonSpinner = () => (
   </div>
 );
 
-/* =================🎙️ NEURAL AUDIO PLAYER (Fixed for COEP) ================= */
+/* =================🎙️ NEURAL AUDIO PLAYER (Fixed) ================= */
 const NeuralAudioPlayer = ({ url }) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const audioRef = useRef(null);
 
   useEffect(() => {
-    // 👈 Audio initialization with CORS policy
+    if (!url) return;
     const audio = new Audio(url);
     audio.crossOrigin = "anonymous"; 
     audioRef.current = audio;
@@ -58,8 +58,12 @@ const NeuralAudioPlayer = ({ url }) => {
   }, [url]);
 
   const togglePlay = () => {
-    if (isPlaying) { audioRef.current.pause(); } 
-    else { audioRef.current.play().catch(err => console.error("Audio Play Error:", err)); }
+    if (!audioRef.current) return;
+    if (isPlaying) { 
+      audioRef.current.pause(); 
+    } else { 
+      audioRef.current.play().catch(err => console.warn("Audio Playback Blocked by Browser")); 
+    }
     setIsPlaying(!isPlaying);
   };
 
@@ -110,6 +114,12 @@ const Messenger = ({ socket }) => {
   const CLOUDINARY_URL = "https://api.cloudinary.com/v1_1/dofp85tq4/upload";
   const UPLOAD_PRESET = "onyx_drift_presets";
 
+  // Helper function to get safe avatar URL
+  const getAvatar = (name) => {
+    const safeName = name && name !== "undefined" ? encodeURIComponent(name) : "Drifter";
+    return `https://ui-avatars.com/api/?name=${safeName}&background=06b6d4&color=fff`;
+  };
+
   /* =================🔒 AUTH CORE ================= */
   const getAuthToken = useCallback(async () => {
     try {
@@ -136,7 +146,6 @@ const Messenger = ({ socket }) => {
   const initiateCall = (type) => {
     if (!currentChat || !user) return;
     const receiverId = currentChat.members?.find(m => m !== user.sub);
-    // 👈 Room ID generate লজিক আরো ইউনিক করা হয়েছে
     const roomId = `room_${Math.random().toString(36).substring(7)}`; 
     if (receiverId) {
       navigate(`/call/${roomId}?to=${receiverId}&mode=${type}`);
@@ -155,7 +164,6 @@ const Messenger = ({ socket }) => {
       recorder.onstop = async () => {
         const blob = new Blob(chunks, { type: "audio/ogg; codecs=opus" });
         await handleFileUpload(null, blob, "voice");
-        // স্ট্রীম বন্ধ করা জরুরি
         stream.getTracks().forEach(track => track.stop());
       };
       
@@ -198,7 +206,7 @@ const Messenger = ({ socket }) => {
     
     const msgData = {
       senderId: user.sub,
-      senderName: isIncognito ? "Ghost-Drifter" : (user.name || user.nickname),
+      senderName: isIncognito ? "Ghost-Drifter" : (user.name || user.nickname || "Drifter"),
       senderAvatar: isIncognito ? "https://ui-avatars.com/api/?name=Ghost&background=000" : user.picture,
       text: newMessage,
       media: mediaUrl,
@@ -296,14 +304,14 @@ const Messenger = ({ socket }) => {
           <div className="flex justify-between items-center">
             <div className="flex items-center gap-3">
               <img 
-                src={user?.picture} 
-                crossOrigin="anonymous" // 👈 COEP Fix
+                src={user?.picture || getAvatar(user?.name)} 
+                crossOrigin="anonymous" 
                 className="w-10 h-10 rounded-xl border border-cyan-500/30 object-cover" 
                 alt="Profile" 
               />
               <div>
                 <h1 className="text-lg font-black italic text-cyan-500 uppercase tracking-tighter">ONYXDRIFT</h1>
-                <p className="text-[8px] text-zinc-500 font-bold uppercase tracking-widest">Node: {user?.nickname}</p>
+                <p className="text-[8px] text-zinc-500 font-bold uppercase tracking-widest">Node: {user?.nickname || "Unknown"}</p>
               </div>
             </div>
             <div className="flex gap-2">
@@ -318,7 +326,7 @@ const Messenger = ({ socket }) => {
           </div>
           <div className="relative">
             <HiMagnifyingGlass className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500" size={18}/>
-            <input type="text" placeholder="Scan the grid..." className="w-full bg-white/5 border border-white/10 rounded-2xl py-3 pl-12 pr-4 text-sm outline-none focus:border-cyan-500/50" />
+            <input type="text" placeholder="Scan the grid..." className="w-full bg-white/5 border border-white/10 rounded-2xl py-3 pl-12 pr-4 text-sm outline-none focus:border-cyan-500/50 text-white" />
           </div>
         </header>
 
@@ -326,15 +334,15 @@ const Messenger = ({ socket }) => {
           {activeTab === "chats" && conversations.map(c => (
             <motion.div whileTap={{ scale: 0.98 }} key={c._id} onClick={() => setCurrentChat(c)} className="p-3.5 flex items-center gap-4 bg-white/[0.02] border border-white/5 rounded-2xl cursor-pointer hover:bg-white/[0.05] transition-all">
               <img 
-                src={c.userDetails?.avatar || `https://ui-avatars.com/api/?name=${c.userDetails?.name}`} 
-                crossOrigin="anonymous" // 👈 COEP Fix
+                src={c.userDetails?.avatar || getAvatar(c.userDetails?.name)} 
+                crossOrigin="anonymous" 
                 className="w-12 h-12 rounded-xl object-cover border border-white/10" 
                 alt="Avatar" 
               />
               <div className="flex-1 min-w-0">
                 <div className="flex justify-between items-center">
                   <span className="font-bold text-sm text-zinc-200">{c.userDetails?.name || "Drifter"}</span>
-                  <span className="text-[8px] text-zinc-600 font-mono">{new Date(c.updatedAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                  <span className="text-[8px] text-zinc-600 font-mono">{c.updatedAt ? new Date(c.updatedAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : ""}</span>
                 </div>
                 <p className="text-xs text-zinc-500 truncate italic">{c.lastMessage?.text || "New encrypted channel..."}</p>
               </div>
@@ -346,7 +354,7 @@ const Messenger = ({ socket }) => {
               socket={socket} 
               API_URL={API_URL} 
               getAuthToken={getAuthToken} 
-              onSelectGroup={(group) => setCurrentChat({ ...group, isGroup: true, userDetails: { name: group.name, avatar: "https://ui-avatars.com/api/?name=Group" } })}
+              onSelectGroup={(group) => setCurrentChat({ ...group, isGroup: true, userDetails: { name: group.name, avatar: getAvatar("Group") } })}
             />
           )}
           
@@ -377,13 +385,13 @@ const Messenger = ({ socket }) => {
                 <div className="flex items-center gap-2">
                   <button onClick={() => setCurrentChat(null)} className="text-zinc-400 p-2"><HiOutlineChevronLeft size={28}/></button>
                   <img 
-                    src={currentChat.userDetails?.avatar} 
-                    crossOrigin="anonymous" // 👈 COEP Fix
+                    src={currentChat.userDetails?.avatar || getAvatar(currentChat.userDetails?.name)} 
+                    crossOrigin="anonymous" 
                     className="w-9 h-9 rounded-lg border border-cyan-500/20 object-cover" 
                     alt="User" 
                   />
                   <div>
-                    <h3 className="font-bold text-xs">{currentChat.userDetails?.name}</h3>
+                    <h3 className="font-bold text-xs">{currentChat.userDetails?.name || "Anonymous"}</h3>
                     <div className="flex items-center gap-1">
                        <div className={`w-1.5 h-1.5 rounded-full ${typingUser ? 'bg-green-500 animate-bounce' : 'bg-cyan-500 animate-pulse'}`}/>
                        <p className="text-[8px] text-cyan-500 font-black uppercase tracking-widest">{typingUser ? 'Typing Signal...' : 'Linked'}</p>
@@ -405,18 +413,20 @@ const Messenger = ({ socket }) => {
               {isLoadingMessages ? <NeonSpinner /> : messages.map((m, i) => (
                 <div key={m._id || i} className={`flex flex-col ${m.senderId === user?.sub ? 'items-end' : 'items-start'}`}>
                   <div className={`px-4 py-2.5 rounded-2xl max-w-[85%] border transition-all duration-500 ${m.senderId === user?.sub ? "bg-cyan-500/10 border-cyan-500/20 text-white" : "bg-white/5 border-white/10 text-zinc-300"}`}>
-                    {m.mediaType === "image" && (
+                    {m.mediaType === "image" && m.media && (
                       <img 
                         src={m.media} 
-                        crossOrigin="anonymous" // 👈 COEP Fix
+                        crossOrigin="anonymous" 
                         alt="Neural" 
                         className="rounded-lg mb-2 max-h-60 w-full object-cover shadow-lg border border-white/10" 
                       />
                     )}
-                    {m.mediaType === "voice" && <NeuralAudioPlayer url={m.media} />}
+                    {m.mediaType === "voice" && m.media && <NeuralAudioPlayer url={m.media} />}
                     {m.text && <p className="text-[13px] leading-relaxed break-words">{m.text}</p>}
                   </div>
-                  <span className="text-[7px] text-zinc-600 mt-1 uppercase font-mono">{new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                  <span className="text-[7px] text-zinc-600 mt-1 uppercase font-mono">
+                    {m.createdAt ? new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ""}
+                  </span>
                 </div>
               ))}
               <div ref={scrollRef} />
@@ -434,7 +444,7 @@ const Messenger = ({ socket }) => {
                   onChange={(e) => {
                     setNewMessage(e.target.value);
                     const s = socket?.current || socket;
-                    if(s && currentChat) s.emit("typing", { conversationId: currentChat._id, senderName: user.name });
+                    if(s && currentChat) s.emit("typing", { conversationId: currentChat._id, senderName: user?.name || "Someone" });
                   }} 
                   onKeyDown={(e) => e.key === 'Enter' && handleSend()} 
                   placeholder="Transmit signal..." 
