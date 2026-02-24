@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import Peer from "simple-peer";
 import { 
   HiOutlineMicrophone, 
   HiOutlineVideoCamera, 
@@ -7,183 +8,213 @@ import {
 import { 
   HiPhoneMissedCall, 
   HiMicrophone, 
-  HiVideoCamera 
+  HiVideoCamera,
+  HiOutlineScreenShare
 } from "react-icons/hi"; 
 import { motion, AnimatePresence } from "framer-motion";
-import { io } from "socket.io-client";
 
-// --- 🔊 কল সাউন্ড ইফেক্ট ---
-const joinSound = new Audio("https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3");
+// --- স্টাইলিশ ভিডিও কম্পোনেন্ট (Peer Stream এর জন্য) ---
+const Video = ({ peer }) => {
+  const ref = useRef();
+  useEffect(() => {
+    peer.on("stream", (stream) => {
+      if (ref.current) ref.current.srcObject = stream;
+    });
+  }, [peer]);
+
+  return (
+    <motion.div layout className="relative bg-zinc-900/40 rounded-[2.5rem] overflow-hidden border border-white/5 group shadow-2xl">
+      <video playsInline autoPlay ref={ref} className="w-full h-full object-cover" />
+      <div className="absolute bottom-6 left-6 bg-black/40 backdrop-blur-xl px-4 py-2 rounded-2xl border border-white/5">
+         <p className="text-[10px] font-mono text-cyan-400">REMOTE_NODE // STABLE</p>
+      </div>
+    </motion.div>
+  );
+};
 
 const GroupCallScreen = ({ roomId, user, socket, onHangup }) => {
+  const [peers, setPeers] = useState([]);
   const [micActive, setMicActive] = useState(true);
   const [videoActive, setVideoActive] = useState(true);
-  const [participants, setParticipants] = useState([]); // অন্যান্য ইউজারদের স্ট্রিম এখানে থাকবে
-  const myVideoRef = useRef();
-  const localStream = useRef(null);
+  const socketRef = useRef();
+  const userVideo = useRef();
+  const peersRef = useRef([]);
+  const userStream = useRef();
 
-  // ১. নিজের ক্যামেরা ও অডিও সেটআপ
   useEffect(() => {
-    const startLocalStream = async () => {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ 
-          video: true, 
-          audio: true 
+    socketRef.current = socket;
+    
+    // ১. ক্যামেরা ও মাইক্রোফোন এক্সেস
+    navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then((stream) => {
+      userStream.current = stream;
+      if (userVideo.current) userVideo.current.srcObject = stream;
+
+      // রুমে জয়েন করা
+      socketRef.current.emit("join-room", { roomId, userId: user.sub });
+
+      // নতুন কেউ জয়েন করলে তাকে সিগন্যাল পাঠানো
+      socketRef.current.on("all-users", (users) => {
+        const peers = [];
+        users.forEach((userID) => {
+          const peer = createPeer(userID, socketRef.current.id, stream);
+          peersRef.current.push({
+            peerID: userID,
+            peer,
+          });
+          peers.push({ peerID: userID, peer });
         });
-        localStream.current = stream;
-        if (myVideoRef.current) myVideoRef.current.srcObject = stream;
-        
-        // রিংটোন প্লে (কল শুরু হলে)
-        joinSound.play().catch(e => console.log("Audio play blocked"));
+        setPeers(peers);
+      });
 
-        // সকেটের মাধ্যমে রুমে জয়েন করা
-        socket.emit("join-room", { roomId, userId: user.sub, name: user.name });
-      } catch (err) {
-        console.error("Neural Link Camera Error:", err);
-      }
-    };
+      // রিসিভার সাইড: অফার গ্রহণ করা
+      socketRef.current.on("user-joined", (payload) => {
+        const peer = addPeer(payload.signal, payload.callerID, stream);
+        peersRef.current.push({
+          peerID: payload.callerID,
+          peer,
+        });
+        setPeers((users) => [...users, { peerID: payload.callerID, peer }]);
+      });
 
-    startLocalStream();
+      // সিগন্যাল রিটার্ন পাওয়া
+      socketRef.current.on("receiving-returned-signal", (payload) => {
+        const item = peersRef.current.find((p) => p.peerID === payload.id);
+        item.peer.signal(payload.signal);
+      });
 
-    // ক্লিন আপ ফাংশন: কল কাটলে ক্যামেরা বন্ধ হবে
-    return () => {
-      if (localStream.current) {
-        localStream.current.getTracks().forEach(track => track.stop());
-      }
-    };
-  }, [roomId, socket, user]);
-
-  // ২. সকেট লিসেনার (অন্যরা জয়েন করলে তাদের ডেটা পাওয়া)
-  useEffect(() => {
-    socket.on("user-connected", (data) => {
-      console.log("New Drifter Joined:", data.name);
-      setParticipants(prev => [...prev, data]);
-      joinSound.play(); // নতুন কেউ এলে হালকা রিংটোন
-    });
-
-    socket.on("user-disconnected", (userId) => {
-      setParticipants(prev => prev.filter(p => p.userId !== userId));
+      // কেউ কল থেকে বের হয়ে গেলে
+      socketRef.current.on("user-left", (id) => {
+        const peerObj = peersRef.current.find((p) => p.peerID === id);
+        if (peerObj) peerObj.peer.destroy();
+        const updatedPeers = peersRef.current.filter((p) => p.peerID !== id);
+        peersRef.current = updatedPeers;
+        setPeers(updatedPeers);
+      });
     });
 
     return () => {
-      socket.off("user-connected");
-      socket.off("user-disconnected");
+      if (userStream.current) {
+        userStream.current.getTracks().forEach(track => track.stop());
+      }
     };
-  }, [socket]);
+  }, []);
 
-  // মিউট/আনমিউট লজিক
+  // --- WebRTC Core Functions ---
+  function createPeer(userToSignal, callerID, stream) {
+    const peer = new Peer({ initiator: true, trickle: false, stream });
+    peer.on("signal", (signal) => {
+      socketRef.current.emit("sending-signal", { userToSignal, callerID, signal });
+    });
+    return peer;
+  }
+
+  function addPeer(incomingSignal, callerID, stream) {
+    const peer = new Peer({ initiator: false, trickle: false, stream });
+    peer.on("signal", (signal) => {
+      socketRef.current.emit("returning-signal", { signal, callerID });
+    });
+    peer.signal(incomingSignal);
+    return peer;
+  }
+
   const toggleMic = () => {
     setMicActive(!micActive);
-    if (localStream.current) {
-      localStream.current.getAudioTracks()[0].enabled = !micActive;
-    }
+    userStream.current.getAudioTracks()[0].enabled = !micActive;
   };
 
   const toggleVideo = () => {
     setVideoActive(!videoActive);
-    if (localStream.current) {
-      localStream.current.getVideoTracks()[0].enabled = !videoActive;
-    }
+    userStream.current.getVideoTracks()[0].enabled = !videoActive;
   };
 
   return (
-    <div className="fixed inset-0 bg-[#020617] z-[5000] flex flex-col p-4 font-sans text-white overflow-hidden">
-      <div className="bg-grainy opacity-20" />
-
-      {/* --- HEADER --- */}
-      <div className="flex justify-between items-center mb-6 px-4 z-10">
-        <div>
-          <div className="flex items-center gap-2">
-             <div className="w-2 h-2 bg-cyan-500 rounded-full animate-ping" />
-             <h2 className="text-cyan-500 font-black text-xs uppercase tracking-[0.4em]">Neural Grid: Synchronized</h2>
+    <div className="fixed inset-0 bg-[#020617] z-[5000] flex flex-col p-6 text-white overflow-hidden">
+      {/* Neural Background Effect */}
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-cyan-900/10 via-transparent to-transparent opacity-50 pointer-events-none" />
+      
+      {/* Header */}
+      <div className="flex justify-between items-start mb-8 z-10">
+        <div className="space-y-1">
+          <div className="flex items-center gap-3">
+            <span className="relative flex h-3 w-3">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-cyan-500"></span>
+            </span>
+            <h2 className="text-xl font-black tracking-tighter italic uppercase text-white">Onyx<span className="text-cyan-500">Drift</span> Call</h2>
           </div>
-          <p className="text-white/30 text-[10px] font-mono mt-1">SECURE_CHANNEL // {roomId}</p>
+          <p className="text-white/20 font-mono text-[10px] tracking-widest">{roomId.toUpperCase()}</p>
         </div>
-        <div className="bg-white/5 border border-white/10 px-4 py-2 rounded-2xl backdrop-blur-xl">
-           <span className="text-cyan-500 font-mono text-xs tracking-widest uppercase">
-             {participants.length + 1} Drifters Linked
-           </span>
+        
+        <div className="flex gap-2">
+           <div className="bg-white/5 border border-white/10 px-4 py-2 rounded-xl backdrop-blur-md">
+             <p className="text-[10px] font-bold text-cyan-500 tracking-tighter uppercase">{peers.length + 1} Drifters Active</p>
+           </div>
         </div>
       </div>
 
-      {/* --- VIDEO GRID --- */}
-      <div className={`flex-1 grid gap-4 transition-all duration-500 ${
-        participants.length === 0 ? 'grid-cols-1' : 
-        participants.length === 1 ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-2 lg:grid-cols-3'
+      {/* Video Grid */}
+      <div className={`flex-1 grid gap-6 transition-all duration-700 ${
+        peers.length === 0 ? 'grid-cols-1 max-w-4xl mx-auto w-full' : 
+        peers.length === 1 ? 'grid-cols-1 md:grid-cols-2' : 
+        'grid-cols-1 md:grid-cols-2 lg:grid-cols-3'
       }`}>
         
-        {/* নিজের ভিডিও */}
-        <motion.div layout className="relative bg-zinc-900/40 rounded-[2.5rem] overflow-hidden border border-cyan-500/20 shadow-2xl group">
-          <video 
-            ref={myVideoRef} 
-            autoPlay 
-            muted 
-            playsInline 
-            className={`w-full h-full object-cover scale-x-[-1] transition-opacity duration-500 ${!videoActive ? 'opacity-0' : 'opacity-100'}`} 
-          />
+        {/* Local User Video */}
+        <motion.div layout className="relative bg-zinc-900/60 rounded-[3rem] overflow-hidden border-2 border-cyan-500/30 shadow-[0_0_50px_rgba(6,182,212,0.15)] group">
+          <video ref={userVideo} autoPlay muted playsInline className={`w-full h-full object-cover scale-x-[-1] transition-transform duration-700 ${!videoActive && 'hidden'}`} />
           {!videoActive && (
-             <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#050505]">
-                <div className="w-24 h-24 rounded-full bg-cyan-500/5 border border-cyan-500/20 flex items-center justify-center mb-4">
-                   <HiVideoCamera className="text-cyan-500/20" size={40} />
+             <div className="absolute inset-0 flex items-center justify-center bg-zinc-950">
+                <div className="w-24 h-24 rounded-full bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center">
+                    <HiVideoCamera size={40} className="text-cyan-500/40" />
                 </div>
-                <p className="text-[10px] font-black text-cyan-500 uppercase tracking-widest">Signal Encrypted</p>
              </div>
           )}
-          <div className="absolute bottom-6 left-6 bg-black/40 backdrop-blur-xl px-4 py-2 rounded-2xl border border-white/5">
-             <p className="text-xs font-bold tracking-tight">You (Neural_Alpha)</p>
+          <div className="absolute top-6 right-6 px-3 py-1 bg-cyan-500 text-black text-[10px] font-black rounded-full uppercase tracking-widest">Host</div>
+          <div className="absolute bottom-8 left-8 flex items-center gap-3 bg-black/60 backdrop-blur-xl p-3 rounded-2xl border border-white/10">
+              <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center">
+                  {micActive ? <HiOutlineMicrophone className="text-cyan-400" /> : <HiMicrophone className="text-red-500" />}
+              </div>
+              <p className="text-xs font-bold tracking-tight">You (Neural_Source)</p>
           </div>
         </motion.div>
 
-        {/* অন্যদের ভিডিও (Participants) */}
-        {participants.map((peer, index) => (
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            key={peer.userId}
-            className="relative bg-zinc-900/40 rounded-[2.5rem] overflow-hidden border border-white/5 group"
-          >
-            {/* এখানে Peer-to-Peer Stream আসবে, আপাতত সিমুলেশন */}
-            <div className="absolute inset-0 flex items-center justify-center bg-[#080808]">
-               <img 
-                 src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${peer.userId}`} 
-                 className="w-24 h-24 rounded-full border border-white/10" 
-                 alt="peer"
-               />
-            </div>
-            <div className="absolute bottom-6 left-6 bg-black/40 backdrop-blur-xl px-4 py-2 rounded-2xl border border-white/5">
-               <p className="text-xs font-bold">{peer.name || "Unknown Drifter"}</p>
-            </div>
-          </motion.div>
+        {/* Remote Peers Video */}
+        {peers.map((peer) => (
+          <Video key={peer.peerID} peer={peer.peer} />
         ))}
       </div>
 
-      {/* --- CONTROLS --- */}
-      <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-20">
-        <div className="flex items-center gap-6 bg-black/60 backdrop-blur-3xl px-10 py-6 rounded-[4rem] border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.5)]">
-          <button 
-            onClick={toggleMic}
-            className={`p-5 rounded-full transition-all duration-300 ${micActive ? 'bg-zinc-800 text-white hover:bg-zinc-700' : 'bg-red-500 text-white animate-pulse'}`}
-          >
-            {micActive ? <HiOutlineMicrophone size={26} /> : <HiMicrophone size={26} />}
-          </button>
-
+      {/* Control Bar */}
+      <div className="fixed bottom-12 left-1/2 -translate-x-1/2 z-50">
+        <motion.div 
+          initial={{ y: 100 }} animate={{ y: 0 }}
+          className="flex items-center gap-4 bg-zinc-900/80 backdrop-blur-3xl p-5 rounded-[3rem] border border-white/10 shadow-2xl"
+        >
+          <ControlBtn onClick={toggleMic} active={micActive} icon={micActive ? <HiOutlineMicrophone size={24} /> : <HiMicrophone size={24} />} />
+          
           <button 
             onClick={onHangup}
-            className="p-7 bg-red-600 text-white rounded-[2.5rem] shadow-[0_0_30px_rgba(220,38,38,0.4)] hover:scale-110 active:scale-95 transition-all duration-300 group"
+            className="w-20 h-20 bg-red-500 hover:bg-red-600 text-white rounded-[2rem] flex items-center justify-center shadow-lg shadow-red-500/40 transition-all hover:scale-110 active:scale-90 group"
           >
-            <HiPhoneMissedCall size={32} className="group-hover:rotate-[135deg] transition-transform duration-500" />
+            <HiPhoneMissedCall size={32} className="group-hover:rotate-12 transition-transform" />
           </button>
 
-          <button 
-            onClick={toggleVideo}
-            className={`p-5 rounded-full transition-all duration-300 ${videoActive ? 'bg-zinc-800 text-white hover:bg-zinc-700' : 'bg-red-500 text-white animate-pulse'}`}
-          >
-            {videoActive ? <HiOutlineVideoCamera size={26} /> : <HiVideoCamera size={26} />}
-          </button>
-        </div>
+          <ControlBtn onClick={toggleVideo} active={videoActive} icon={videoActive ? <HiOutlineVideoCamera size={24} /> : <HiVideoCamera size={24} />} />
+        </motion.div>
       </div>
     </div>
   );
 };
+
+const ControlBtn = ({ onClick, active, icon }) => (
+  <button 
+    onClick={onClick}
+    className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all ${
+      active ? 'bg-white/5 text-white hover:bg-white/10' : 'bg-red-500/20 text-red-500 border border-red-500/50 animate-pulse'
+    }`}
+  >
+    {icon}
+  </button>
+);
 
 export default GroupCallScreen;

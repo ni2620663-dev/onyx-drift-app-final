@@ -28,7 +28,7 @@ import reelRoutes from "./routes/reels.js";
 import profileRoutes from "./routes/profile.js"; 
 import groupRoutes from "./routes/group.js"; 
 import marketRoutes from "./routes/market.js"; 
-import adminRoutes from "./routes/admin.js";               
+import adminRoutes from "./routes/admin.js";                
 import { getNeuralFeed } from "./controllers/feedController.js";
 
 // 🛡️ Auth0 JWT ভেরিফিকেশন মিডলওয়্যার
@@ -71,8 +71,8 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-app.use(express.json({ limit: "150mb" }));
-app.use(express.urlencoded({ limit: "150mb", extended: true }));
+app.use(express.json({ limit: "50mb" })); // লমিট কিছুটা কমানো হয়েছে সার্ভার স্ট্যাবিলিটির জন্য
+app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
 const uploadDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadDir)){
@@ -93,7 +93,7 @@ const updateNeuralPulse = async (req, res, next) => {
             );
         }
     } catch (err) {
-        console.warn("Pulse bypass log:", err.message);
+        // Pulse bypass quietly
     }
     next();
 };
@@ -115,18 +115,25 @@ app.use("/api/market", checkJwt, updateNeuralPulse, marketRoutes);
 app.use("/api/admin", checkJwt, updateNeuralPulse, adminRoutes);
 
 /* ==========================================================
-    📡 REAL-TIME ENGINE (Socket.io) + ULTRA CALLING LOGIC
+    📡 REAL-TIME ENGINE (Socket.io) + WebRTC Signaling
 ========================================================== */
 const io = new Server(server, {
     cors: corsOptions,
     transports: ['websocket', 'polling'],
-    path: '/socket.io/'
+    path: '/socket.io/',
+    connectTimeout: 45000,
+    pingTimeout: 60000,
+    pingInterval: 25000
 });
 
 const redis = process.env.REDIS_URL ? new Redis(process.env.REDIS_URL, {
     maxRetriesPerRequest: null,
     enableReadyCheck: false
 }) : null;
+
+if (redis) {
+    redis.on("error", (err) => console.log("Redis Connection Error:", err));
+}
 
 io.on("connection", (socket) => {
     
@@ -142,9 +149,9 @@ io.on("connection", (socket) => {
         }
     });
 
-    /* --- 📞 ULTRA-SECURE CUSTOM CALLING (WebRTC Signaling) --- */
+    /* --- 📞 WebRTC CALLING SIGNALS --- */
 
-    // ১. কলার থেকে রিসিভারকে কল অফার পাঠানো
+    // কলার সিগন্যাল পাঠাচ্ছে
     socket.on("callUser", (data) => {
         const { userToCall, signalData, from, name, pic, type } = data;
         io.to(userToCall).emit("incomingCall", { 
@@ -156,26 +163,39 @@ io.on("connection", (socket) => {
         });
     });
 
-    // ২. রিসিভার যখন কল রিসিভ করবে (Answer)
+    // রিসিভার কল একসেপ্ট করছে
     socket.on("answerCall", (data) => {
         io.to(data.to).emit("callAccepted", data.signal);
     });
 
-    // ৩. ICE Candidate এক্সচেঞ্জ (নেটওয়ার্ক হ্যান্ডশেক - Ultra Lag-free এর জন্য জরুরি)
+    // ICE Candidate বিনিময় (Lag কমানোর জন্য)
     socket.on("iceCandidate", (data) => {
-        io.to(data.to).emit("iceCandidate", data.candidate);
+        if (data.to) {
+            io.to(data.to).emit("iceCandidate", data.candidate);
+        }
     });
 
-    // ৪. কল এন্ড বা রিজেক্ট করা
+    // কল এন্ড সিগন্যাল
     socket.on("endCall", (data) => {
-        io.to(data.to).emit("callEnded");
+        if (data.to) {
+            io.to(data.to).emit("callEnded");
+        }
     });
 
     /* --- 💬 MESSAGE SIGNALS --- */
     socket.on("sendMessage", (message) => {
         const { receiverId } = message;
         if (receiverId) {
-            socket.to(receiverId).emit("getMessage", message);
+            // ইউজারের নিজস্ব রুম (ID) এ মেসেজ পাঠানো
+            io.to(receiverId).emit("getMessage", message);
+        }
+    });
+
+    // টাইপিং সিগন্যাল
+    socket.on("typing", (data) => {
+        const { conversationId, receiverId, senderName } = data;
+        if (receiverId) {
+            socket.to(receiverId).emit("typing", { conversationId, senderName });
         }
     });
 
@@ -203,5 +223,5 @@ app.use((err, req, res, next) => {
 ========================================================== */
 const PORT = process.env.PORT || 10000;
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 ONYX CORE ACTIVE ON PORT: ${PORT} | CALLING: WebRTC ENABLED`);
+    console.log(`🚀 ONYX CORE ACTIVE ON PORT: ${PORT} | MODE: WebRTC ENABLED`);
 });

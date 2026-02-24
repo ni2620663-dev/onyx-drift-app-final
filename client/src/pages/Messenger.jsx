@@ -16,7 +16,6 @@ import { useNavigate } from "react-router-dom";
 // Neural Components
 import MoodSelector from "./MoodSelector";
 import GroupMessenger from "./GroupMessenger";
-import GroupCallScreen from "./GroupCallScreen"; 
 import Notification from "./Notifications";
 import Settings from "./Settings";
 
@@ -39,23 +38,30 @@ const NeonSpinner = () => (
   </div>
 );
 
-/* =================🎙️ NEURAL AUDIO PLAYER ================= */
+/* =================🎙️ NEURAL AUDIO PLAYER (Fixed for COEP) ================= */
 const NeuralAudioPlayer = ({ url }) => {
   const [isPlaying, setIsPlaying] = useState(false);
-  const audioRef = useRef(new Audio(url));
+  const audioRef = useRef(null);
+
+  useEffect(() => {
+    // 👈 Audio initialization with CORS policy
+    const audio = new Audio(url);
+    audio.crossOrigin = "anonymous"; 
+    audioRef.current = audio;
+
+    const handleEnded = () => setIsPlaying(false);
+    audio.addEventListener('ended', handleEnded);
+    return () => {
+      audio.removeEventListener('ended', handleEnded);
+      audio.pause();
+    };
+  }, [url]);
 
   const togglePlay = () => {
     if (isPlaying) { audioRef.current.pause(); } 
-    else { audioRef.current.play(); }
+    else { audioRef.current.play().catch(err => console.error("Audio Play Error:", err)); }
     setIsPlaying(!isPlaying);
   };
-
-  useEffect(() => {
-    const audio = audioRef.current;
-    const handleEnded = () => setIsPlaying(false);
-    audio.addEventListener('ended', handleEnded);
-    return () => audio.removeEventListener('ended', handleEnded);
-  }, []);
 
   return (
     <div className="flex items-center gap-3 bg-black/40 p-2 rounded-xl border border-cyan-500/20 w-48">
@@ -114,7 +120,6 @@ const Messenger = ({ socket }) => {
       tokenCache.current = token;
       return token;
     } catch (e) {
-      console.error("Neural Token Acquisition Failed:", e);
       return null;
     }
   }, [getAccessTokenSilently]);
@@ -127,11 +132,12 @@ const Messenger = ({ socket }) => {
     });
   }, [getAuthToken]);
 
-  /* =================📞 CALLING ENGINE (WebRTC Trigger) ================= */
+  /* =================📞 CALLING ENGINE ================= */
   const initiateCall = (type) => {
     if (!currentChat || !user) return;
     const receiverId = currentChat.members?.find(m => m !== user.sub);
-    const roomId = `room_${user.sub.slice(-5)}_${receiverId.slice(-5)}_${Date.now()}`;
+    // 👈 Room ID generate লজিক আরো ইউনিক করা হয়েছে
+    const roomId = `room_${Math.random().toString(36).substring(7)}`; 
     if (receiverId) {
       navigate(`/call/${roomId}?to=${receiverId}&mode=${type}`);
     }
@@ -149,6 +155,8 @@ const Messenger = ({ socket }) => {
       recorder.onstop = async () => {
         const blob = new Blob(chunks, { type: "audio/ogg; codecs=opus" });
         await handleFileUpload(null, blob, "voice");
+        // স্ট্রীম বন্ধ করা জরুরি
+        stream.getTracks().forEach(track => track.stop());
       };
       
       recorder.start();
@@ -223,18 +231,21 @@ const Messenger = ({ socket }) => {
     const s = socket?.current || socket;
     if (!s || !user) return;
     
-    s.on("getMessage", (data) => {
-      if(currentChat?._id === data.conversationId) setMessages(prev => [...prev, data]);
+    const messageHandler = (data) => {
+      if(currentChat?._id === data.conversationId) {
+        setMessages(prev => [...prev, data]);
+      }
       fetchConversations();
-    });
+    };
 
+    s.on("getMessage", messageHandler);
     s.on("typing", (data) => {
        if(currentChat?._id === data.conversationId) setTypingUser(data.senderName);
        setTimeout(() => setTypingUser(null), 3000);
     });
 
     return () => { 
-      s.off("getMessage"); 
+      s.off("getMessage", messageHandler); 
       s.off("typing");
     };
   }, [socket, currentChat, user]);
@@ -284,7 +295,12 @@ const Messenger = ({ socket }) => {
         <header className="p-5 pt-12 flex flex-col gap-4 bg-black/40 border-b border-white/5 backdrop-blur-3xl">
           <div className="flex justify-between items-center">
             <div className="flex items-center gap-3">
-              <img src={user?.picture} className="w-10 h-10 rounded-xl border border-cyan-500/30 object-cover" alt="Profile" />
+              <img 
+                src={user?.picture} 
+                crossOrigin="anonymous" // 👈 COEP Fix
+                className="w-10 h-10 rounded-xl border border-cyan-500/30 object-cover" 
+                alt="Profile" 
+              />
               <div>
                 <h1 className="text-lg font-black italic text-cyan-500 uppercase tracking-tighter">ONYXDRIFT</h1>
                 <p className="text-[8px] text-zinc-500 font-bold uppercase tracking-widest">Node: {user?.nickname}</p>
@@ -309,7 +325,12 @@ const Messenger = ({ socket }) => {
         <div className="flex-1 overflow-y-auto px-4 py-4 space-y-2 pb-32">
           {activeTab === "chats" && conversations.map(c => (
             <motion.div whileTap={{ scale: 0.98 }} key={c._id} onClick={() => setCurrentChat(c)} className="p-3.5 flex items-center gap-4 bg-white/[0.02] border border-white/5 rounded-2xl cursor-pointer hover:bg-white/[0.05] transition-all">
-              <img src={c.userDetails?.avatar || `https://ui-avatars.com/api/?name=${c.userDetails?.name}`} className="w-12 h-12 rounded-xl object-cover border border-white/10" alt="Avatar" />
+              <img 
+                src={c.userDetails?.avatar || `https://ui-avatars.com/api/?name=${c.userDetails?.name}`} 
+                crossOrigin="anonymous" // 👈 COEP Fix
+                className="w-12 h-12 rounded-xl object-cover border border-white/10" 
+                alt="Avatar" 
+              />
               <div className="flex-1 min-w-0">
                 <div className="flex justify-between items-center">
                   <span className="font-bold text-sm text-zinc-200">{c.userDetails?.name || "Drifter"}</span>
@@ -320,7 +341,6 @@ const Messenger = ({ socket }) => {
             </motion.div>
           ))}
           
-          {/* GroupMessenger add kora holo ekhane */}
           {activeTab === "groups" && (
             <GroupMessenger 
               socket={socket} 
@@ -356,7 +376,12 @@ const Messenger = ({ socket }) => {
             <header className="p-3 pt-12 flex justify-between items-center border-b border-white/5 bg-black/80 backdrop-blur-xl">
                 <div className="flex items-center gap-2">
                   <button onClick={() => setCurrentChat(null)} className="text-zinc-400 p-2"><HiOutlineChevronLeft size={28}/></button>
-                  <img src={currentChat.userDetails?.avatar} className="w-9 h-9 rounded-lg border border-cyan-500/20 object-cover" alt="User" />
+                  <img 
+                    src={currentChat.userDetails?.avatar} 
+                    crossOrigin="anonymous" // 👈 COEP Fix
+                    className="w-9 h-9 rounded-lg border border-cyan-500/20 object-cover" 
+                    alt="User" 
+                  />
                   <div>
                     <h3 className="font-bold text-xs">{currentChat.userDetails?.name}</h3>
                     <div className="flex items-center gap-1">
@@ -380,7 +405,14 @@ const Messenger = ({ socket }) => {
               {isLoadingMessages ? <NeonSpinner /> : messages.map((m, i) => (
                 <div key={m._id || i} className={`flex flex-col ${m.senderId === user?.sub ? 'items-end' : 'items-start'}`}>
                   <div className={`px-4 py-2.5 rounded-2xl max-w-[85%] border transition-all duration-500 ${m.senderId === user?.sub ? "bg-cyan-500/10 border-cyan-500/20 text-white" : "bg-white/5 border-white/10 text-zinc-300"}`}>
-                    {m.mediaType === "image" && <img src={m.media} alt="Neural" className="rounded-lg mb-2 max-h-60 w-full object-cover shadow-lg border border-white/10" />}
+                    {m.mediaType === "image" && (
+                      <img 
+                        src={m.media} 
+                        crossOrigin="anonymous" // 👈 COEP Fix
+                        alt="Neural" 
+                        className="rounded-lg mb-2 max-h-60 w-full object-cover shadow-lg border border-white/10" 
+                      />
+                    )}
                     {m.mediaType === "voice" && <NeuralAudioPlayer url={m.media} />}
                     {m.text && <p className="text-[13px] leading-relaxed break-words">{m.text}</p>}
                   </div>

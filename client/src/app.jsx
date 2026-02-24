@@ -24,7 +24,7 @@ import AITwinSync from './components/AITwinSync';
 // --- 📞 CUSTOM CALL CONTEXT IMPORT ---
 import { useCall } from './context/CallContext';
 
-// --- 🔊 RINGTONE CONFIG ---
+// --- 🔊 RINGTONE CONFIG (COEP এর জন্য সোর্সগুলো চেক করা জরুরি) ---
 const INCOMING_SOUND_URL = "https://assets.mixkit.co/active_storage/sfx/1359/1359-preview.mp3";
 const OUTGOING_SOUND_URL = "https://www.soundjay.com/phone/phone-calling-1.mp3";
 
@@ -44,17 +44,28 @@ export default function App() {
   const location = useLocation();
   const navigate = useNavigate();
   
-  // Call Context থেকে ডাটা নেওয়া
   const { 
     call, 
     callAccepted, 
     answerCall, 
-    leaveCall,
-    stream 
+    leaveCall
   } = useCall();
 
-  const incomingAudio = useRef(new Audio(INCOMING_SOUND_URL));
-  const outgoingAudio = useRef(new Audio(OUTGOING_SOUND_URL));
+  // 🔊 অডিও অবজেক্ট তৈরি এবং COEP পলিসি ফিক্স
+  const incomingAudio = useRef(null);
+  const outgoingAudio = useRef(null);
+
+  useEffect(() => {
+    // অডিও ইনিশিয়ালাইজেশন crossOrigin সহ
+    const inAudio = new Audio(INCOMING_SOUND_URL);
+    inAudio.crossOrigin = "anonymous";
+    incomingAudio.current = inAudio;
+
+    const outAudio = new Audio(OUTGOING_SOUND_URL);
+    outAudio.crossOrigin = "anonymous";
+    outgoingAudio.current = outAudio;
+  }, []);
+
   const [searchQuery, setSearchQuery] = useState("");
   const [isPostModalOpen, setIsPostModalOpen] = useState(false);
 
@@ -97,28 +108,31 @@ export default function App() {
 
   /* =================📡 RINGTONE LOGIC ================= */
   useEffect(() => {
-    // ইনকামিং কল রিংটোন
     if (call.isReceivingCall && !callAccepted) {
-      incomingAudio.current.loop = true;
-      incomingAudio.current.play().catch(() => {});
+      if (incomingAudio.current) {
+        incomingAudio.current.loop = true;
+        incomingAudio.current.play().catch(e => console.log("Play blocked by browser"));
+      }
       if (navigator.vibrate) navigator.vibrate([500, 200, 500]);
     } else {
-      incomingAudio.current.pause();
-      incomingAudio.current.currentTime = 0;
+      if (incomingAudio.current) {
+        incomingAudio.current.pause();
+        incomingAudio.current.currentTime = 0;
+      }
     }
 
     return () => {
-      incomingAudio.current.pause();
+      if (incomingAudio.current) incomingAudio.current.pause();
     };
   }, [call.isReceivingCall, callAccepted]);
 
   const handleAnswerCall = () => {
-    answerCall(); // Context ফাংশন
+    answerCall();
     navigate(`/call/${call.from || 'room'}`); 
   };
 
   const handleRejectCall = () => {
-    leaveCall(); // Context ফাংশন (ক্যামেরা অফ করবে ও রিলোড দিবে)
+    leaveCall();
   };
 
   const isFullWidthPage = ["/messenger", "/messages", "/settings", "/", "/join", "/reels", "/ai-twin", "/call"].some(path => location.pathname === path || location.pathname.startsWith(path + "/"));
@@ -144,7 +158,12 @@ export default function App() {
               <div className="flex items-center gap-4">
                 <div className="relative">
                   <div className="absolute inset-0 bg-cyan-500 rounded-2xl animate-ping opacity-20" />
-                  <img src={call.pic || "https://api.dicebear.com/7.x/avataaars/svg?seed=Onyx"} className="w-14 h-14 rounded-2xl border border-cyan-500/30 object-cover" alt="caller" />
+                  <img 
+                    src={call.pic || "https://api.dicebear.com/7.x/avataaars/svg?seed=Onyx"} 
+                    crossOrigin="anonymous" // 👈 COEP ফিক্স
+                    className="w-14 h-14 rounded-2xl border border-cyan-500/30 object-cover" 
+                    alt="caller" 
+                  />
                 </div>
                 <div>
                   <h4 className="text-[13px] font-black text-white uppercase tracking-tighter truncate">{call.name || "Unknown Link"}</h4>

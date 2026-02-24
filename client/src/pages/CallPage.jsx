@@ -31,7 +31,6 @@ const CallPage = () => {
   const connectionRef = useRef();
 
   useEffect(() => {
-    // ১. মিডিয়া পারমিশন এবং কল সেটআপ
     const setupMedia = async () => {
       try {
         const currentStream = await navigator.mediaDevices.getUserMedia({ 
@@ -44,8 +43,6 @@ const CallPage = () => {
           myVideo.current.srcObject = currentStream;
         }
 
-        // যদি কল রিসিভার হয় (signalData URL এ আছে কিনা চেক করা যেতে পারে, অথবা সকেটের মাধ্যমে)
-        // তবে আপনার লজিক অনুযায়ী যদি remoteUserId থাকে তবেই কল শুরু হবে (Caller)
         if (remoteUserId) {
           startCall(currentStream, remoteUserId);
         }
@@ -56,7 +53,6 @@ const CallPage = () => {
 
     setupMedia();
 
-    // ২. সকেট লিসেনারস
     socket.on("callAccepted", (signal) => {
       setCallAccepted(true);
       if (connectionRef.current) {
@@ -64,7 +60,6 @@ const CallPage = () => {
       }
     });
 
-    // ইনকামিং সিগন্যাল হ্যান্ডেল করা (Answerer এর জন্য)
     socket.on("incomingSignal", (signal) => {
         if (connectionRef.current) {
             connectionRef.current.signal(signal);
@@ -79,7 +74,6 @@ const CallPage = () => {
       socket.off("callAccepted");
       socket.off("incomingSignal");
       socket.off("callEnded");
-      // কম্পোনেন্ট আনমাউন্ট হলে সব ট্র্যাক বন্ধ করা
       if (stream) {
         stream.getTracks().forEach(track => track.stop());
       }
@@ -121,7 +115,7 @@ const CallPage = () => {
   };
 
   const endCallLocally = () => {
-    if (callEnded) return; // ডাবল কল রোধে
+    if (callEnded) return;
     setCallEnded(true);
     if (connectionRef.current) connectionRef.current.destroy();
     if (stream) stream.getTracks().forEach(track => track.stop());
@@ -165,13 +159,19 @@ const CallPage = () => {
             playsInline 
             ref={userVideo} 
             autoPlay 
+            crossOrigin="anonymous" // 👈 COEP ফিক্স
             className="absolute inset-0 w-full h-full object-cover" 
           />
         ) : (
           <div className="flex flex-col items-center gap-6">
             <div className="relative">
                 <div className="w-32 h-32 rounded-full border-4 border-cyan-500/30 border-t-cyan-500 animate-spin" />
-                <img src={user?.picture} className="w-24 h-24 rounded-full absolute top-4 left-4 object-cover" alt="caller" />
+                <img 
+                  src={user?.picture} 
+                  crossOrigin="anonymous" // 👈 COEP ফিক্স
+                  className="w-24 h-24 rounded-full absolute top-4 left-4 object-cover" 
+                  alt="caller" 
+                />
             </div>
             <div className="text-cyan-500 animate-pulse text-sm tracking-[0.3em] font-black uppercase text-center px-4">
               Establishing Neural Link...
@@ -191,11 +191,17 @@ const CallPage = () => {
            muted 
            ref={myVideo} 
            autoPlay 
+           crossOrigin="anonymous" // 👈 COEP ফিক্স
            className={`w-full h-full object-cover ${!isCamOn ? 'hidden' : ''}`} 
         />
         {!isCamOn && (
            <div className="w-full h-full flex items-center justify-center bg-zinc-900">
-             <img src={user?.picture} className="w-12 h-12 rounded-full opacity-30" alt="avatar" />
+             <img 
+               src={user?.picture} 
+               crossOrigin="anonymous" // 👈 COEP ফিক্স
+               className="w-12 h-12 rounded-full opacity-30" 
+               alt="avatar" 
+             />
            </div>
         )}
       </motion.div>
@@ -208,6 +214,7 @@ const CallPage = () => {
       >
         <button 
           onClick={toggleMic}
+          // 👈 backgroundColor এ transparent এর বদলে rgba(..., 0) ব্যবহার করা হয়েছে
           className={`p-4 rounded-full transition-all ${!isMicOn ? 'bg-red-500 text-white shadow-[0_0_20px_rgba(239,68,68,0.4)]' : 'bg-white/5 text-cyan-400 hover:bg-white/10'}`}
         >
           {isMicOn ? <FaMicrophone size={18} /> : <FaMicrophoneSlash size={18} />}
