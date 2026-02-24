@@ -4,22 +4,31 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>OnyxDrift</title>
+    <title>OnyxDrift | Neural Network</title>
 
     <script>
+      // global অবজেক্ট ফিক্স (Vite/ESM এর জন্য জরুরি)
       if (typeof global === 'undefined') {
         window.global = window;
       }
-    </script>
-    
-    <script>
+      // process অবজেক্ট ফিক্স
       if (typeof window.process === 'undefined') {
-        window.process = { env: { NODE_ENV: 'production' } };
+        window.process = { 
+          env: { NODE_ENV: 'production' },
+          nextTick: function(fn) { setTimeout(fn, 0); },
+          browser: true
+        };
       }
     </script>
+    
+    <script type="module">
+      import { Buffer } from 'buffer';
+      window.Buffer = Buffer;
+    </script>
   </head>
-  <body>
+  <body class="bg-[#020617]">
     <div id="root"></div>
+    
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

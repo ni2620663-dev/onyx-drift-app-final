@@ -4,8 +4,14 @@ import { BrowserRouter } from "react-router-dom";
 import { Auth0Provider } from "@auth0/auth0-react";
 import App from "./app.jsx";
 import { AuthProvider } from "./context/AuthContext"; 
-import { ContextProvider } from "./context/CallContext"; // নতুন যোগ করা হয়েছে
+import { ContextProvider } from "./context/CallContext"; 
 import "./index.css"; 
+
+// --- 🛠️ NODE.JS POLYFILLS FOR BROWSER (Vite/WebRTC Fix) ---
+import { Buffer } from 'buffer';
+window.Buffer = Buffer;
+window.global = window;
+window.process = { env: { NODE_ENV: 'production' }, browser: true };
 
 /**
  * 🔐 Auth0 Configuration
@@ -35,10 +41,9 @@ ReactDOM.createRoot(document.getElementById("root")).render(
         useRefreshTokens={true}
         cacheLocation="localstorage"
       >
-        {/* ৩. কাস্টম AuthProvider */}
+        {/* ৩. কাস্টম AuthProvider: ইউজার ডাটা হ্যান্ডলিং */}
         <AuthProvider>
           {/* ৪. Call ContextProvider: ভিডিও/অডিও কলের গ্লোবাল স্টেট */}
-          {/* এটিকে অবশ্যই App-এর বাইরে থাকতে হবে */}
           <ContextProvider> 
             <Suspense fallback={
               <div className="h-screen w-screen flex items-center justify-center bg-[#020617] text-cyan-500 font-mono tracking-widest uppercase animate-pulse">

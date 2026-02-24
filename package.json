@@ -19,6 +19,7 @@
     "@stream-io/video-react-sdk": "^1.32.4",
     "axios": "^1.13.2",
     "bcryptjs": "^3.0.3",
+    "buffer": "^6.0.3",
     "cloudinary": "^2.8.0",
     "cors": "^2.8.5",
     "date-fns": "^4.1.0",

@@ -50,11 +50,20 @@ export default function App() {
     leaveCall
   } = useCall();
 
-  // 🔊 অডিও অবজেক্ট রিফারেন্স
   const incomingAudio = useRef(null);
+  const [userInteracted, setUserInteracted] = useState(false);
 
+  // ব্রাউজার ইন্টারঅ্যাকশন ট্র্যাকিং (Auto-play ফিক্সের জন্য)
   useEffect(() => {
-    // অডিও ইনিশিয়ালাইজেশন (COEP ও CORS ফিক্স)
+    const handleFirstInteraction = () => {
+      setUserInteracted(true);
+      window.removeEventListener('click', handleFirstInteraction);
+      window.removeEventListener('touchstart', handleFirstInteraction);
+    };
+    window.addEventListener('click', handleFirstInteraction);
+    window.addEventListener('touchstart', handleFirstInteraction);
+    
+    // অডিও ইনিশিয়ালাইজেশন
     const audio = new Audio(INCOMING_SOUND_URL);
     audio.crossOrigin = "anonymous";
     audio.loop = true;
@@ -108,12 +117,9 @@ export default function App() {
   /* =================📡 RINGTONE & VIBRATION ================= */
   useEffect(() => {
     if (call.isReceivingCall && !callAccepted) {
-      const playPromise = incomingAudio.current?.play();
-      
-      if (playPromise !== undefined) {
-        playPromise.catch(() => {
-          console.log("Audio play deferred until user interaction.");
-        });
+      // ইউজার ইন্টারঅ্যাক্ট করলেই কেবল অডিও বাজবে
+      if (userInteracted && incomingAudio.current) {
+        incomingAudio.current.play().catch(e => console.log("Audio play blocked", e));
       }
 
       if (navigator.vibrate) {
@@ -128,25 +134,19 @@ export default function App() {
         navigator.vibrate(0);
       }
     }
-  }, [call.isReceivingCall, callAccepted]);
+  }, [call.isReceivingCall, callAccepted, userInteracted]);
 
   const handleAnswerCall = () => {
-    if (incomingAudio.current) {
-      incomingAudio.current.pause();
-    }
+    if (incomingAudio.current) incomingAudio.current.pause();
     answerCall();
-    // কল রুমে জয়েন করা
     navigate(`/call/${call.roomId || 'active-session'}?mode=${call.type || 'video'}`); 
   };
 
   const handleRejectCall = () => {
-    if (incomingAudio.current) {
-      incomingAudio.current.pause();
-    }
+    if (incomingAudio.current) incomingAudio.current.pause();
     leaveCall();
   };
 
-  // Layout Logic
   const isFullWidthPage = ["/messenger", "/messages", "/settings", "/", "/join", "/reels", "/ai-twin", "/call"].some(path => location.pathname === path || location.pathname.startsWith(path + "/"));
   const isReelsPage = location.pathname.startsWith("/reels");
 
@@ -158,17 +158,17 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#020617] text-gray-200 font-sans relative overflow-x-hidden">
-      <Toaster position="top-center" toastOptions={{ style: { background: '#000', color: '#06b6d4', border: '1px solid #06b6d4' }}} />
+      <Toaster position="top-center" />
       <CustomCursor />
 
-      {/* =================📞 INCOMING CALL OVERLAY ================= */}
+      {/* =================📞 INCOMING CALL UI ================= */}
       <AnimatePresence>
         {call.isReceivingCall && !callAccepted && (
           <motion.div 
             initial={{ y: -150, opacity: 0 }}
             animate={{ y: 20, opacity: 1 }}
             exit={{ y: -150, opacity: 0 }}
-            className="fixed top-0 left-1/2 -translate-x-1/2 z-[100000] w-[95%] max-w-md backdrop-blur-3xl border border-cyan-500/40 p-5 rounded-[2.5rem] bg-black/90 shadow-[0_0_50px_rgba(6,182,212,0.15)]"
+            className="fixed top-0 left-1/2 -translate-x-1/2 z-[100000] w-[95%] max-w-md backdrop-blur-3xl border border-cyan-500/40 p-5 rounded-[2.5rem] bg-black/90 shadow-2xl"
           >
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-4">
@@ -177,32 +177,18 @@ export default function App() {
                   <img 
                     src={call.pic || `https://api.dicebear.com/7.x/avataaars/svg?seed=${call.name}`} 
                     referrerPolicy="no-referrer"
-                    className="w-14 h-14 rounded-2xl border border-cyan-500/30 object-cover bg-zinc-900" 
+                    className="w-14 h-14 rounded-2xl border border-cyan-500/30 object-cover" 
                     alt="caller" 
                   />
                 </div>
                 <div className="overflow-hidden">
-                  <h4 className="text-[14px] font-black text-white uppercase tracking-tighter truncate w-32 md:w-40">
-                    {call.name || "Unknown Link"}
-                  </h4>
-                  <p className="text-[10px] text-cyan-500 font-black tracking-widest uppercase animate-pulse">
-                    Incoming Neural {call.type === 'audio' ? 'Audio' : 'Video'}...
-                  </p>
+                  <h4 className="text-[14px] font-black text-white uppercase tracking-tighter truncate w-32 md:w-40">{call.name || "Unknown Link"}</h4>
+                  <p className="text-[10px] text-cyan-500 font-black tracking-widest uppercase animate-pulse">Incoming {call.type === 'audio' ? 'Audio' : 'Video'} Link...</p>
                 </div>
               </div>
               <div className="flex gap-2">
-                <button 
-                  onClick={handleRejectCall} 
-                  className="w-12 h-12 rounded-2xl bg-red-500/20 text-red-500 border border-red-500/40 flex items-center justify-center active:scale-90 transition-all hover:bg-red-500 hover:text-white"
-                >
-                  <HiXMark size={26} />
-                </button>
-                <button 
-                  onClick={handleAnswerCall} 
-                  className="w-12 h-12 rounded-2xl bg-cyan-500 text-[#020617] flex items-center justify-center shadow-lg shadow-cyan-500/30 active:scale-90 transition-all hover:bg-cyan-400"
-                >
-                  <FaPhone size={18} />
-                </button>
+                <button onClick={handleRejectCall} className="w-12 h-12 rounded-2xl bg-red-500/20 text-red-500 border border-red-500/40 flex items-center justify-center active:scale-90 transition-all"><HiXMark size={26} /></button>
+                <button onClick={handleAnswerCall} className="w-12 h-12 rounded-2xl bg-cyan-500 text-[#020617] flex items-center justify-center active:scale-90 transition-all"><FaPhone size={18} /></button>
               </div>
             </div>
           </motion.div>
@@ -212,13 +198,11 @@ export default function App() {
       <div className="flex flex-col w-full">
         <div className="flex justify-center w-full">
           <div className={`flex w-full ${isFullWidthPage ? "max-w-full" : "max-w-[1440px] px-0 lg:px-6"} gap-6`}>
-            
             {isAuthenticated && !isFullWidthPage && !isReelsPage && (
               <aside className="hidden lg:block w-[280px] sticky top-0 h-screen py-6">
                 <Sidebar />
               </aside>
             )}
-
             <main className={`flex-1 flex justify-center mt-0 ${isFullWidthPage ? "" : "pb-24 lg:pb-10 pt-6"}`}>
               <div className={`${isFullWidthPage ? "w-full" : "w-full lg:max-w-[650px]"}`}>
                 <Suspense fallback={<div className="h-screen bg-[#020617]" />}>
