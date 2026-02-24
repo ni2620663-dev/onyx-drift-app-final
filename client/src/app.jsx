@@ -53,7 +53,7 @@ export default function App() {
   const incomingAudio = useRef(null);
   const [userInteracted, setUserInteracted] = useState(false);
 
-  // ব্রাউজার ইন্টারঅ্যাকশন ট্র্যাকিং (Auto-play ফিক্সের জন্য)
+  // ব্রাউজার ইন্টারঅ্যাকশন ট্র্যাকিং (Autoplay & Vibration Fix)
   useEffect(() => {
     const handleFirstInteraction = () => {
       setUserInteracted(true);
@@ -117,13 +117,17 @@ export default function App() {
   /* =================📡 RINGTONE & VIBRATION ================= */
   useEffect(() => {
     if (call.isReceivingCall && !callAccepted) {
-      // ইউজার ইন্টারঅ্যাক্ট করলেই কেবল অডিও বাজবে
+      // ইউজার ইন্টারঅ্যাক্ট করলে অডিও এবং ভাইব্রেশন কাজ করবে
       if (userInteracted && incomingAudio.current) {
-        incomingAudio.current.play().catch(e => console.log("Audio play blocked", e));
-      }
-
-      if (navigator.vibrate) {
-        navigator.vibrate([500, 200, 500, 200, 500]);
+        incomingAudio.current.play().catch(e => console.log("Audio play deferred", e));
+        
+        if (navigator.vibrate) {
+          try {
+            navigator.vibrate([500, 200, 500, 200, 500]);
+          } catch (e) {
+            console.warn("Vibration failed", e);
+          }
+        }
       }
     } else {
       if (incomingAudio.current) {
@@ -187,8 +191,8 @@ export default function App() {
                 </div>
               </div>
               <div className="flex gap-2">
-                <button onClick={handleRejectCall} className="w-12 h-12 rounded-2xl bg-red-500/20 text-red-500 border border-red-500/40 flex items-center justify-center active:scale-90 transition-all"><HiXMark size={26} /></button>
-                <button onClick={handleAnswerCall} className="w-12 h-12 rounded-2xl bg-cyan-500 text-[#020617] flex items-center justify-center active:scale-90 transition-all"><FaPhone size={18} /></button>
+                <button onClick={handleRejectCall} className="w-12 h-12 rounded-2xl bg-red-500/20 text-red-500 border border-red-500/40 flex items-center justify-center active:scale-90 transition-all shadow-lg hover:bg-red-500 hover:text-white"><HiXMark size={26} /></button>
+                <button onClick={handleAnswerCall} className="w-12 h-12 rounded-2xl bg-cyan-500 text-[#020617] flex items-center justify-center active:scale-90 transition-all shadow-lg shadow-cyan-500/30 hover:bg-cyan-400"><FaPhone size={18} /></button>
               </div>
             </div>
           </motion.div>
