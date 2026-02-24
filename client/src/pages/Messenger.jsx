@@ -38,7 +38,7 @@ const NeonSpinner = () => (
   </div>
 );
 
-/* =================🎙️ NEURAL AUDIO PLAYER (Fixed) ================= */
+/* =================🎙️ NEURAL AUDIO PLAYER ================= */
 const NeuralAudioPlayer = ({ url }) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const audioRef = useRef(null);
@@ -62,7 +62,7 @@ const NeuralAudioPlayer = ({ url }) => {
     if (isPlaying) { 
       audioRef.current.pause(); 
     } else { 
-      audioRef.current.play().catch(err => console.warn("Audio Playback Blocked by Browser")); 
+      audioRef.current.play().catch(err => console.warn("Audio Playback Blocked")); 
     }
     setIsPlaying(!isPlaying);
   };
@@ -114,10 +114,10 @@ const Messenger = ({ socket }) => {
   const CLOUDINARY_URL = "https://api.cloudinary.com/v1_1/dofp85tq4/upload";
   const UPLOAD_PRESET = "onyx_drift_presets";
 
-  // Helper function to get safe avatar URL
+  // Safe Avatar Logic (Replaced ui-avatars with DiceBear for CORS stability)
   const getAvatar = (name) => {
-    const safeName = name && name !== "undefined" ? encodeURIComponent(name) : "Drifter";
-    return `https://ui-avatars.com/api/?name=${safeName}&background=06b6d4&color=fff`;
+    const seed = name || "Drifter";
+    return `https://api.dicebear.com/7.x/bottts-neutral/svg?seed=${seed}&backgroundColor=06b6d4`;
   };
 
   /* =================🔒 AUTH CORE ================= */
@@ -129,9 +129,7 @@ const Messenger = ({ socket }) => {
       });
       tokenCache.current = token;
       return token;
-    } catch (e) {
-      return null;
-    }
+    } catch (e) { return null; }
   }, [getAccessTokenSilently]);
 
   const neuralApi = useCallback(async () => {
@@ -150,34 +148,6 @@ const Messenger = ({ socket }) => {
     if (receiverId) {
       navigate(`/call/${roomId}?to=${receiverId}&mode=${type}`);
     }
-  };
-
-  /* =================🎙️ VOICE RECORDING ================= */
-  const startRecording = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream);
-      mediaRecorderRef.current = recorder;
-      
-      const chunks = [];
-      recorder.ondataavailable = (e) => chunks.push(e.data);
-      recorder.onstop = async () => {
-        const blob = new Blob(chunks, { type: "audio/ogg; codecs=opus" });
-        await handleFileUpload(null, blob, "voice");
-        stream.getTracks().forEach(track => track.stop());
-      };
-      
-      recorder.start();
-      setIsRecording(true);
-      if (navigator.vibrate) navigator.vibrate(50);
-    } catch (err) {
-      console.error("Microphone Access Denied:", err);
-    }
-  };
-
-  const stopRecording = () => {
-    mediaRecorderRef.current?.stop();
-    setIsRecording(false);
   };
 
   /* =================📁 MEDIA HANDLING ================= */
@@ -200,14 +170,39 @@ const Messenger = ({ socket }) => {
     }
   };
 
+  /* =================🎙️ VOICE RECORDING ================= */
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = recorder;
+      
+      const chunks = [];
+      recorder.ondataavailable = (e) => chunks.push(e.data);
+      recorder.onstop = async () => {
+        const blob = new Blob(chunks, { type: "audio/ogg; codecs=opus" });
+        await handleFileUpload(null, blob, "voice");
+        stream.getTracks().forEach(track => track.stop());
+      };
+      
+      recorder.start();
+      setIsRecording(true);
+    } catch (err) { console.error("Mic Denied", err); }
+  };
+
+  const stopRecording = () => {
+    mediaRecorderRef.current?.stop();
+    setIsRecording(false);
+  };
+
   /* =================📡 SIGNAL TRANSMISSION ================= */
   const handleSend = async (mediaUrl = null, type = "text") => {
     if ((!newMessage.trim() && !mediaUrl) || !currentChat || !user) return;
     
     const msgData = {
       senderId: user.sub,
-      senderName: isIncognito ? "Ghost-Drifter" : (user.name || user.nickname || "Drifter"),
-      senderAvatar: isIncognito ? "https://ui-avatars.com/api/?name=Ghost&background=000" : user.picture,
+      senderName: isIncognito ? "Ghost-Drifter" : (user.name || "Drifter"),
+      senderAvatar: isIncognito ? getAvatar("Ghost") : user.picture,
       text: newMessage,
       media: mediaUrl,
       mediaType: type,
@@ -281,11 +276,12 @@ const Messenger = ({ socket }) => {
   useEffect(() => { if (currentChat) fetchMessages(currentChat._id); }, [currentChat]);
   useEffect(() => { scrollRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
-  if (authLoading) return <div className="h-screen bg-[#02040a] flex items-center justify-center text-cyan-500 font-mono animate-pulse">BOOTING NEURAL INTERFACE...</div>;
+  if (authLoading) return <NeonSpinner />;
 
   return (
     <div className={`fixed inset-0 text-white h-[100dvh] overflow-hidden transition-all duration-700 ${isIncognito ? 'bg-[#0a0010]' : 'bg-[#02040a]'}`}>
       
+      {/* 🔔 Notifications Layer */}
       <AnimatePresence>
         {showNotification && (
           <motion.div initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }} className="fixed inset-0 z-[300] bg-[#02040a] flex flex-col">
@@ -305,7 +301,7 @@ const Messenger = ({ socket }) => {
             <div className="flex items-center gap-3">
               <img 
                 src={user?.picture || getAvatar(user?.name)} 
-                crossOrigin="anonymous" 
+                referrerPolicy="no-referrer"
                 className="w-10 h-10 rounded-xl border border-cyan-500/30 object-cover" 
                 alt="Profile" 
               />
@@ -335,7 +331,7 @@ const Messenger = ({ socket }) => {
             <motion.div whileTap={{ scale: 0.98 }} key={c._id} onClick={() => setCurrentChat(c)} className="p-3.5 flex items-center gap-4 bg-white/[0.02] border border-white/5 rounded-2xl cursor-pointer hover:bg-white/[0.05] transition-all">
               <img 
                 src={c.userDetails?.avatar || getAvatar(c.userDetails?.name)} 
-                crossOrigin="anonymous" 
+                referrerPolicy="no-referrer"
                 className="w-12 h-12 rounded-xl object-cover border border-white/10" 
                 alt="Avatar" 
               />
@@ -377,7 +373,7 @@ const Messenger = ({ socket }) => {
         </nav>
       </div>
 
-      {/* 💬 Chat Interface */}
+      {/* 💬 Chat Interface Layer */}
       <AnimatePresence>
         {currentChat && (
           <motion.div initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }} className="fixed inset-0 z-[200] flex flex-col bg-[#02040a]">
@@ -386,7 +382,7 @@ const Messenger = ({ socket }) => {
                   <button onClick={() => setCurrentChat(null)} className="text-zinc-400 p-2"><HiOutlineChevronLeft size={28}/></button>
                   <img 
                     src={currentChat.userDetails?.avatar || getAvatar(currentChat.userDetails?.name)} 
-                    crossOrigin="anonymous" 
+                    referrerPolicy="no-referrer"
                     className="w-9 h-9 rounded-lg border border-cyan-500/20 object-cover" 
                     alt="User" 
                   />
@@ -400,10 +396,10 @@ const Messenger = ({ socket }) => {
                 </div>
                 
                 <div className="flex gap-1 pr-2">
-                  <button onClick={() => initiateCall('audio')} className="p-2.5 text-zinc-400 hover:text-cyan-500 hover:bg-white/5 rounded-xl active:scale-90 transition-all">
+                  <button onClick={() => initiateCall('audio')} className="p-2.5 text-zinc-400 hover:text-cyan-500 hover:bg-white/5 rounded-xl transition-all">
                     <FaPhone size={16}/>
                   </button>
-                  <button onClick={() => initiateCall('video')} className="p-2.5 text-zinc-400 hover:text-cyan-500 hover:bg-white/5 rounded-xl active:scale-90 transition-all">
+                  <button onClick={() => initiateCall('video')} className="p-2.5 text-zinc-400 hover:text-cyan-500 hover:bg-white/5 rounded-xl transition-all">
                     <HiOutlineVideoCamera size={22}/>
                   </button>
                 </div>
@@ -412,13 +408,13 @@ const Messenger = ({ socket }) => {
             <div className="flex-1 overflow-y-auto p-4 space-y-4 pb-32">
               {isLoadingMessages ? <NeonSpinner /> : messages.map((m, i) => (
                 <div key={m._id || i} className={`flex flex-col ${m.senderId === user?.sub ? 'items-end' : 'items-start'}`}>
-                  <div className={`px-4 py-2.5 rounded-2xl max-w-[85%] border transition-all duration-500 ${m.senderId === user?.sub ? "bg-cyan-500/10 border-cyan-500/20 text-white" : "bg-white/5 border-white/10 text-zinc-300"}`}>
+                  <div className={`px-4 py-2.5 rounded-2xl max-w-[85%] border ${m.senderId === user?.sub ? "bg-cyan-500/10 border-cyan-500/20 text-white" : "bg-white/5 border-white/10 text-zinc-300"}`}>
                     {m.mediaType === "image" && m.media && (
                       <img 
                         src={m.media} 
-                        crossOrigin="anonymous" 
+                        referrerPolicy="no-referrer"
                         alt="Neural" 
-                        className="rounded-lg mb-2 max-h-60 w-full object-cover shadow-lg border border-white/10" 
+                        className="rounded-lg mb-2 max-h-60 w-full object-cover border border-white/10" 
                       />
                     )}
                     {m.mediaType === "voice" && m.media && <NeuralAudioPlayer url={m.media} />}

@@ -28,7 +28,7 @@ import reelRoutes from "./routes/reels.js";
 import profileRoutes from "./routes/profile.js"; 
 import groupRoutes from "./routes/group.js"; 
 import marketRoutes from "./routes/market.js"; 
-import adminRoutes from "./routes/admin.js";                  
+import adminRoutes from "./routes/admin.js";                      
 import { getNeuralFeed } from "./controllers/feedController.js";
 
 // 🛡️ Auth0 JWT ভেরিফিকেশন মিডলওয়্যার
@@ -48,7 +48,7 @@ cloudinary.config({
 const app = express();
 const server = http.createServer(app);
 
-// ৩. CORS কনফিগারেশন
+// ৩. CORS কনফিগারেশন (Strict Security)
 const allowedOrigins = [
     "http://localhost:5173", 
     "https://onyx-drift-app-final.onrender.com",
@@ -90,7 +90,7 @@ const updateNeuralPulse = async (req, res, next) => {
             User.updateOne(
                 { auth0Id: auth0Id },
                 { $set: { "deathSwitch.lastPulseTimestamp": new Date() } }
-            ).catch(err => {});
+            ).catch(() => {});
         }
     } catch (err) {}
     next();
@@ -122,9 +122,7 @@ const io = new Server(server, {
 });
 
 const redis = process.env.REDIS_URL ? new Redis(process.env.REDIS_URL) : null;
-const roomUsers = {}; // Group call tracking
-
-
+const roomUsers = {}; // roomId: [socketId1, socketId2...]
 
 io.on("connection", (socket) => {
     
@@ -141,25 +139,26 @@ io.on("connection", (socket) => {
         }
     });
 
-    /* --- 👥 GROUP CALLING LOGIC (WebRTC Mesh) --- */
+    /* --- 👥 GROUP CALLING LOGIC (Mesh Network) --- */
     socket.on("join-room", (payload) => {
-        const { roomId, userId } = payload;
+        const { roomId } = payload;
+        socket.roomId = roomId;
+
         if (roomUsers[roomId]) {
             roomUsers[roomId].push(socket.id);
         } else {
             roomUsers[roomId] = [socket.id];
         }
-        socket.roomId = roomId;
-        
-        // রুমে থাকা অন্য ইউজারদের লিস্ট পাঠানো (নিজেকে বাদ দিয়ে)
-        const otherUsers = roomUsers[roomId].filter(id => id !== socket.id);
-        socket.emit("all-users", otherUsers);
+
+        // রুমে থাকা অন্য ইউজারদের লিস্ট পাঠানো
+        const otherUsersInRoom = roomUsers[roomId].filter(id => id !== socket.id);
+        socket.emit("all-users", otherUsersInRoom);
     });
 
     socket.on("sending-signal", payload => {
         io.to(payload.userToSignal).emit('user-joined', { 
             signal: payload.signal, 
-            callerID: payload.callerID 
+            callerID: socket.id // সকেট আইডি ব্যবহার করা হচ্ছে ম্যাপিংয়ের জন্য
         });
     });
 
@@ -183,11 +182,15 @@ io.on("connection", (socket) => {
 
     /* --- 💬 MESSAGE & TYPING --- */
     socket.on("sendMessage", (message) => {
-        if (message.receiverId) io.to(message.receiverId).emit("getMessage", message);
+        if (message.receiverId) {
+            io.to(message.receiverId).emit("getMessage", message);
+        }
     });
 
     socket.on("typing", (data) => {
-        if (data.receiverId) socket.to(data.receiverId).emit("typing", data);
+        if (data.receiverId) {
+            socket.to(data.receiverId).emit("typing", data);
+        }
     });
 
     // ডিসকানেক্ট হ্যান্ডলার
@@ -196,7 +199,13 @@ io.on("connection", (socket) => {
         const roomId = socket.roomId;
         if (roomId && roomUsers[roomId]) {
             roomUsers[roomId] = roomUsers[roomId].filter(id => id !== socket.id);
+            // রুমে যারা আছে তাদের জানানো যে কেউ একজন লিভ করেছে
             socket.to(roomId).emit("user-left", socket.id);
+            
+            // যদি রুম খালি হয়ে যায় তবে অবজেক্ট থেকে ডিলিট করা
+            if (roomUsers[roomId].length === 0) {
+                delete roomUsers[roomId];
+            }
         }
 
         // Online Status Cleanup

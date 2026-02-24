@@ -21,12 +21,11 @@ import CustomCursor from "./components/CustomCursor";
 import MobileNav from "./components/MobileNav";
 import AITwinSync from './components/AITwinSync';
 
-// --- 📞 CUSTOM CALL CONTEXT IMPORT ---
+// --- 📞 CALL CONTEXT ---
 import { useCall } from './context/CallContext';
 
-// --- 🔊 RINGTONE CONFIG (COEP এর জন্য সোর্সগুলো চেক করা জরুরি) ---
+// --- 🔊 RINGTONE CONFIG ---
 const INCOMING_SOUND_URL = "https://assets.mixkit.co/active_storage/sfx/1359/1359-preview.mp3";
-const OUTGOING_SOUND_URL = "https://www.soundjay.com/phone/phone-calling-1.mp3";
 
 const ProtectedRoute = ({ component: Component, ...props }) => {
   const AuthenticatedComponent = withAuthenticationRequired(Component, {
@@ -51,23 +50,23 @@ export default function App() {
     leaveCall
   } = useCall();
 
-  // 🔊 অডিও অবজেক্ট তৈরি এবং COEP পলিসি ফিক্স
+  // 🔊 অডিও অবজেক্ট রিফারেন্স
   const incomingAudio = useRef(null);
-  const outgoingAudio = useRef(null);
 
   useEffect(() => {
-    // অডিও ইনিশিয়ালাইজেশন crossOrigin সহ
-    const inAudio = new Audio(INCOMING_SOUND_URL);
-    inAudio.crossOrigin = "anonymous";
-    incomingAudio.current = inAudio;
+    // অডিও ইনিশিয়ালাইজেশন (COEP ও CORS ফিক্স)
+    const audio = new Audio(INCOMING_SOUND_URL);
+    audio.crossOrigin = "anonymous";
+    audio.loop = true;
+    incomingAudio.current = audio;
 
-    const outAudio = new Audio(OUTGOING_SOUND_URL);
-    outAudio.crossOrigin = "anonymous";
-    outgoingAudio.current = outAudio;
+    return () => {
+      if (incomingAudio.current) {
+        incomingAudio.current.pause();
+        incomingAudio.current = null;
+      }
+    };
   }, []);
-
-  const [searchQuery, setSearchQuery] = useState("");
-  const [isPostModalOpen, setIsPostModalOpen] = useState(false);
 
   const API_AUDIENCE = "https://onyx-drift-api.com";
   const BACKEND_URL = "https://onyx-drift-app-final-u29m.onrender.com";
@@ -106,73 +105,104 @@ export default function App() {
     syncUserWithDB();
   }, [isAuthenticated, user, getAccessTokenSilently]);
 
-  /* =================📡 RINGTONE LOGIC ================= */
+  /* =================📡 RINGTONE & VIBRATION ================= */
   useEffect(() => {
     if (call.isReceivingCall && !callAccepted) {
-      if (incomingAudio.current) {
-        incomingAudio.current.loop = true;
-        incomingAudio.current.play().catch(e => console.log("Play blocked by browser"));
+      const playPromise = incomingAudio.current?.play();
+      
+      if (playPromise !== undefined) {
+        playPromise.catch(() => {
+          console.log("Audio play deferred until user interaction.");
+        });
       }
-      if (navigator.vibrate) navigator.vibrate([500, 200, 500]);
+
+      if (navigator.vibrate) {
+        navigator.vibrate([500, 200, 500, 200, 500]);
+      }
     } else {
       if (incomingAudio.current) {
         incomingAudio.current.pause();
         incomingAudio.current.currentTime = 0;
       }
+      if (navigator.vibrate) {
+        navigator.vibrate(0);
+      }
     }
-
-    return () => {
-      if (incomingAudio.current) incomingAudio.current.pause();
-    };
   }, [call.isReceivingCall, callAccepted]);
 
   const handleAnswerCall = () => {
+    if (incomingAudio.current) {
+      incomingAudio.current.pause();
+    }
     answerCall();
-    navigate(`/call/${call.from || 'room'}`); 
+    // কল রুমে জয়েন করা
+    navigate(`/call/${call.roomId || 'active-session'}?mode=${call.type || 'video'}`); 
   };
 
   const handleRejectCall = () => {
+    if (incomingAudio.current) {
+      incomingAudio.current.pause();
+    }
     leaveCall();
   };
 
+  // Layout Logic
   const isFullWidthPage = ["/messenger", "/messages", "/settings", "/", "/join", "/reels", "/ai-twin", "/call"].some(path => location.pathname === path || location.pathname.startsWith(path + "/"));
   const isReelsPage = location.pathname.startsWith("/reels");
 
-  if (isLoading) return <div className="h-screen bg-[#020617] flex items-center justify-center text-cyan-500 font-mono">Connecting to Onyx Grid...</div>;
+  if (isLoading) return (
+    <div className="h-screen bg-[#020617] flex items-center justify-center text-cyan-500 font-mono tracking-widest animate-pulse">
+      ONYX_DRIFT_OS: CONNECTING...
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-[#020617] text-gray-200 font-sans relative overflow-x-hidden">
-      <Toaster position="top-center" />
+      <Toaster position="top-center" toastOptions={{ style: { background: '#000', color: '#06b6d4', border: '1px solid #06b6d4' }}} />
       <CustomCursor />
 
-      {/* =================📞 INCOMING CALL UI ================= */}
+      {/* =================📞 INCOMING CALL OVERLAY ================= */}
       <AnimatePresence>
         {call.isReceivingCall && !callAccepted && (
           <motion.div 
             initial={{ y: -150, opacity: 0 }}
             animate={{ y: 20, opacity: 1 }}
             exit={{ y: -150, opacity: 0 }}
-            className="fixed top-0 left-1/2 -translate-x-1/2 z-[100000] w-[92%] max-w-md backdrop-blur-3xl border border-cyan-500/40 p-5 rounded-[2.5rem] bg-black/80 shadow-2xl shadow-cyan-500/10"
+            className="fixed top-0 left-1/2 -translate-x-1/2 z-[100000] w-[95%] max-w-md backdrop-blur-3xl border border-cyan-500/40 p-5 rounded-[2.5rem] bg-black/90 shadow-[0_0_50px_rgba(6,182,212,0.15)]"
           >
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-4">
                 <div className="relative">
                   <div className="absolute inset-0 bg-cyan-500 rounded-2xl animate-ping opacity-20" />
                   <img 
-                    src={call.pic || "https://api.dicebear.com/7.x/avataaars/svg?seed=Onyx"} 
-                    crossOrigin="anonymous" // 👈 COEP ফিক্স
-                    className="w-14 h-14 rounded-2xl border border-cyan-500/30 object-cover" 
+                    src={call.pic || `https://api.dicebear.com/7.x/avataaars/svg?seed=${call.name}`} 
+                    referrerPolicy="no-referrer"
+                    className="w-14 h-14 rounded-2xl border border-cyan-500/30 object-cover bg-zinc-900" 
                     alt="caller" 
                   />
                 </div>
-                <div>
-                  <h4 className="text-[13px] font-black text-white uppercase tracking-tighter truncate">{call.name || "Unknown Link"}</h4>
-                  <p className="text-[9px] text-cyan-500 font-black tracking-widest uppercase animate-pulse">Incoming Neural Link...</p>
+                <div className="overflow-hidden">
+                  <h4 className="text-[14px] font-black text-white uppercase tracking-tighter truncate w-32 md:w-40">
+                    {call.name || "Unknown Link"}
+                  </h4>
+                  <p className="text-[10px] text-cyan-500 font-black tracking-widest uppercase animate-pulse">
+                    Incoming Neural {call.type === 'audio' ? 'Audio' : 'Video'}...
+                  </p>
                 </div>
               </div>
               <div className="flex gap-2">
-                <button onClick={handleRejectCall} className="w-12 h-12 rounded-2xl bg-red-500/10 text-red-500 border border-red-500/20 flex items-center justify-center active:scale-90 transition-transform"><HiXMark size={26} /></button>
-                <button onClick={handleAnswerCall} className="w-12 h-12 rounded-2xl bg-cyan-500 text-[#020617] flex items-center justify-center shadow-lg shadow-cyan-500/20 active:scale-90 transition-transform"><FaPhone size={18} /></button>
+                <button 
+                  onClick={handleRejectCall} 
+                  className="w-12 h-12 rounded-2xl bg-red-500/20 text-red-500 border border-red-500/40 flex items-center justify-center active:scale-90 transition-all hover:bg-red-500 hover:text-white"
+                >
+                  <HiXMark size={26} />
+                </button>
+                <button 
+                  onClick={handleAnswerCall} 
+                  className="w-12 h-12 rounded-2xl bg-cyan-500 text-[#020617] flex items-center justify-center shadow-lg shadow-cyan-500/30 active:scale-90 transition-all hover:bg-cyan-400"
+                >
+                  <FaPhone size={18} />
+                </button>
               </div>
             </div>
           </motion.div>
