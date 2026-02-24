@@ -28,7 +28,7 @@ import reelRoutes from "./routes/reels.js";
 import profileRoutes from "./routes/profile.js"; 
 import groupRoutes from "./routes/group.js"; 
 import marketRoutes from "./routes/market.js"; 
-import adminRoutes from "./routes/admin.js";                 
+import adminRoutes from "./routes/admin.js";                  
 import { getNeuralFeed } from "./controllers/feedController.js";
 
 // 🛡️ Auth0 JWT ভেরিফিকেশন মিডলওয়্যার
@@ -48,7 +48,7 @@ cloudinary.config({
 const app = express();
 const server = http.createServer(app);
 
-// ৩. CORS কনফিগারেশন (উন্নত সুরক্ষা)
+// ৩. CORS কনফিগারেশন
 const allowedOrigins = [
     "http://localhost:5173", 
     "https://onyx-drift-app-final.onrender.com",
@@ -74,7 +74,6 @@ app.use(cors(corsOptions));
 app.use(express.json({ limit: "50mb" })); 
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
-// স্ট্যাটিক ফাইল ফোল্ডার সেটআপ
 const uploadDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadDir)){
     fs.mkdirSync(uploadDir);
@@ -88,15 +87,12 @@ const updateNeuralPulse = async (req, res, next) => {
     try {
         const auth0Id = req.auth?.payload?.sub; 
         if (auth0Id) {
-            // Background update - Don't wait (await) to improve response time
             User.updateOne(
                 { auth0Id: auth0Id },
                 { $set: { "deathSwitch.lastPulseTimestamp": new Date() } }
-            ).catch(err => console.error("Pulse error:", err));
+            ).catch(err => {});
         }
-    } catch (err) {
-        // Pulse bypass quietly
-    }
+    } catch (err) {}
     next();
 };
 
@@ -104,11 +100,7 @@ const updateNeuralPulse = async (req, res, next) => {
     📡 API ROUTES
 ========================================================== */
 app.get("/", (req, res) => res.status(200).send("🚀 OnyxDrift Neural Core Online!"));
-
-// Public Feed with Pulse
 app.get("/api/posts/neural-feed", checkJwt, updateNeuralPulse, getNeuralFeed);
-
-// Modular Routes
 app.use("/api/user", checkJwt, updateNeuralPulse, userRoutes); 
 app.use("/api/users", checkJwt, updateNeuralPulse, userRoutes); 
 app.use("/api/profile", checkJwt, updateNeuralPulse, profileRoutes);
@@ -121,37 +113,26 @@ app.use("/api/market", checkJwt, updateNeuralPulse, marketRoutes);
 app.use("/api/admin", checkJwt, updateNeuralPulse, adminRoutes);
 
 /* ==========================================================
-    📡 REAL-TIME ENGINE (Socket.io) + WebRTC
+    📡 REAL-TIME ENGINE (Socket.io)
 ========================================================== */
 const io = new Server(server, {
     cors: corsOptions,
     transports: ['websocket', 'polling'],
-    path: '/socket.io/',
-    connectTimeout: 45000,
-    pingTimeout: 60000,
-    pingInterval: 25000
+    path: '/socket.io/'
 });
 
-// Redis Connection
-const redis = process.env.REDIS_URL ? new Redis(process.env.REDIS_URL, {
-    maxRetriesPerRequest: null,
-    enableReadyCheck: false
-}) : null;
-
-if (redis) {
-    redis.on("error", (err) => console.log("Redis Connection Error:", err));
-    redis.on("connect", () => console.log("🧠 Neural Redis Cache Synced"));
-}
+const redis = process.env.REDIS_URL ? new Redis(process.env.REDIS_URL) : null;
+const roomUsers = {}; // Group call tracking
 
 
 
 io.on("connection", (socket) => {
     
-    // ইউজার কানেক্ট হলে অনলাইন স্ট্যাটাস আপডেট
+    // অনলাইন ইউজার হ্যান্ডলিং
     socket.on("addNewUser", async (auth0Id) => { 
         if (!auth0Id) return;
         socket.userId = auth0Id; 
-        socket.join(auth0Id); // প্রতিটি ইউজারকে নিজস্ব রুমে জয়েন করানো
+        socket.join(auth0Id); 
         
         if (redis) {
             await redis.hset("online_users", auth0Id, socket.id);
@@ -160,15 +141,39 @@ io.on("connection", (socket) => {
         }
     });
 
-    /* --- 📞 WebRTC CALLING SIGNALS --- */
+    /* --- 👥 GROUP CALLING LOGIC (WebRTC Mesh) --- */
+    socket.on("join-room", (payload) => {
+        const { roomId, userId } = payload;
+        if (roomUsers[roomId]) {
+            roomUsers[roomId].push(socket.id);
+        } else {
+            roomUsers[roomId] = [socket.id];
+        }
+        socket.roomId = roomId;
+        
+        // রুমে থাকা অন্য ইউজারদের লিস্ট পাঠানো (নিজেকে বাদ দিয়ে)
+        const otherUsers = roomUsers[roomId].filter(id => id !== socket.id);
+        socket.emit("all-users", otherUsers);
+    });
+
+    socket.on("sending-signal", payload => {
+        io.to(payload.userToSignal).emit('user-joined', { 
+            signal: payload.signal, 
+            callerID: payload.callerID 
+        });
+    });
+
+    socket.on("returning-signal", payload => {
+        io.to(payload.callerID).emit('receiving-returned-signal', { 
+            signal: payload.signal, 
+            id: socket.id 
+        });
+    });
+
+    /* --- 📞 ONE-TO-ONE CALL SIGNALS --- */
     socket.on("callUser", (data) => {
-        const { userToCall, signalData, from, name, pic, type } = data;
-        io.to(userToCall).emit("incomingCall", { 
-            signal: signalData, 
-            from, 
-            name, 
-            pic,
-            type 
+        io.to(data.userToCall).emit("incomingCall", { 
+            signal: data.signalData, from: data.from, name: data.name, pic: data.pic, type: data.type 
         });
     });
 
@@ -176,79 +181,41 @@ io.on("connection", (socket) => {
         io.to(data.to).emit("callAccepted", data.signal);
     });
 
-    socket.on("iceCandidate", (data) => {
-        if (data.to) {
-            io.to(data.to).emit("iceCandidate", data.candidate);
-        }
-    });
-
-    socket.on("endCall", (data) => {
-        if (data.to) {
-            io.to(data.to).emit("callEnded");
-        }
-    });
-
-    /* --- 💬 MESSAGE SIGNALS --- */
+    /* --- 💬 MESSAGE & TYPING --- */
     socket.on("sendMessage", (message) => {
-        const { receiverId } = message;
-        if (receiverId) {
-            // receiverId হচ্ছে ওই ইউজারের রুমের নাম
-            io.to(receiverId).emit("getMessage", message);
-        }
+        if (message.receiverId) io.to(message.receiverId).emit("getMessage", message);
     });
 
-    // টাইপিং সিগন্যাল (ইমপ্রুভড লজিক)
     socket.on("typing", (data) => {
-        const { receiverId, conversationId, senderName } = data;
-        if (receiverId) {
-            socket.to(receiverId).emit("typing", { conversationId, senderName });
-        }
-    });
-
-    socket.on("stopTyping", (data) => {
-        const { receiverId } = data;
-        if (receiverId) {
-            socket.to(receiverId).emit("stopTyping");
-        }
+        if (data.receiverId) socket.to(data.receiverId).emit("typing", data);
     });
 
     // ডিসকানেক্ট হ্যান্ডলার
     socket.on("disconnect", async () => {
+        // Group Call Cleanup
+        const roomId = socket.roomId;
+        if (roomId && roomUsers[roomId]) {
+            roomUsers[roomId] = roomUsers[roomId].filter(id => id !== socket.id);
+            socket.to(roomId).emit("user-left", socket.id);
+        }
+
+        // Online Status Cleanup
         if (redis && socket.userId) {
             await redis.hdel("online_users", socket.userId);
             const allUsers = await redis.hgetall("online_users");
             io.emit("getOnlineUsers", Object.keys(allUsers).map(id => ({ userId: id })));
         }
-        console.log("📡 Signal Lost: Node Disconnected");
     });
 });
 
 /* ==========================================================
-    🛡️ GLOBAL ERROR HANDLER
+    🛡️ ERROR HANDLER & START
 ========================================================== */
 app.use((err, req, res, next) => {
-    console.error("Critical Error:", err.stack);
-    
-    if (err.name === 'UnauthorizedError' || err.status === 401) {
-        return res.status(401).json({ error: 'Identity Verification Failed', message: "Invalid or expired token" });
-    }
-    
-    res.status(err.status || 500).json({ 
-        error: "Neural Grid Breakdown", 
-        message: process.env.NODE_ENV === 'production' ? "Internal Server Error" : err.message 
-    });
+    res.status(err.status || 500).json({ error: "Neural Grid Breakdown", message: err.message });
 });
 
-/* ==========================================================
-    🚀 SERVER START
-========================================================== */
 const PORT = process.env.PORT || 10000;
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`
-    ================================================
-    🚀 ONYX CORE ACTIVE ON PORT: ${PORT}
-    📡 MODE: WebRTC & Socket.io ENABLED
-    🛡️ SECURITY: Auth0 JWT PROTECTED
-    ================================================
-    `);
+    console.log(`🚀 ONYX CORE ACTIVE ON PORT: ${PORT}`);
 });
