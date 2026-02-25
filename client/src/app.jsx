@@ -4,7 +4,7 @@ import { useAuth0, withAuthenticationRequired } from "@auth0/auth0-react";
 import { motion, AnimatePresence } from "framer-motion";
 import toast, { Toaster } from 'react-hot-toast';
 import axios from 'axios'; 
-import { HiXMark, HiLink, HiCalendarDays } from "react-icons/hi2";
+import { HiXMark, HiCalendarDays } from "react-icons/hi2";
 import { FaPhone, FaUsers, FaVideo } from "react-icons/fa";
 
 // Components & Pages
@@ -66,7 +66,7 @@ export default function App() {
     navigate(`/call/${roomId}?mode=group`);
   };
 
-  // --- 📅 ২. শিডিউলড মিটিং (ক্যালেন্ডার নোটিফিকেশন) ---
+  // --- 📅 ২. শিডিউলড মিটিং ---
   const handleScheduleMeeting = () => {
     toast("Syncing with Neural Calendar...", { 
       icon: <HiCalendarDays className="text-cyan-400" />,
@@ -78,7 +78,9 @@ export default function App() {
   useEffect(() => {
     const handleFirstInteraction = () => {
       setUserInteracted(true);
-      if (incomingAudio.current) incomingAudio.current.load();
+      if (incomingAudio.current) {
+        incomingAudio.current.load(); 
+      }
       window.removeEventListener('click', handleFirstInteraction);
       window.removeEventListener('touchstart', handleFirstInteraction);
     };
@@ -140,7 +142,8 @@ export default function App() {
       if (userInteracted && incomingAudio.current) {
         incomingAudio.current.play().catch(() => {});
       }
-      if (navigator.vibrate) {
+      // ফিক্স: শুধুমাত্র ইউজার ইন্টারঅ্যাকশন থাকলে ভাইব্রেট হবে
+      if (userInteracted && navigator.vibrate) {
         navigator.vibrate([500, 200, 500]);
         vibrationInterval = setInterval(() => navigator.vibrate([500, 200, 500]), 2000);
       }
@@ -169,6 +172,9 @@ export default function App() {
     toast.error("Call Declined");
   };
 
+  // কন্ডিশনাল রেন্ডারিং লজিক
+  const isMessengerPage = location.pathname.startsWith("/messenger") || location.pathname.startsWith("/messages");
+  
   const isFullWidthPage = ["/messenger", "/messages", "/settings", "/", "/join", "/reels", "/ai-twin", "/call"].some(path => 
     location.pathname === path || location.pathname.startsWith(path + "/")
   );
@@ -185,8 +191,8 @@ export default function App() {
       <Toaster position="top-center" reverseOrder={false} />
       <CustomCursor />
 
-      {/* --- 🛠️ GROUP CALL & SCHEDULE TOOLS (Floating) --- */}
-      {isAuthenticated && !location.pathname.startsWith("/call") && (
+      {/* --- 🛠️ শুধুমাত্র মেসেঞ্জার পেজে বাটনগুলো দেখাবে --- */}
+      {isAuthenticated && isMessengerPage && (
         <div className="fixed bottom-24 right-6 flex flex-col gap-4 z-[999]">
           <motion.button 
             whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
@@ -206,7 +212,7 @@ export default function App() {
         </div>
       )}
 
-      {/* =================📞 INCOMING CALL UI (1-on-1) ================= */}
+      {/* =================📞 INCOMING CALL UI ================= */}
       <AnimatePresence>
         {call.isReceivingCall && !callAccepted && (
           <motion.div 
@@ -228,7 +234,7 @@ export default function App() {
                 </div>
                 <div className="overflow-hidden">
                   <h4 className="text-[14px] font-black text-white uppercase truncate w-32 md:w-40">{call.name}</h4>
-                  <p className="text-[10px] text-cyan-400 font-bold tracking-widest animate-pulse">Incoming Private Link...</p>
+                  <p className="text-[10px] text-cyan-400 font-bold tracking-widest animate-pulse">Incoming Link...</p>
                 </div>
               </div>
               <div className="flex gap-3">
