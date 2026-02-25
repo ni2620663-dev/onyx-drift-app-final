@@ -53,20 +53,20 @@ export default function App() {
   const incomingAudio = useRef(null);
   const [userInteracted, setUserInteracted] = useState(false);
 
-  // --- 🔗 ১. ইনস্ট্যান্ট গ্রুপ মিটিং লিঙ্ক জেনারেটর ---
+  // ১. ইনস্ট্যান্ট গ্রুপ মিটিং লিঙ্ক জেনারেটর
   const handleInstantMeeting = () => {
     const roomId = `room-${Math.random().toString(36).substring(2, 10)}`;
     const groupLink = `${window.location.origin}/call/${roomId}?mode=group`;
     
     navigator.clipboard.writeText(groupLink);
-    toast.success("Group Link Copied! Share it to start meeting.", {
+    toast.success("Group Link Copied!", {
       style: { background: '#020617', color: '#06b6d4', border: '1px solid #06b6d4' },
       icon: <FaUsers className="text-cyan-400" />
     });
     navigate(`/call/${roomId}?mode=group`);
   };
 
-  // --- 📅 ২. শিডিউলড মিটিং ---
+  // ২. শিডিউলড মিটিং
   const handleScheduleMeeting = () => {
     toast("Syncing with Neural Calendar...", { 
       icon: <HiCalendarDays className="text-cyan-400" />,
@@ -74,7 +74,7 @@ export default function App() {
     });
   };
 
-  // ব্রাউজার ইন্টারঅ্যাকশন ট্র্যাকিং
+  // ৩. ব্রাউজার ইন্টারঅ্যাকশন ট্র্যাকিং (ভাইব্রেশন এরর ফিক্সের জন্য)
   useEffect(() => {
     const handleFirstInteraction = () => {
       setUserInteracted(true);
@@ -98,9 +98,6 @@ export default function App() {
     };
   }, []);
 
-  const API_AUDIENCE = "https://onyx-drift-api.com";
-  const BACKEND_URL = "https://onyx-drift-app-final-u29m.onrender.com";
-
   /* =================📡 USER DATA SYNC ================= */
   useEffect(() => {
     const syncUserWithDB = async () => {
@@ -108,7 +105,7 @@ export default function App() {
         try {
           const token = await getAccessTokenSilently({
             authorizationParams: { 
-              audience: API_AUDIENCE,
+              audience: "https://onyx-drift-api.com",
               scope: "openid profile email offline_access" 
             },
           });
@@ -121,11 +118,8 @@ export default function App() {
             nickname: user.nickname || user.name?.split(' ')[0].toLowerCase(),
           };
 
-          await axios.post(`${BACKEND_URL}/api/users/sync`, userData, {
-            headers: { 
-              Authorization: `Bearer ${token}`,
-              'Content-Type': 'application/json'
-            }
+          await axios.post(`https://onyx-drift-app-final-u29m.onrender.com/api/users/sync`, userData, {
+            headers: { Authorization: `Bearer ${token}` }
           });
         } catch (err) {
           console.error("❌ Neural Sync Error:", err.message);
@@ -135,17 +129,20 @@ export default function App() {
     syncUserWithDB();
   }, [isAuthenticated, user, getAccessTokenSilently]);
 
-  /* =================📡 RINGTONE & VIBRATION ================= */
+  /* =================📡 RINGTONE & VIBRATION (FIXED) ================= */
   useEffect(() => {
     let vibrationInterval;
-    if (call.isReceivingCall && !callAccepted) {
-      if (userInteracted && incomingAudio.current) {
+    // কল আসছে + ইউজার একবার অন্তত পেজে ক্লিক করেছে
+    if (call.isReceivingCall && !callAccepted && userInteracted) {
+      if (incomingAudio.current) {
         incomingAudio.current.play().catch(() => {});
       }
-      // ফিক্স: শুধুমাত্র ইউজার ইন্টারঅ্যাকশন থাকলে ভাইব্রেট হবে
-      if (userInteracted && navigator.vibrate) {
-        navigator.vibrate([500, 200, 500]);
-        vibrationInterval = setInterval(() => navigator.vibrate([500, 200, 500]), 2000);
+      
+      if (navigator.vibrate) {
+        try {
+          navigator.vibrate([500, 200, 500]);
+          vibrationInterval = setInterval(() => navigator.vibrate([500, 200, 500]), 2000);
+        } catch (e) { console.log("Vibration blocked by browser policy"); }
       }
     } else {
       if (incomingAudio.current) {
@@ -172,9 +169,8 @@ export default function App() {
     toast.error("Call Declined");
   };
 
-  // কন্ডিশনাল রেন্ডারিং লজিক
+  // পেজ কন্ডিশন চেক
   const isMessengerPage = location.pathname.startsWith("/messenger") || location.pathname.startsWith("/messages");
-  
   const isFullWidthPage = ["/messenger", "/messages", "/settings", "/", "/join", "/reels", "/ai-twin", "/call"].some(path => 
     location.pathname === path || location.pathname.startsWith(path + "/")
   );
@@ -191,7 +187,7 @@ export default function App() {
       <Toaster position="top-center" reverseOrder={false} />
       <CustomCursor />
 
-      {/* --- 🛠️ শুধুমাত্র মেসেঞ্জার পেজে বাটনগুলো দেখাবে --- */}
+      {/* --- 🛠️ শুধুমাত্র মেসেঞ্জার পেজে Floating বাটন দেখাবে --- */}
       {isAuthenticated && isMessengerPage && (
         <div className="fixed bottom-24 right-6 flex flex-col gap-4 z-[999]">
           <motion.button 
@@ -227,7 +223,6 @@ export default function App() {
                   <div className="absolute inset-0 bg-cyan-500 rounded-2xl animate-ping opacity-20" />
                   <img 
                     src={call.pic || `https://api.dicebear.com/7.x/avataaars/svg?seed=${call.name}`} 
-                    referrerPolicy="no-referrer"
                     className="w-14 h-14 rounded-2xl border border-cyan-500/30 object-cover z-10 relative" 
                     alt="caller" 
                   />
@@ -256,7 +251,7 @@ export default function App() {
             )}
             <main className={`flex-1 flex justify-center mt-0 ${isFullWidthPage ? "" : "pb-24 lg:pb-10 pt-6"}`}>
               <div className={`${isFullWidthPage ? "w-full" : "w-full lg:max-w-[650px]"}`}>
-                <Suspense fallback={<div className="h-screen flex items-center justify-center bg-[#020617] text-cyan-500 font-mono">Loading Neural Data...</div>}>
+                <Suspense fallback={<div className="h-screen flex items-center justify-center bg-[#020617] text-cyan-500 font-mono">Loading...</div>}>
                   <Routes>
                     <Route path="/" element={isAuthenticated ? <Navigate to="/feed" replace /> : <Landing />} />
                     <Route path="/join" element={<JoinPage />} /> 
