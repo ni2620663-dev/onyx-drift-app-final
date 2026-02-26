@@ -4,16 +4,17 @@ import Peer from 'simple-peer';
 
 const SocketContext = createContext();
 
-// সকেট কানেকশন
+// সকেট কানেকশন - autoConnect: false দিয়ে শুরু করা ভালো যাতে কম্পোনেন্ট মাউন্ট হওয়ার পর কানেক্ট হয়
 const socket = io('https://onyx-drift-app-final-u29m.onrender.com', {
   transports: ['websocket'],
+  secure: true
 });
 
 const ContextProvider = ({ children }) => {
   const [callAccepted, setCallAccepted] = useState(false);
   const [callEnded, setCallEnded] = useState(false);
   const [stream, setStream] = useState(null);
-  const [call, setCall] = useState({});
+  const [call, setCall] = useState({ isReceivingCall: false, from: '', name: '', signal: null });
   const [me, setMe] = useState('');
   const [name, setName] = useState('');
 
@@ -21,12 +22,14 @@ const ContextProvider = ({ children }) => {
   const userVideo = useRef();
   const connectionRef = useRef();
 
-  // গ্লোবাল আইপি খুঁজে পাওয়ার জন্য STUN সার্ভার
-  const iceServers = {
+  // ১. STUN সার্ভার কনফিগারেশন আপডেট (ICE Servers)
+  const peerConfig = {
     iceServers: [
       { urls: 'stun:stun.l.google.com:19302' },
       { urls: 'stun:stun1.l.google.com:19302' },
       { urls: 'stun:stun2.l.google.com:19302' },
+      { urls: 'stun:stun3.l.google.com:19302' },
+      { urls: 'stun:stun4.l.google.com:19302' },
     ],
   };
 
@@ -34,6 +37,7 @@ const ContextProvider = ({ children }) => {
     socket.on('me', (id) => setMe(id));
 
     socket.on('incomingCall', ({ from, name: callerName, signal, pic }) => {
+      // স্টেট আপডেট করার সময় আগের ডাটা ক্লিনিং
       setCall({ isReceivingCall: true, from, name: callerName, signal, pic });
     });
 
@@ -43,9 +47,21 @@ const ContextProvider = ({ children }) => {
     };
   }, []);
 
+  // ২. ক্যামেরা পারমিশন হ্যান্ডলার (Improved)
   const getMediaStream = async () => {
     try {
-      const currentStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      // যদি আগে থেকেই স্ট্রিম থাকে তবে সেটি রিটার্ন করবে
+      if (stream) return stream;
+
+      const currentStream = await navigator.mediaDevices.getUserMedia({ 
+        video: {
+          width: { ideal: 640 },
+          height: { ideal: 480 },
+          facingMode: "user" // ফোনের ফ্রন্ট ক্যামেরা নিশ্চিত করতে
+        }, 
+        audio: true 
+      });
+      
       setStream(currentStream);
       if (myVideo.current) {
         myVideo.current.srcObject = currentStream;
@@ -53,22 +69,23 @@ const ContextProvider = ({ children }) => {
       return currentStream;
     } catch (err) {
       console.error("Camera Access Error:", err);
+      alert("Please allow camera/microphone access to make calls.");
       return null;
     }
   };
 
-  // ✅ কল রিসিভ করা (Answer Call)
+  // ✅ কল রিসিভ করা (Answer Call) - Fixed Signal Handling
   const answerCall = async () => {
-    setCallAccepted(true);
     const userStream = await getMediaStream();
     if (!userStream) return;
 
-    // simple-peer initialization ফিক্স
+    setCallAccepted(true);
+
     const peer = new Peer({ 
       initiator: false, 
       trickle: false, 
       stream: userStream,
-      config: iceServers 
+      config: peerConfig 
     });
 
     peer.on('signal', (data) => {
@@ -81,9 +98,11 @@ const ContextProvider = ({ children }) => {
       }
     });
 
+    // সিগন্যাল ডাটা রিসিভ করা নিশ্চিত করা
     if (call.signal) {
       peer.signal(call.signal);
     }
+    
     connectionRef.current = peer;
   };
 
@@ -96,7 +115,7 @@ const ContextProvider = ({ children }) => {
       initiator: true, 
       trickle: false, 
       stream: userStream,
-      config: iceServers 
+      config: peerConfig 
     });
 
     peer.on('signal', (data) => {
@@ -116,7 +135,9 @@ const ContextProvider = ({ children }) => {
 
     socket.on('callAccepted', (signal) => {
       setCallAccepted(true);
-      peer.signal(signal);
+      if (peer) {
+        peer.signal(signal);
+      }
     });
 
     connectionRef.current = peer;
@@ -130,7 +151,7 @@ const ContextProvider = ({ children }) => {
     if (stream) {
       stream.getTracks().forEach(track => track.stop());
     }
-    window.location.reload();
+    window.location.reload(); // সেশন ক্লিন করতে রিলোড জরুরি
   };
 
   return (
@@ -143,12 +164,5 @@ const ContextProvider = ({ children }) => {
   );
 };
 
-export const useCall = () => {
-  const context = useContext(SocketContext);
-  if (!context) {
-    throw new Error('useCall must be used within a ContextProvider');
-  }
-  return context;
-};
-
+export const useCall = () => useContext(SocketContext);
 export { ContextProvider, SocketContext };
