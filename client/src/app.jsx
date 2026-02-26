@@ -67,11 +67,13 @@ export default function App() {
     });
   };
 
-  // ২. ব্রাউজার অ্যাক্টিভেশন ট্র্যাকিং (ইন্টারভেনশন এরর ফিক্স)
+  // ২. ব্রাউজার অ্যাক্টিভেশন ট্র্যাকিং ও অডিও লোড
   useEffect(() => {
     const handleFirstInteraction = () => {
       setUserInteracted(true);
-      if (incomingAudio.current) incomingAudio.current.load();
+      if (incomingAudio.current) {
+        incomingAudio.current.load();
+      }
       ["click", "touchstart", "keydown"].forEach(e => window.removeEventListener(e, handleFirstInteraction));
     };
 
@@ -112,7 +114,7 @@ export default function App() {
     syncUserWithDB();
   }, [isAuthenticated, user, getAccessTokenSilently]);
 
-  // ৪. রিংটোন এবং ভাইব্রেশন হ্যান্ডলার (Safe Execution)
+  // ৪. রিংটোন এবং ভাইব্রেশন হ্যান্ডলার
   useEffect(() => {
     let vibrationInterval;
 
@@ -184,6 +186,7 @@ export default function App() {
                     className="w-14 h-14 rounded-2xl border border-cyan-500/30 object-cover relative z-10" 
                     alt="caller"
                     referrerPolicy="no-referrer"
+                    crossOrigin="anonymous"
                     onError={(e) => {
                       e.target.src = `https://api.dicebear.com/7.x/bottts/svg?seed=${call.name}`;
                     }}
@@ -196,7 +199,16 @@ export default function App() {
               </div>
               <div className="flex gap-3">
                 <button onClick={() => leaveCall()} className="w-11 h-11 rounded-xl bg-red-500/10 text-red-500 border border-red-500/20 flex items-center justify-center active:scale-95 transition-transform"><HiXMark size={24} /></button>
-                <button onClick={() => { answerCall(); navigate(`/call/${call.roomId || 'session'}`); }} className="w-11 h-11 rounded-xl bg-cyan-500 text-[#020617] flex items-center justify-center active:scale-95 transition-transform"><FaPhone size={18} /></button>
+                <button 
+                  onClick={() => { 
+                    answerCall(); 
+                    // CallPage-এ যাওয়ার সময় রুম আইডি পাস করা
+                    navigate(`/call/${call.from || 'session'}`); 
+                  }} 
+                  className="w-11 h-11 rounded-xl bg-cyan-500 text-[#020617] flex items-center justify-center active:scale-95 transition-transform"
+                >
+                  <FaPhone size={18} />
+                </button>
               </div>
             </div>
           </motion.div>

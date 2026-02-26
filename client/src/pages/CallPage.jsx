@@ -1,12 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import Peer from 'simple-peer/simplepeer.min.js'; // Vite এর জন্য minified version ব্যবহার করা ভালো
+import Peer from 'simple-peer'; 
 import { io } from "socket.io-client";
 import { motion, AnimatePresence } from 'framer-motion';
 import { FaMicrophone, FaVideo, FaPhoneSlash, FaMicrophoneSlash, FaVideoSlash } from 'react-icons/fa';
 import { useAuth0 } from "@auth0/auth0-react";
 import { useCall } from '../context/CallContext';
 
+// সকেট কানেকশন - নিশ্চিত করুন এটি আপনার রেন্ডার ইউআরএল
 const socket = io("https://onyx-drift-app-final-u29m.onrender.com", {
   transports: ["websocket"],
 });
@@ -16,7 +17,9 @@ const CallPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth0();
-  const { call, callAccepted: contextCallAccepted, answerCall: contextAnswerCall } = useCall();
+  
+  // Context থেকে ডাটা নেওয়া
+  const { call, setCall } = useCall();
 
   const queryParams = new URLSearchParams(location.search);
   const isAudioOnly = queryParams.get('mode') === 'audio';
@@ -32,11 +35,20 @@ const CallPage = () => {
   const userVideo = useRef();
   const connectionRef = useRef();
 
+  // STUN Servers (এটি ছাড়া ফোন ও ল্যাপটপ কানেক্ট হবে না)
+  const iceServers = {
+    iceServers: [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' },
+      { urls: 'stun:stun2.l.google.com:19302' },
+    ],
+  };
+
   useEffect(() => {
-    const setupMediaAndSignals = async () => {
+    const setupMedia = async () => {
       try {
         const currentStream = await navigator.mediaDevices.getUserMedia({ 
-          video: !isAudioOnly ? { width: 1280, height: 720 } : false, 
+          video: !isAudioOnly ? { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "user" } : false, 
           audio: true 
         });
         
@@ -45,20 +57,21 @@ const CallPage = () => {
           myVideo.current.srcObject = currentStream;
         }
 
-        // লজিক ১: যদি আপনি কল শুরু করেন (Caller)
+        // যদি আমি কল করি (Caller)
         if (remoteUserId) {
           initiateCall(currentStream, remoteUserId);
         } 
-        // লজিক ২: যদি আপনি কল রিসিভ করেন (Receiver)
+        // যদি আমি কল রিসিভ করি (Receiver)
         else if (call.isReceivingCall && call.signal) {
           respondToCall(currentStream, call.signal);
         }
       } catch (err) {
         console.error("Media Access Error:", err);
+        alert("Camera/Mic access denied!");
       }
     };
 
-    setupMediaAndSignals();
+    setupMedia();
 
     // সকেট লিসেনারস
     socket.on("callAccepted", (signal) => {
@@ -68,28 +81,22 @@ const CallPage = () => {
       }
     });
 
-    socket.on("receiving-returned-signal", (data) => {
-      if (connectionRef.current) {
-        connectionRef.current.signal(data.signal);
-      }
-    });
-
     socket.on("callEnded", () => {
       endCallLocally();
     });
 
     return () => {
       socket.off("callAccepted");
-      socket.off("receiving-returned-signal");
       socket.off("callEnded");
       terminateTracks();
     };
-  }, [remoteUserId, isAudioOnly, call.isReceivingCall]);
+  }, []); // শুধু মাউন্টে একবার রান হবে
 
   const initiateCall = (myStream, targetId) => {
     const peer = new Peer({
       initiator: true,
       trickle: false,
+      config: iceServers,
       stream: myStream,
     });
 
@@ -97,7 +104,7 @@ const CallPage = () => {
       socket.emit('callUser', {
         userToCall: targetId,
         signalData: data,
-        from: user?.sub,
+        from: socket.id, // আপনার সকেট আইডি
         name: user?.name,
         pic: user?.picture,
         type: isAudioOnly ? 'audio' : 'video',
@@ -105,7 +112,10 @@ const CallPage = () => {
       });
     });
 
-    setupPeerEvents(peer);
+    peer.on('stream', (remoteStream) => {
+      if (userVideo.current) userVideo.current.srcObject = remoteStream;
+    });
+
     connectionRef.current = peer;
   };
 
@@ -114,6 +124,7 @@ const CallPage = () => {
     const peer = new Peer({
       initiator: false,
       trickle: false,
+      config: iceServers,
       stream: myStream,
     });
 
@@ -121,21 +132,12 @@ const CallPage = () => {
       socket.emit('answerCall', { signal: data, to: call.from });
     });
 
-    peer.signal(incomingSignal);
-    setupPeerEvents(peer);
-    connectionRef.current = peer;
-  };
-
-  const setupPeerEvents = (peer) => {
     peer.on('stream', (remoteStream) => {
-      if (userVideo.current) {
-        userVideo.current.srcObject = remoteStream;
-      }
+      if (userVideo.current) userVideo.current.srcObject = remoteStream;
     });
 
-    peer.on('error', (err) => console.error("Peer Error:", err));
-    
-    peer.on('close', () => endCallLocally());
+    peer.signal(incomingSignal);
+    connectionRef.current = peer;
   };
 
   const terminateTracks = () => {
@@ -145,15 +147,11 @@ const CallPage = () => {
   };
 
   const endCallLocally = () => {
-    if (callEnded) return;
     setCallEnded(true);
-    
-    if (connectionRef.current) {
-      connectionRef.current.destroy();
-    }
-    
+    if (connectionRef.current) connectionRef.current.destroy();
     terminateTracks();
-    setTimeout(() => navigate('/messages'), 500);
+    navigate('/messages');
+    window.location.reload(); // ক্লিনআপের জন্য
   };
 
   const handleEndCall = () => {
@@ -164,21 +162,15 @@ const CallPage = () => {
 
   const toggleMic = () => {
     if (stream) {
-      const audioTrack = stream.getAudioTracks()[0];
-      if (audioTrack) {
-        audioTrack.enabled = !audioTrack.enabled;
-        setIsMicOn(audioTrack.enabled);
-      }
+      stream.getAudioTracks()[0].enabled = !isMicOn;
+      setIsMicOn(!isMicOn);
     }
   };
 
   const toggleVideo = () => {
     if (stream && !isAudioOnly) {
-      const videoTrack = stream.getVideoTracks()[0];
-      if (videoTrack) {
-        videoTrack.enabled = !videoTrack.enabled;
-        setIsCamOn(videoTrack.enabled);
-      }
+      stream.getVideoTracks()[0].enabled = !isCamOn;
+      setIsCamOn(!isCamOn);
     }
   };
 
@@ -186,19 +178,10 @@ const CallPage = () => {
     <div className="fixed inset-0 bg-[#020617] overflow-hidden flex flex-col items-center justify-center font-sans">
       
       {/* 📸 Remote Video Screen */}
-      <AnimatePresence mode="wait">
+      <AnimatePresence>
         {callAccepted && !callEnded ? (
-          <motion.div 
-            initial={{ opacity: 0 }} 
-            animate={{ opacity: 1 }}
-            className="absolute inset-0 w-full h-full bg-black"
-          >
-            <video 
-              playsInline 
-              ref={userVideo} 
-              autoPlay 
-              className="w-full h-full object-cover" 
-            />
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="absolute inset-0 w-full h-full bg-black">
+            <video playsInline ref={userVideo} autoPlay className="w-full h-full object-cover" />
           </motion.div>
         ) : (
           <div className="flex flex-col items-center gap-6 z-10">
@@ -208,7 +191,7 @@ const CallPage = () => {
                   src={call.pic || user?.picture} 
                   referrerPolicy="no-referrer"
                   className="w-24 h-24 rounded-full absolute top-4 left-4 object-cover border border-cyan-500/50 shadow-[0_0_20px_rgba(6,182,212,0.3)]" 
-                  alt="caller" 
+                  alt="avatar" 
                 />
             </div>
             <div className="text-cyan-500 animate-pulse text-[10px] tracking-[0.4em] font-black uppercase text-center px-6 py-2 bg-black/40 backdrop-blur-md rounded-full border border-cyan-500/20">
@@ -218,19 +201,9 @@ const CallPage = () => {
         )}
       </AnimatePresence>
       
-      {/* 📹 My Video Overlay (Draggable) */}
-      <motion.div 
-        drag 
-        dragConstraints={{ left: -300, right: 300, top: -400, bottom: 400 }}
-        className="absolute top-6 right-6 w-32 h-44 md:w-44 md:h-60 rounded-3xl border border-white/20 overflow-hidden z-50 bg-black shadow-2xl cursor-grab active:cursor-grabbing"
-      >
-        <video 
-           playsInline 
-           muted 
-           ref={myVideo} 
-           autoPlay 
-           className={`w-full h-full object-cover mirror ${!isCamOn ? 'hidden' : ''}`} 
-        />
+      {/* 📹 My Video Overlay */}
+      <motion.div drag dragConstraints={{ left: -300, right: 300, top: -400, bottom: 400 }} className="absolute top-6 right-6 w-32 h-44 md:w-44 md:h-60 rounded-3xl border border-white/20 overflow-hidden z-50 bg-black shadow-2xl">
+        <video playsInline muted ref={myVideo} autoPlay className={`w-full h-full object-cover mirror ${!isCamOn ? 'hidden' : ''}`} />
         {!isCamOn && (
            <div className="w-full h-full flex items-center justify-center bg-zinc-900">
              <img src={user?.picture} referrerPolicy="no-referrer" className="w-12 h-12 rounded-full opacity-20" alt="avatar" />
@@ -239,34 +212,21 @@ const CallPage = () => {
       </motion.div>
 
       {/* 🛠️ Call Controls */}
-      <motion.div 
-        initial={{ y: 100, opacity: 0 }} 
-        animate={{ y: 0, opacity: 1 }}
-        className="absolute bottom-10 flex gap-4 md:gap-6 items-center bg-zinc-900/80 backdrop-blur-3xl px-8 py-5 rounded-[40px] border border-white/10 z-[60] shadow-2xl"
-      >
-        <button 
-          onClick={toggleMic}
-          className={`p-4 rounded-2xl transition-all active:scale-90 ${!isMicOn ? 'bg-red-500 text-white shadow-lg shadow-red-500/40' : 'bg-white/5 text-cyan-400 hover:bg-white/10'}`}
-        >
+      <div className="absolute bottom-10 flex gap-4 md:gap-6 items-center bg-zinc-900/80 backdrop-blur-3xl px-8 py-5 rounded-[40px] border border-white/10 z-[60]">
+        <button onClick={toggleMic} className={`p-4 rounded-2xl ${!isMicOn ? 'bg-red-500' : 'bg-white/5 text-cyan-400'}`}>
           {isMicOn ? <FaMicrophone size={18} /> : <FaMicrophoneSlash size={18} />}
         </button>
         
-        <button 
-          onClick={handleEndCall}
-          className="p-5 rounded-[2rem] bg-red-500 hover:bg-red-600 text-white shadow-2xl shadow-red-500/50 transition-all active:scale-95 group"
-        >
-          <FaPhoneSlash size={26} className="group-hover:rotate-12 transition-transform" />
+        <button onClick={handleEndCall} className="p-5 rounded-[2rem] bg-red-500 text-white shadow-2xl shadow-red-500/50">
+          <FaPhoneSlash size={26} />
         </button>
 
         {!isAudioOnly && (
-          <button 
-            onClick={toggleVideo}
-            className={`p-4 rounded-2xl transition-all active:scale-90 ${!isCamOn ? 'bg-red-500 text-white shadow-lg shadow-red-500/40' : 'bg-white/5 text-cyan-400 hover:bg-white/10'}`}
-          >
+          <button onClick={toggleVideo} className={`p-4 rounded-2xl ${!isCamOn ? 'bg-red-500' : 'bg-white/5 text-cyan-400'}`}>
             {isCamOn ? <FaVideo size={18} /> : <FaVideoSlash size={18} />}
           </button>
         )}
-      </motion.div>
+      </div>
 
       <style>{`.mirror { transform: scaleX(-1); }`}</style>
     </div>
