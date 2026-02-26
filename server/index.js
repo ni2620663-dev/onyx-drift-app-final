@@ -48,7 +48,7 @@ cloudinary.config({
 const app = express();
 const server = http.createServer(app);
 
-// ৩. CORS কনফিগারেশন (Strict Security)
+// ৩. CORS কনফিগারেশন
 const allowedOrigins = [
     "http://localhost:5173", 
     "https://onyx-drift-app-final.onrender.com",
@@ -122,7 +122,8 @@ const io = new Server(server, {
 });
 
 const redis = process.env.REDIS_URL ? new Redis(process.env.REDIS_URL) : null;
-const roomUsers = {}; // roomId: [socketId1, socketId2...]
+const roomUsers = {}; 
+const userSocketMap = {}; // গুরুত্বপূর্ণ: {auth0Id: socketId} ম্যাপিংয়ের জন্য
 
 io.on("connection", (socket) => {
     
@@ -130,6 +131,7 @@ io.on("connection", (socket) => {
     socket.on("addNewUser", async (auth0Id) => { 
         if (!auth0Id) return;
         socket.userId = auth0Id; 
+        userSocketMap[auth0Id] = socket.id; // ম্যাপিং সেভ করা হচ্ছে
         socket.join(auth0Id); 
         
         if (redis) {
@@ -139,50 +141,35 @@ io.on("connection", (socket) => {
         }
     });
 
-    /* --- 👥 GROUP CALLING LOGIC (Mesh Network) --- */
-    socket.on("join-room", (payload) => {
-        const { roomId } = payload;
-        socket.roomId = roomId;
-
-        if (roomUsers[roomId]) {
-            roomUsers[roomId].push(socket.id);
-        } else {
-            roomUsers[roomId] = [socket.id];
-        }
-
-        // রুমে থাকা অন্য ইউজারদের লিস্ট পাঠানো
-        const otherUsersInRoom = roomUsers[roomId].filter(id => id !== socket.id);
-        socket.emit("all-users", otherUsersInRoom);
-    });
-
-    socket.on("sending-signal", payload => {
-        io.to(payload.userToSignal).emit('user-joined', { 
-            signal: payload.signal, 
-            callerID: socket.id // সকেট আইডি ব্যবহার করা হচ্ছে ম্যাপিংয়ের জন্য
-        });
-    });
-
-    socket.on("returning-signal", payload => {
-        io.to(payload.callerID).emit('receiving-returned-signal', { 
-            signal: payload.signal, 
-            id: socket.id 
-        });
-    });
-
-    /* --- 📞 ONE-TO-ONE CALL SIGNALS --- */
+    /* --- 📞 ONE-TO-ONE CALL SIGNALS (FIXED) --- */
     socket.on("callUser", (data) => {
-        io.to(data.userToCall).emit("incomingCall", { 
-            signal: data.signalData, from: data.from, name: data.name, pic: data.pic, type: data.type 
-        });
+        // যদি রিসিভার অনলাইনে থাকে তবে তার সকেট আইডিতে পাঠানো হবে
+        const recipientSocketId = userSocketMap[data.userToCall];
+        if (recipientSocketId) {
+            io.to(recipientSocketId).emit("incomingCall", { 
+                signal: data.signalData, 
+                from: socket.id, // রিসিভার যাতে উত্তর দিতে পারে
+                name: data.name, 
+                pic: data.pic, 
+                type: data.type 
+            });
+        }
     });
 
     socket.on("answerCall", (data) => {
+        // সরাসরি কলদাতার সকেট আইডিতে সিগন্যাল পাঠানো হচ্ছে
         io.to(data.to).emit("callAccepted", data.signal);
+    });
+
+    socket.on("endCall", (data) => {
+        const recipientSocketId = userSocketMap[data.to] || data.to;
+        io.to(recipientSocketId).emit("callEnded");
     });
 
     /* --- 💬 MESSAGE & TYPING --- */
     socket.on("sendMessage", (message) => {
         if (message.receiverId) {
+            // ইউজারের রুমে পাঠানো হচ্ছে যাতে সব ডিভাইসে সিঙ্ক হয়
             io.to(message.receiverId).emit("getMessage", message);
         }
     });
@@ -193,22 +180,41 @@ io.on("connection", (socket) => {
         }
     });
 
+    /* --- 👥 GROUP CALLING LOGIC --- */
+    socket.on("join-room", (payload) => {
+        const { roomId } = payload;
+        socket.roomId = roomId;
+        if (roomUsers[roomId]) roomUsers[roomId].push(socket.id);
+        else roomUsers[roomId] = [socket.id];
+        const otherUsersInRoom = roomUsers[roomId].filter(id => id !== socket.id);
+        socket.emit("all-users", otherUsersInRoom);
+    });
+
+    socket.on("sending-signal", payload => {
+        io.to(payload.userToSignal).emit('user-joined', { 
+            signal: payload.signal, callerID: socket.id 
+        });
+    });
+
+    socket.on("returning-signal", payload => {
+        io.to(payload.callerID).emit('receiving-returned-signal', { 
+            signal: payload.signal, id: socket.id 
+        });
+    });
+
     // ডিসকানেক্ট হ্যান্ডলার
     socket.on("disconnect", async () => {
-        // Group Call Cleanup
+        if (socket.userId) {
+            delete userSocketMap[socket.userId]; // ম্যাপিং ক্লিনআপ
+        }
+
         const roomId = socket.roomId;
         if (roomId && roomUsers[roomId]) {
             roomUsers[roomId] = roomUsers[roomId].filter(id => id !== socket.id);
-            // রুমে যারা আছে তাদের জানানো যে কেউ একজন লিভ করেছে
             socket.to(roomId).emit("user-left", socket.id);
-            
-            // যদি রুম খালি হয়ে যায় তবে অবজেক্ট থেকে ডিলিট করা
-            if (roomUsers[roomId].length === 0) {
-                delete roomUsers[roomId];
-            }
+            if (roomUsers[roomId].length === 0) delete roomUsers[roomId];
         }
 
-        // Online Status Cleanup
         if (redis && socket.userId) {
             await redis.hdel("online_users", socket.userId);
             const allUsers = await redis.hgetall("online_users");
