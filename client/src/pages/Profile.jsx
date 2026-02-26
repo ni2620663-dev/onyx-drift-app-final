@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { 
   FaArrowLeft, FaMapMarkerAlt, FaLink, FaCalendarAlt, FaEllipsisH 
 } from 'react-icons/fa';
@@ -12,19 +12,15 @@ const ProfilePage = ({ user, isOwnProfile, userPosts, onUpdate, currentUserId, f
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isFollowing, setIsFollowing] = useState(false);
 
-  // ১. আইডি ডিকোড এবং স্যানিটাইজ করা (Critical Fix)
+  // ১. আইডি স্যানিটাইজেশন
   const sanitizeId = (id) => id ? decodeURIComponent(id).trim() : null;
-  
   const decodedCurrentId = sanitizeId(currentUserId);
   const decodedProfileId = sanitizeId(user?.auth0Id);
-  
-  // নিজের প্রোফাইল কি না তা নিশ্চিত করার জন্য ডাবল চেক
   const isReallyMe = isOwnProfile || (decodedCurrentId && decodedProfileId && decodedCurrentId === decodedProfileId);
 
-  // ফলোয়িং স্টেট সিঙ্ক করা
+  // ২. ফলোয়িং স্টেট সিঙ্ক
   useEffect(() => {
     if (user?.followers && decodedCurrentId) {
-      // কিছু ক্ষেত্রে ডাটাবেজে ID এরে হিসেবে থাকে, তাই includes চেক করা হচ্ছে
       const followingStatus = user.followers.some(fId => sanitizeId(fId) === decodedCurrentId);
       setIsFollowing(followingStatus);
     }
@@ -33,11 +29,11 @@ const ProfilePage = ({ user, isOwnProfile, userPosts, onUpdate, currentUserId, f
   const observer = useRef();
   const tabs = ["Signals", "Replies", "Media", "Energy"];
 
-  // Default Fallbacks
+  // ৩. ডিফল্ট ইমেজ হ্যান্ডলার
   const defaultBanner = "https://images.unsplash.com/photo-1614850523296-d8c1af93d400?q=80&w=2070";
-  const defaultAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.name || 'Drifter')}&background=06b6d4&color=fff`;
+  const defaultAvatar = `https://api.dicebear.com/7.x/bottts/svg?seed=${user?.name || 'Drifter'}`;
 
-  // Infinite Scroll Logic
+  // ৪. ইনফিনিট স্ক্রল লজিক
   const lastPostRef = (node) => {
     if (observer.current) observer.current.disconnect();
     observer.current = new IntersectionObserver(entries => {
@@ -48,10 +44,9 @@ const ProfilePage = ({ user, isOwnProfile, userPosts, onUpdate, currentUserId, f
 
   const toggleFollow = () => {
     setIsFollowing(!isFollowing);
-    // এখানে আপনার ফলো API কলটি যুক্ত করুন
+    // TODO: Connect with your Follow/Unfollow API
   };
 
-  // যদি ইউজার ডাটা না থাকে (Loading State)
   if (!user) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center font-mono">
@@ -74,7 +69,7 @@ const ProfilePage = ({ user, isOwnProfile, userPosts, onUpdate, currentUserId, f
           <FaArrowLeft size={18} className="group-hover:-translate-x-1 transition-transform" />
         </button>
         <div>
-          <h2 className="text-xl font-black flex items-center gap-1 tracking-tighter">
+          <h2 className="text-xl font-black flex items-center gap-1 tracking-tighter truncate max-w-[200px]">
             {user?.name || "Neural Drifter"} 
             {user?.isVerified && <HiBadgeCheck className="text-cyan-400" />}
           </h2>
@@ -91,6 +86,8 @@ const ProfilePage = ({ user, isOwnProfile, userPosts, onUpdate, currentUserId, f
             src={user?.coverImg || defaultBanner} 
             alt="cover" 
             className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" 
+            referrerPolicy="no-referrer"
+            crossOrigin="anonymous"
             onError={(e) => { e.target.src = defaultBanner }}
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
@@ -98,12 +95,14 @@ const ProfilePage = ({ user, isOwnProfile, userPosts, onUpdate, currentUserId, f
 
         <div className="px-4">
           <div className="relative flex justify-between items-end -mt-16 mb-4">
-            {/* Avatar */}
-            <div className="w-32 h-32 rounded-full border-4 border-black bg-black overflow-hidden shadow-2xl relative z-10 group">
+            {/* Profile Avatar */}
+            <div className="w-28 h-28 md:w-32 md:h-32 rounded-full border-4 border-black bg-black overflow-hidden shadow-2xl relative z-10 group">
               <img 
                 src={user?.avatar || user?.picture || defaultAvatar} 
                 alt="avatar" 
                 className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" 
+                referrerPolicy="no-referrer"
+                crossOrigin="anonymous"
                 onError={(e) => { e.target.src = defaultAvatar }}
               />
             </div>
@@ -127,7 +126,7 @@ const ProfilePage = ({ user, isOwnProfile, userPosts, onUpdate, currentUserId, f
                   className={`px-6 py-2 rounded-full font-black text-sm transition-all shadow-lg ${
                     isFollowing 
                     ? "border border-zinc-700 text-white hover:border-red-500/50 hover:text-red-500" 
-                    : "bg-white text-black hover:bg-cyan-400 transition-colors"
+                    : "bg-white text-black hover:bg-cyan-400"
                   }`}
                 >
                   {isFollowing ? "Orbiting" : "Orbit"}
@@ -189,7 +188,7 @@ const ProfilePage = ({ user, isOwnProfile, userPosts, onUpdate, currentUserId, f
             <span className={activeTab === tab ? "text-cyan-400" : "text-zinc-600"}>{tab}</span>
             {activeTab === tab && (
               <motion.div 
-                layoutId="tab" 
+                layoutId="tab-underline" 
                 className="absolute bottom-0 left-1/2 -translate-x-1/2 w-10 h-0.5 bg-cyan-400 shadow-[0_0_10px_#06b6d4]" 
               />
             )}
@@ -199,16 +198,16 @@ const ProfilePage = ({ user, isOwnProfile, userPosts, onUpdate, currentUserId, f
 
       {/* 📰 Signals Feed */}
       <div className="divide-y divide-zinc-900 min-h-[400px]">
-        {activeTab === "Signals" && (
+        {activeTab === "Signals" ? (
           userPosts?.length > 0 ? (
-            userPosts.map((post, index) => {
-              const isLastElement = userPosts.length === index + 1;
-              return (
-                <div ref={isLastElement ? lastPostRef : null} key={post._id || index}>
-                  <SignalCard post={post} user={user} />
-                </div>
-              );
-            })
+            userPosts.map((post, index) => (
+              <div 
+                ref={userPosts.length === index + 1 ? lastPostRef : null} 
+                key={post._id || index}
+              >
+                <SignalCard post={post} user={user} />
+              </div>
+            ))
           ) : (
             <div className="py-24 text-center">
               <p className="text-zinc-700 font-black uppercase tracking-[0.4em] text-[10px] animate-pulse">
@@ -216,9 +215,7 @@ const ProfilePage = ({ user, isOwnProfile, userPosts, onUpdate, currentUserId, f
               </p>
             </div>
           )
-        )}
-        
-        {activeTab !== "Signals" && (
+        ) : (
           <div className="py-24 text-center text-zinc-800 text-[10px] font-black uppercase tracking-[0.6em]">
             {activeTab} module offline
           </div>
@@ -226,15 +223,16 @@ const ProfilePage = ({ user, isOwnProfile, userPosts, onUpdate, currentUserId, f
       </div>
 
       {/* 🧬 Edit Profile Modal */}
-      {isEditModalOpen && (
-        <EditProfileModal
-          isOpen={isEditModalOpen}
-          onClose={() => setIsEditModalOpen(false)}
-          user={user}
-          onUpdate={onUpdate}
-        />
-      )}
-
+      <AnimatePresence>
+        {isEditModalOpen && (
+          <EditProfileModal
+            isOpen={isEditModalOpen}
+            onClose={() => setIsEditModalOpen(false)}
+            user={user}
+            onUpdate={onUpdate}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 };
