@@ -7,11 +7,20 @@ import { AuthProvider } from "./context/AuthContext";
 import { ContextProvider } from "./context/CallContext"; 
 import "./index.css"; 
 
-// --- 🛠️ NODE.JS POLYFILLS FOR BROWSER (Vite/WebRTC Fix) ---
+/* ==========================================================
+  🛠️ NODE.JS POLYFILLS FOR BROWSER (Vite/WebRTC Fix)
+  এটি ছাড়া simple-peer ব্রাউজারে 'call' বা 'undefined' এরর দেয়।
+========================================================== 
+*/
 import { Buffer } from 'buffer';
+
+// গ্লোবাল অবজেক্ট সেটআপ
 window.Buffer = Buffer;
 window.global = window;
-window.process = { env: { NODE_ENV: 'production' }, browser: true };
+window.process = { 
+  env: { NODE_ENV: 'production' }, 
+  browser: true 
+};
 
 /**
  * 🔐 Auth0 Configuration
@@ -19,6 +28,13 @@ window.process = { env: { NODE_ENV: 'production' }, browser: true };
 const AUTH0_DOMAIN = "dev-prxn6v2o08xp5loz.us.auth0.com";
 const AUTH0_CLIENT_ID = "fPDZj5sDRTwv0EaH2woGlnmPwkpTCePF";
 const API_AUDIENCE = "https://onyx-drift-api.com"; 
+
+// নোটিফিকেশন পারমিশন রিকোয়েস্ট (কল আসার এলার্ট এর জন্য)
+if (typeof window !== "undefined" && "Notification" in window) {
+  if (Notification.permission !== "granted" && Notification.permission !== "denied") {
+    Notification.requestPermission();
+  }
+}
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
@@ -47,7 +63,10 @@ ReactDOM.createRoot(document.getElementById("root")).render(
           <ContextProvider> 
             <Suspense fallback={
               <div className="h-screen w-screen flex items-center justify-center bg-[#020617] text-cyan-500 font-mono tracking-widest uppercase animate-pulse">
-                Syncing Neural Interface...
+                <div className="flex flex-col items-center gap-4">
+                  <div className="w-12 h-12 border-4 border-cyan-500/20 border-t-cyan-500 rounded-full animate-spin"></div>
+                  <span>Syncing Neural Interface...</span>
+                </div>
               </div>
             }>
               <App />

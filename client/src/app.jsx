@@ -114,7 +114,7 @@ export default function App() {
     syncUserWithDB();
   }, [isAuthenticated, user, getAccessTokenSilently]);
 
-  // ৪. রিংটোন এবং ভাইব্রেশন হ্যান্ডলার
+  // ৪. রিংটোন এবং ভাইব্রেশন হ্যান্ডলার (Fixed Logic)
   useEffect(() => {
     let vibrationInterval;
 
@@ -148,11 +148,13 @@ export default function App() {
     return () => stopAll();
   }, [call.isReceivingCall, callAccepted, userInteracted]);
 
-  const isMessengerPage = location.pathname.startsWith("/messenger") || location.pathname.startsWith("/messages");
   const isFullWidthPage = ["/messenger", "/messages", "/settings", "/", "/join", "/reels", "/ai-twin", "/call"].some(path => 
     location.pathname === path || location.pathname.startsWith(path + "/")
   );
+  
+  const isMessengerPage = location.pathname.startsWith("/messenger") || location.pathname.startsWith("/messages");
   const isReelsPage = location.pathname.startsWith("/reels");
+  const isCallPage = location.pathname.startsWith("/call");
 
   if (isLoading) return <div className="h-screen bg-[#020617] flex items-center justify-center text-cyan-500 font-mono">ONYX_DRIFT_OS: CONNECTING...</div>;
 
@@ -161,8 +163,8 @@ export default function App() {
       <Toaster position="top-center" reverseOrder={false} />
       <CustomCursor />
 
-      {/* Floating Buttons */}
-      {isAuthenticated && isMessengerPage && (
+      {/* Floating Action Buttons */}
+      {isAuthenticated && isMessengerPage && !isCallPage && (
         <div className="fixed bottom-24 right-6 flex flex-col gap-4 z-[999]">
           <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={handleScheduleMeeting} className="w-12 h-12 bg-black/60 border border-cyan-500/20 text-cyan-500 rounded-2xl flex items-center justify-center backdrop-blur-md shadow-xl">
             <HiCalendarDays size={24} />
@@ -173,10 +175,15 @@ export default function App() {
         </div>
       )}
 
-      {/* Incoming Call UI */}
+      {/* 🚨 INCOMING CALL UI (Overlay) */}
       <AnimatePresence>
         {call.isReceivingCall && !callAccepted && (
-          <motion.div initial={{ y: -100, opacity: 0 }} animate={{ y: 20, opacity: 1 }} exit={{ y: -100, opacity: 0 }} className="fixed top-0 left-1/2 -translate-x-1/2 z-[100000] w-[95%] max-w-md backdrop-blur-3xl border border-cyan-500/40 p-5 rounded-[2.5rem] bg-black/80 shadow-2xl">
+          <motion.div 
+            initial={{ y: -100, opacity: 0 }} 
+            animate={{ y: 20, opacity: 1 }} 
+            exit={{ y: -100, opacity: 0 }} 
+            className="fixed top-0 left-1/2 -translate-x-1/2 z-[100000] w-[95%] max-w-md backdrop-blur-3xl border border-cyan-500/40 p-5 rounded-[2.5rem] bg-black/80 shadow-2xl"
+          >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
                 <div className="relative">
@@ -186,24 +193,23 @@ export default function App() {
                     className="w-14 h-14 rounded-2xl border border-cyan-500/30 object-cover relative z-10" 
                     alt="caller"
                     referrerPolicy="no-referrer"
-                    crossOrigin="anonymous"
-                    onError={(e) => {
-                      e.target.src = `https://api.dicebear.com/7.x/bottts/svg?seed=${call.name}`;
-                    }}
                   />
                 </div>
-                <div>
-                  <h4 className="text-sm font-black text-white uppercase truncate w-32">{call.name}</h4>
+                <div className="max-w-[150px]">
+                  <h4 className="text-sm font-black text-white uppercase truncate">{call.name}</h4>
                   <p className="text-[10px] text-cyan-400 font-bold tracking-widest animate-pulse">Incoming Link...</p>
                 </div>
               </div>
               <div className="flex gap-3">
-                <button onClick={() => leaveCall()} className="w-11 h-11 rounded-xl bg-red-500/10 text-red-500 border border-red-500/20 flex items-center justify-center active:scale-95 transition-transform"><HiXMark size={24} /></button>
+                <button onClick={() => leaveCall()} className="w-11 h-11 rounded-xl bg-red-500/10 text-red-500 border border-red-500/20 flex items-center justify-center active:scale-95 transition-transform">
+                  <HiXMark size={24} />
+                </button>
                 <button 
                   onClick={() => { 
                     answerCall(); 
-                    // CallPage-এ যাওয়ার সময় রুম আইডি পাস করা
-                    navigate(`/call/${call.from || 'session'}`); 
+                    // কলদাতার সকেট আইডি বা রুম আইডি অনুযায়ী নেভিগেট
+                    const callRoomId = call.from || 'session';
+                    navigate(`/call/${callRoomId}`); 
                   }} 
                   className="w-11 h-11 rounded-xl bg-cyan-500 text-[#020617] flex items-center justify-center active:scale-95 transition-transform"
                 >
@@ -219,10 +225,12 @@ export default function App() {
         <div className="flex justify-center w-full">
           <div className={`flex w-full ${isFullWidthPage ? "max-w-full" : "max-w-[1440px] px-0 lg:px-6"} gap-6`}>
             {isAuthenticated && !isFullWidthPage && !isReelsPage && (
-              <aside className="hidden lg:block w-[280px] sticky top-0 h-screen py-6"><Sidebar /></aside>
+              <aside className="hidden lg:block w-[280px] sticky top-0 h-screen py-6">
+                <Sidebar />
+              </aside>
             )}
             <main className={`flex-1 ${isFullWidthPage ? "" : "pb-24 lg:pb-10 pt-6"}`}>
-              <Suspense fallback={<div className="h-screen flex items-center justify-center text-cyan-500">Neural Loading...</div>}>
+              <Suspense fallback={<div className="h-screen flex items-center justify-center text-cyan-500 font-mono">Neural Loading...</div>}>
                 <Routes>
                   <Route path="/" element={isAuthenticated ? <Navigate to="/feed" replace /> : <Landing />} />
                   <Route path="/join" element={<JoinPage />} /> 
@@ -242,7 +250,8 @@ export default function App() {
         </div>
       </div>
 
-      {isAuthenticated && !isReelsPage && !location.pathname.startsWith("/call") && (
+      {/* Bottom Navigation */}
+      {isAuthenticated && !isReelsPage && !isCallPage && (
         <MobileNav userAuth0Id={user?.sub} />
       )}
     </div>

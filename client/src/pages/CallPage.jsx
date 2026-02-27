@@ -7,7 +7,7 @@ import { FaMicrophone, FaVideo, FaPhoneSlash, FaMicrophoneSlash, FaVideoSlash } 
 import { useAuth0 } from "@auth0/auth0-react";
 import { useCall } from '../context/CallContext';
 
-// 🛠️ VITE GLOBAL FIX: simple-peer এর 'call' এরর ফিক্স করার জন্য
+// 🛠️ VITE GLOBAL FIX: simple-peer এর ইন্টারনাল 'call' এরর ফিক্স করার জন্য
 if (typeof window !== 'undefined' && !window.global) {
     window.global = window;
 }
@@ -36,16 +36,29 @@ const CallPage = () => {
   const myVideo = useRef();
   const userVideo = useRef();
   const connectionRef = useRef();
+  const ringtoneRef = useRef(new Audio('https://res.cloudinary.com/dffu9p69f/video/upload/v1710512345/ringtone.mp3')); // একটি রিংটোন লিঙ্ক দিন
 
   const iceServers = {
     iceServers: [
       { urls: 'stun:stun.l.google.com:19302' },
       { urls: 'stun:stun1.l.google.com:19302' },
       { urls: 'stun:stun2.l.google.com:19302' },
+      { urls: 'stun:stun3.l.google.com:19302' },
     ],
   };
 
   useEffect(() => {
+    // কল আসলে রিংটোন বাজানো
+    if (call.isReceivingCall && !callAccepted) {
+      ringtoneRef.current.loop = true;
+      ringtoneRef.current.play().catch(e => console.log("Audio play blocked by browser"));
+      
+      // ব্রাউজার নোটিফিকেশন
+      if (Notification.permission === "granted") {
+          new Notification("Incoming Call", { body: `${call.name} is calling you...`, icon: call.pic });
+      }
+    }
+
     const setupMedia = async () => {
       try {
         const currentStream = await navigator.mediaDevices.getUserMedia({ 
@@ -54,9 +67,7 @@ const CallPage = () => {
         });
         
         setStream(currentStream);
-        if (myVideo.current) {
-          myVideo.current.srcObject = currentStream;
-        }
+        if (myVideo.current) myVideo.current.srcObject = currentStream;
 
         if (remoteUserId) {
           initiateCall(currentStream, remoteUserId);
@@ -65,6 +76,7 @@ const CallPage = () => {
         }
       } catch (err) {
         console.error("Media Access Error:", err);
+        alert("Please allow camera and microphone access to talk!");
       }
     };
 
@@ -72,6 +84,7 @@ const CallPage = () => {
 
     socket.on("callAccepted", (signal) => {
       setCallAccepted(true);
+      ringtoneRef.current.pause(); // কল এক্সেপ্ট হলে রিংটোন বন্ধ
       if (connectionRef.current) {
         connectionRef.current.signal(signal);
       }
@@ -84,12 +97,12 @@ const CallPage = () => {
     return () => {
       socket.off("callAccepted");
       socket.off("callEnded");
+      ringtoneRef.current.pause();
       terminateTracks();
     };
   }, []);
 
   const initiateCall = (myStream, targetId) => {
-    // 🛠️ Vite Constructor Fix
     const PeerConstructor = Peer.default || Peer;
     const peer = new PeerConstructor({
       initiator: true,
@@ -105,8 +118,7 @@ const CallPage = () => {
         from: socket.id,
         name: user?.name,
         pic: user?.picture,
-        type: isAudioOnly ? 'audio' : 'video',
-        roomId: roomId
+        type: isAudioOnly ? 'audio' : 'video'
       });
     });
 
@@ -119,6 +131,7 @@ const CallPage = () => {
 
   const respondToCall = (myStream, incomingSignal) => {
     setCallAccepted(true);
+    ringtoneRef.current.pause();
     const PeerConstructor = Peer.default || Peer;
     const peer = new PeerConstructor({
       initiator: false,
@@ -147,6 +160,7 @@ const CallPage = () => {
 
   const endCallLocally = () => {
     setCallEnded(true);
+    ringtoneRef.current.pause();
     if (connectionRef.current) connectionRef.current.destroy();
     terminateTracks();
     navigate('/messages');
@@ -176,53 +190,49 @@ const CallPage = () => {
   return (
     <div className="fixed inset-0 bg-[#020617] overflow-hidden flex flex-col items-center justify-center font-sans">
       
-      {/* 📸 Remote Video Screen */}
+      {/* 📸 Remote Video */}
       <AnimatePresence>
         {callAccepted && !callEnded ? (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="absolute inset-0 w-full h-full bg-black">
             <video playsInline ref={userVideo} autoPlay className="w-full h-full object-cover" />
           </motion.div>
         ) : (
-          <div className="flex flex-col items-center gap-6 z-10">
+          <div className="flex flex-col items-center gap-6 z-10 text-center">
             <div className="relative">
-                <div className="w-32 h-32 rounded-full border-4 border-cyan-500/10 border-t-cyan-500 animate-spin" />
-                <img 
-                  src={call.pic || user?.picture} 
-                  referrerPolicy="no-referrer"
-                  className="w-24 h-24 rounded-full absolute top-4 left-4 object-cover border border-cyan-500/50" 
-                  alt="avatar" 
-                />
+                <div className="w-40 h-40 rounded-full border-4 border-cyan-500/10 border-t-cyan-500 animate-spin" />
+                <img src={call.pic || user?.picture} className="w-32 h-32 rounded-full absolute top-4 left-4 object-cover border-2 border-cyan-500" alt="avatar" />
             </div>
-            <div className="text-cyan-500 animate-pulse text-[10px] tracking-[0.4em] font-black uppercase text-center px-6 py-2 bg-black/40 backdrop-blur-md rounded-full border border-cyan-500/20">
-              {callEnded ? "Link Severed" : "Syncing Neural Grid..."}
+            <h2 className="text-white text-2xl font-bold">{call.name || "Connecting..."}</h2>
+            <div className="text-cyan-500 animate-pulse text-[10px] tracking-[0.4em] uppercase py-2 px-6 bg-black/40 rounded-full border border-cyan-500/20">
+              {callEnded ? "Call Ended" : "Neural Link Initiating..."}
             </div>
           </div>
         )}
       </AnimatePresence>
       
       {/* 📹 My Video Overlay */}
-      <motion.div drag dragConstraints={{ left: -300, right: 300, top: -400, bottom: 400 }} className="absolute top-6 right-6 w-32 h-44 md:w-44 md:h-60 rounded-3xl border border-white/20 overflow-hidden z-50 bg-black shadow-2xl cursor-grab active:cursor-grabbing">
+      <motion.div drag dragConstraints={{ left: -300, right: 300, top: -400, bottom: 400 }} className="absolute top-6 right-6 w-32 h-44 md:w-44 md:h-60 rounded-3xl border border-white/20 overflow-hidden z-50 bg-black shadow-2xl">
         <video playsInline muted ref={myVideo} autoPlay className={`w-full h-full object-cover mirror ${!isCamOn ? 'hidden' : ''}`} />
         {!isCamOn && (
            <div className="w-full h-full flex items-center justify-center bg-zinc-900">
-             <img src={user?.picture} referrerPolicy="no-referrer" className="w-12 h-12 rounded-full opacity-20" alt="avatar" />
+             <img src={user?.picture} className="w-12 h-12 rounded-full opacity-30" alt="avatar" />
            </div>
         )}
       </motion.div>
 
       {/* 🛠️ Call Controls */}
-      <div className="absolute bottom-10 flex gap-4 md:gap-6 items-center bg-zinc-900/80 backdrop-blur-3xl px-8 py-5 rounded-[40px] border border-white/10 z-[60] shadow-2xl">
-        <button onClick={toggleMic} className={`p-4 rounded-2xl transition-all ${!isMicOn ? 'bg-red-500 text-white shadow-lg shadow-red-500/40' : 'bg-white/5 text-cyan-400 hover:bg-white/10'}`}>
-          {isMicOn ? <FaMicrophone size={18} /> : <FaMicrophoneSlash size={18} />}
+      <div className="absolute bottom-10 flex gap-6 items-center bg-zinc-900/80 backdrop-blur-3xl px-8 py-5 rounded-[40px] border border-white/10 z-[60]">
+        <button onClick={toggleMic} className={`p-4 rounded-2xl ${!isMicOn ? 'bg-red-500' : 'bg-white/5 text-cyan-400'}`}>
+          {isMicOn ? <FaMicrophone size={20} /> : <FaMicrophoneSlash size={20} />}
         </button>
         
-        <button onClick={handleEndCall} className="p-5 rounded-[2rem] bg-red-500 hover:bg-red-600 text-white shadow-2xl shadow-red-500/50 transition-all active:scale-95 group">
-          <FaPhoneSlash size={26} className="group-hover:rotate-12 transition-transform" />
+        <button onClick={handleEndCall} className="p-6 rounded-full bg-red-500 text-white shadow-2xl shadow-red-500/50 hover:scale-105 transition-transform">
+          <FaPhoneSlash size={28} />
         </button>
 
         {!isAudioOnly && (
-          <button onClick={toggleVideo} className={`p-4 rounded-2xl transition-all ${!isCamOn ? 'bg-red-500 text-white shadow-lg shadow-red-500/40' : 'bg-white/5 text-cyan-400 hover:bg-white/10'}`}>
-            {isCamOn ? <FaVideo size={18} /> : <FaVideoSlash size={18} />}
+          <button onClick={toggleVideo} className={`p-4 rounded-2xl ${!isCamOn ? 'bg-red-500' : 'bg-white/5 text-cyan-400'}`}>
+            {isCamOn ? <FaVideo size={20} /> : <FaVideoSlash size={20} />}
           </button>
         )}
       </div>
