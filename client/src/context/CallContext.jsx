@@ -1,21 +1,23 @@
 import React, { createContext, useState, useRef, useEffect, useContext } from 'react';
 import { io } from 'socket.io-client';
-import Peer from 'simple-peer';
+import Peer from 'simple-peer/simplepeer.min.js'; // ✅ এটি এরর ফিক্স করবে
 
-// Vite Fix for simple-peer
-if (typeof window !== 'undefined' && !window.global) {
+// ১. Vite & WebRTC Polyfills
+if (typeof window !== 'undefined') {
     window.global = window;
+    window.process = { env: {} }; // Simple-peer internal dependencies এর জন্য
 }
 
 const SocketContext = createContext();
 
+// সকেট ইউআরএল (আপনার প্রোভাইড করা ইউআরএল)
 const socket = io('https://onyx-drift-app-final-u29m.onrender.com', {
     transports: ['websocket'],
     secure: true
 });
 
 const ContextProvider = ({ children }) => {
-    const [call, setCall] = useState({ isReceivingCall: false, from: '', name: '', signal: null, pic: '' });
+    const [call, setCall] = useState({ isReceivingCall: false, from: '', name: '', signal: null, pic: '', type: 'video' });
     const [callAccepted, setCallAccepted] = useState(false);
     const [callEnded, setCallEnded] = useState(false);
     const [stream, setStream] = useState(null);
@@ -26,15 +28,17 @@ const ContextProvider = ({ children }) => {
     const connectionRef = useRef();
 
     useEffect(() => {
+        // নিজের সকেট আইডি সেট করা
         socket.on('me', (id) => setMe(id));
 
-        socket.on('incomingCall', ({ from, name, signal, pic }) => {
-            // ফেসবুক স্টাইলে সরাসরি স্টেট আপডেট
-            setCall({ isReceivingCall: true, from, name, signal, pic });
+        // ইনকামিং কল লিসেনার
+        socket.on('incomingCall', ({ from, name, signal, pic, type }) => {
+            setCall({ isReceivingCall: true, from, name, signal, pic, type });
         });
 
+        // কল এন্ডেড লিসেনার
         socket.on('callEnded', () => {
-            leaveCall();
+            resetCallState();
         });
 
         return () => {
@@ -44,46 +48,66 @@ const ContextProvider = ({ children }) => {
         };
     }, []);
 
-    // ১. ক্যামেরা ও মাইক্রোফোন এক্সেস (ফেসবুকের মতো কল রিসিভ করার পর অন হবে)
+    // ২. মিডিয়া স্ট্রিম হ্যান্ডলিং (ক্যামেরা/মাইক্রোফোন)
     const getMedia = async (isAudioOnly = false) => {
         try {
+            // আগের কোনো স্ট্রিম থাকলে সেটা বন্ধ করা (WebMediaPlayer এরর ফিক্স করতে)
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+            }
+
             const currentStream = await navigator.mediaDevices.getUserMedia({
                 video: !isAudioOnly,
                 audio: true
             });
+
             setStream(currentStream);
-            if (myVideo.current) myVideo.current.srcObject = currentStream;
+            if (myVideo.current) {
+                myVideo.current.srcObject = currentStream;
+            }
             return currentStream;
         } catch (err) {
-            console.error("Media Error:", err);
+            console.error("Media Access Error:", err);
             return null;
         }
     };
 
-    // ২. কল রিসিভ করা (Answer Call)
+    // ৩. কল রিসিভ করা (Answer Call)
     const answerCall = async () => {
         setCallAccepted(true);
         const userStream = await getMedia(call.type === 'audio');
-        
-        const peer = new Peer({ initiator: false, trickle: false, stream: userStream });
+        if (!userStream) return;
+
+        const peer = new Peer({ 
+            initiator: false, 
+            trickle: false, 
+            stream: userStream 
+        });
 
         peer.on('signal', (data) => {
             socket.emit('answerCall', { signal: data, to: call.from });
         });
 
         peer.on('stream', (remoteStream) => {
-            if (userVideo.current) userVideo.current.srcObject = remoteStream;
+            if (userVideo.current) {
+                userVideo.current.srcObject = remoteStream;
+            }
         });
 
         peer.signal(call.signal);
         connectionRef.current = peer;
     };
 
-    // ৩. কল করা (Call User)
+    // ৪. কল করা (Initiate Call)
     const callUser = async (id, name, pic, isAudioOnly = false) => {
         const userStream = await getMedia(isAudioOnly);
-        
-        const peer = new Peer({ initiator: true, trickle: false, stream: userStream });
+        if (!userStream) return;
+
+        const peer = new Peer({ 
+            initiator: true, 
+            trickle: false, 
+            stream: userStream 
+        });
 
         peer.on('signal', (data) => {
             socket.emit('callUser', {
@@ -97,7 +121,9 @@ const ContextProvider = ({ children }) => {
         });
 
         peer.on('stream', (remoteStream) => {
-            if (userVideo.current) userVideo.current.srcObject = remoteStream;
+            if (userVideo.current) {
+                userVideo.current.srcObject = remoteStream;
+            }
         });
 
         socket.on('callAccepted', (signal) => {
@@ -108,14 +134,36 @@ const ContextProvider = ({ children }) => {
         connectionRef.current = peer;
     };
 
+    // ৫. কল এন্ড করা
     const leaveCall = () => {
         setCallEnded(true);
-        if (connectionRef.current) connectionRef.current.destroy();
-        if (stream) stream.getTracks().forEach(track => track.stop());
         
-        // রিলোড না করে জাস্ট স্টেট রিসেট (ফেসবুক স্টাইল)
-        setCall({ isReceivingCall: false, from: '', name: '', signal: null });
+        if (connectionRef.current) {
+            connectionRef.current.destroy();
+        }
+
+        // সকেটকে জানানো যে কল শেষ
+        const target = call.from || me;
+        socket.emit("endCall", { to: target });
+
+        resetCallState();
+    };
+
+    // স্টেট রিসেট ফাংশন (ফেসবুক স্টাইল - পেজ রিলোড ছাড়াই)
+    const resetCallState = () => {
+        if (stream) {
+            stream.getTracks().forEach(track => track.stop());
+        }
+        
+        setCall({ isReceivingCall: false, from: '', name: '', signal: null, pic: '', type: 'video' });
         setCallAccepted(false);
+        setCallEnded(false);
+        setStream(null);
+        
+        if (myVideo.current) myVideo.current.srcObject = null;
+        if (userVideo.current) userVideo.current.srcObject = null;
+
+        // কল শেষ হলে মেসেজ পেজে নিয়ে যাওয়া
         window.location.href = '/messages';
     };
 
