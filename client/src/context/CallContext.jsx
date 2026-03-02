@@ -2,19 +2,34 @@ import React, { createContext, useState, useRef, useEffect, useContext } from 'r
 import { io } from 'socket.io-client';
 import Peer from 'simple-peer';
 
+// 🛠️ VITE/ESM GLOBAL FIX: simple-peer এর ইন্টারনাল ক্রাশ ঠেকানোর জন্য
+if (typeof window !== 'undefined' && !window.global) {
+  window.global = window;
+}
+
 const SocketContext = createContext();
 
-// সকেট কানেকশন - autoConnect: false দিয়ে শুরু করা ভালো যাতে কম্পোনেন্ট মাউন্ট হওয়ার পর কানেক্ট হয়
+// সকেট কানেকশন
 const socket = io('https://onyx-drift-app-final-u29m.onrender.com', {
   transports: ['websocket'],
-  secure: true
+  secure: true,
+  autoConnect: true
 });
 
 const ContextProvider = ({ children }) => {
   const [callAccepted, setCallAccepted] = useState(false);
   const [callEnded, setCallEnded] = useState(false);
   const [stream, setStream] = useState(null);
-  const [call, setCall] = useState({ isReceivingCall: false, from: '', name: '', signal: null });
+  
+  // ✅ Initial state হিসেবে একটি অবজেক্ট দেওয়া হয়েছে যাতে undefined এরর না আসে
+  const [call, setCall] = useState({ 
+    isReceivingCall: false, 
+    from: '', 
+    name: '', 
+    signal: null, 
+    pic: '' 
+  });
+  
   const [me, setMe] = useState('');
   const [name, setName] = useState('');
 
@@ -22,42 +37,55 @@ const ContextProvider = ({ children }) => {
   const userVideo = useRef();
   const connectionRef = useRef();
 
-  // ১. STUN সার্ভার কনফিগারেশন আপডেট (ICE Servers)
+  // STUN সার্ভার কনফিগারেশন (WebRTC Connectivity Fix)
   const peerConfig = {
     iceServers: [
       { urls: 'stun:stun.l.google.com:19302' },
       { urls: 'stun:stun1.l.google.com:19302' },
       { urls: 'stun:stun2.l.google.com:19302' },
-      { urls: 'stun:stun3.l.google.com:19302' },
-      { urls: 'stun:stun4.l.google.com:19302' },
     ],
   };
 
   useEffect(() => {
-    socket.on('me', (id) => setMe(id));
+    // সকেট কানেক্ট হলে নিজের আইডি সেভ করা
+    socket.on('me', (id) => {
+      console.log("My Socket ID:", id);
+      setMe(id);
+    });
 
+    // ইনকামিং কল লিসেনার
     socket.on('incomingCall', ({ from, name: callerName, signal, pic }) => {
-      // স্টেট আপডেট করার সময় আগের ডাটা ক্লিনিং
-      setCall({ isReceivingCall: true, from, name: callerName, signal, pic });
+      setCall({ 
+        isReceivingCall: true, 
+        from, 
+        name: callerName, 
+        signal, 
+        pic 
+      });
+    });
+
+    // কল এন্ডেড লিসেনার
+    socket.on('callEnded', () => {
+      leaveCall();
     });
 
     return () => {
       socket.off('me');
       socket.off('incomingCall');
+      socket.off('callEnded');
     };
   }, []);
 
-  // ২. ক্যামেরা পারমিশন হ্যান্ডলার (Improved)
+  // ২. মিডিয়া স্ট্রিম হ্যান্ডলার
   const getMediaStream = async () => {
     try {
-      // যদি আগে থেকেই স্ট্রিম থাকে তবে সেটি রিটার্ন করবে
       if (stream) return stream;
 
       const currentStream = await navigator.mediaDevices.getUserMedia({ 
         video: {
           width: { ideal: 640 },
           height: { ideal: 480 },
-          facingMode: "user" // ফোনের ফ্রন্ট ক্যামেরা নিশ্চিত করতে
+          facingMode: "user"
         }, 
         audio: true 
       });
@@ -69,19 +97,21 @@ const ContextProvider = ({ children }) => {
       return currentStream;
     } catch (err) {
       console.error("Camera Access Error:", err);
-      alert("Please allow camera/microphone access to make calls.");
       return null;
     }
   };
 
-  // ✅ কল রিসিভ করা (Answer Call) - Fixed Signal Handling
+  // ✅ কল রিসিভ করা (Answer Call)
   const answerCall = async () => {
     const userStream = await getMediaStream();
     if (!userStream) return;
 
     setCallAccepted(true);
+    setCallEnded(false);
 
-    const peer = new Peer({ 
+    // simple-peer Constructor fix for Vite
+    const PeerConstructor = Peer.default || Peer;
+    const peer = new PeerConstructor({ 
       initiator: false, 
       trickle: false, 
       stream: userStream,
@@ -98,7 +128,6 @@ const ContextProvider = ({ children }) => {
       }
     });
 
-    // সিগন্যাল ডাটা রিসিভ করা নিশ্চিত করা
     if (call.signal) {
       peer.signal(call.signal);
     }
@@ -107,11 +136,12 @@ const ContextProvider = ({ children }) => {
   };
 
   // 📞 কল করা (Initiate Call)
-  const callUser = async (id) => {
+  const callUser = async (id, userName, userPic) => {
     const userStream = await getMediaStream();
     if (!userStream) return;
 
-    const peer = new Peer({ 
+    const PeerConstructor = Peer.default || Peer;
+    const peer = new PeerConstructor({ 
       initiator: true, 
       trickle: false, 
       stream: userStream,
@@ -123,7 +153,8 @@ const ContextProvider = ({ children }) => {
         userToCall: id, 
         signalData: data, 
         from: me, 
-        name: name 
+        name: userName || name,
+        pic: userPic
       });
     });
 
@@ -135,29 +166,47 @@ const ContextProvider = ({ children }) => {
 
     socket.on('callAccepted', (signal) => {
       setCallAccepted(true);
-      if (peer) {
-        peer.signal(signal);
-      }
+      peer.signal(signal);
     });
 
     connectionRef.current = peer;
   };
 
+  // 🛑 কল শেষ করা
   const leaveCall = () => {
     setCallEnded(true);
+    setCallAccepted(false);
+    
     if (connectionRef.current) {
       connectionRef.current.destroy();
     }
+
     if (stream) {
       stream.getTracks().forEach(track => track.stop());
     }
-    window.location.reload(); // সেশন ক্লিন করতে রিলোড জরুরি
+
+    // স্টেট রিসেট
+    setCall({ isReceivingCall: false, from: '', name: '', signal: null, pic: '' });
+    setStream(null);
+    
+    // হার্ড রিলোড না করে ন্যাভিগেশন ব্যবহার করা ভালো, তবে WebRTC ক্লিনিংয়ের জন্য উইন্ডো রিলোড সেফ
+    window.location.href = '/messages'; 
   };
 
   return (
     <SocketContext.Provider value={{ 
-      call, callAccepted, myVideo, userVideo, stream, 
-      name, setName, answerCall, leaveCall, callUser, me 
+      call, 
+      callAccepted, 
+      callEnded,
+      myVideo, 
+      userVideo, 
+      stream, 
+      name, 
+      setName, 
+      answerCall, 
+      leaveCall, 
+      callUser, 
+      me 
     }}>
       {children}
     </SocketContext.Provider>

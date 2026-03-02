@@ -123,15 +123,20 @@ const io = new Server(server, {
 
 const redis = process.env.REDIS_URL ? new Redis(process.env.REDIS_URL) : null;
 const roomUsers = {}; 
-const userSocketMap = {}; // গুরুত্বপূর্ণ: {auth0Id: socketId} ম্যাপিংয়ের জন্য
+const userSocketMap = {}; 
+
+
 
 io.on("connection", (socket) => {
     
-    // অনলাইন ইউজার হ্যান্ডলিং
+    // ✅ ১. নিজের সকেট আইডি ক্লায়েন্টকে জানানো (CallContext এর জন্য গুরুত্বপূর্ণ)
+    socket.emit("me", socket.id);
+
+    // ২. অনলাইন ইউজার হ্যান্ডলিং
     socket.on("addNewUser", async (auth0Id) => { 
         if (!auth0Id) return;
         socket.userId = auth0Id; 
-        userSocketMap[auth0Id] = socket.id; // ম্যাপিং সেভ করা হচ্ছে
+        userSocketMap[auth0Id] = socket.id; 
         socket.join(auth0Id); 
         
         if (redis) {
@@ -139,16 +144,16 @@ io.on("connection", (socket) => {
             const allUsers = await redis.hgetall("online_users");
             io.emit("getOnlineUsers", Object.keys(allUsers).map(id => ({ userId: id })));
         }
+        console.log(`User Linked: ${auth0Id} as ${socket.id}`);
     });
 
-    /* --- 📞 ONE-TO-ONE CALL SIGNALS (FIXED) --- */
+    /* --- 📞 ONE-TO-ONE CALL SIGNALS (FIXED & SYNCED) --- */
     socket.on("callUser", (data) => {
-        // যদি রিসিভার অনলাইনে থাকে তবে তার সকেট আইডিতে পাঠানো হবে
         const recipientSocketId = userSocketMap[data.userToCall];
         if (recipientSocketId) {
             io.to(recipientSocketId).emit("incomingCall", { 
                 signal: data.signalData, 
-                from: socket.id, // রিসিভার যাতে উত্তর দিতে পারে
+                from: socket.id, 
                 name: data.name, 
                 pic: data.pic, 
                 type: data.type 
@@ -157,26 +162,25 @@ io.on("connection", (socket) => {
     });
 
     socket.on("answerCall", (data) => {
-        // সরাসরি কলদাতার সকেট আইডিতে সিগন্যাল পাঠানো হচ্ছে
+        // data.to হলো কলদাতার সকেট আইডি (from)
         io.to(data.to).emit("callAccepted", data.signal);
     });
 
     socket.on("endCall", (data) => {
-        const recipientSocketId = userSocketMap[data.to] || data.to;
-        io.to(recipientSocketId).emit("callEnded");
+        const target = userSocketMap[data.to] || data.to;
+        io.to(target).emit("callEnded");
     });
 
     /* --- 💬 MESSAGE & TYPING --- */
     socket.on("sendMessage", (message) => {
         if (message.receiverId) {
-            // ইউজারের রুমে পাঠানো হচ্ছে যাতে সব ডিভাইসে সিঙ্ক হয়
             io.to(message.receiverId).emit("getMessage", message);
         }
     });
 
     socket.on("typing", (data) => {
         if (data.receiverId) {
-            socket.to(data.receiverId).emit("typing", data);
+            io.to(data.receiverId).emit("typing", data);
         }
     });
 
@@ -205,7 +209,9 @@ io.on("connection", (socket) => {
     // ডিসকানেক্ট হ্যান্ডলার
     socket.on("disconnect", async () => {
         if (socket.userId) {
-            delete userSocketMap[socket.userId]; // ম্যাপিং ক্লিনআপ
+            delete userSocketMap[socket.userId]; 
+            // ডিসকানেক্ট হলে কল অটোমেটিক এন্ড মেসেজ পাঠানো
+            socket.broadcast.emit("callEnded");
         }
 
         const roomId = socket.roomId;
@@ -227,6 +233,7 @@ io.on("connection", (socket) => {
     🛡️ ERROR HANDLER & START
 ========================================================== */
 app.use((err, req, res, next) => {
+    console.error(err.stack);
     res.status(err.status || 500).json({ error: "Neural Grid Breakdown", message: err.message });
 });
 
