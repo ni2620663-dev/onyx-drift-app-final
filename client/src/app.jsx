@@ -47,19 +47,23 @@ export default function App() {
   const incomingAudio = useRef(null);
   const [userInteracted, setUserInteracted] = useState(false);
 
-  // ১. ইউজার ইন্টারঅ্যাকশন হ্যান্ডলার (ব্রাউজার পলিসি অনুযায়ী অডিও আনলক করা)
+  // ১. ইউজার ইন্টারঅ্যাকশন হ্যান্ডলার (ব্রাউজার পলিসি আনলক করা)
   useEffect(() => {
     const handleFirstInteraction = () => {
-      setUserInteracted(true);
-      if (incomingAudio.current) {
-        incomingAudio.current.load();
+      if (!userInteracted) {
+        setUserInteracted(true);
+        // অডিও প্রি-লোড করে ব্রাউজার পারমিশন নেওয়া
+        if (incomingAudio.current) {
+          incomingAudio.current.load();
+        }
+        // একবার ইন্টারঅ্যাকশন হলে লিসেনার রিমুভ করে দেওয়া
+        ["click", "touchstart", "keydown", "mousedown"].forEach(e => 
+          window.removeEventListener(e, handleFirstInteraction)
+        );
       }
-      ["click", "touchstart", "keydown"].forEach(e => 
-        window.removeEventListener(e, handleFirstInteraction)
-      );
     };
 
-    ["click", "touchstart", "keydown"].forEach(e => 
+    ["click", "touchstart", "keydown", "mousedown"].forEach(e => 
       window.addEventListener(e, handleFirstInteraction)
     );
 
@@ -67,36 +71,45 @@ export default function App() {
     incomingAudio.current.loop = true;
 
     return () => {
-      ["click", "touchstart", "keydown"].forEach(e => 
+      ["click", "touchstart", "keydown", "mousedown"].forEach(e => 
         window.removeEventListener(e, handleFirstInteraction)
       );
     };
-  }, []);
+  }, [userInteracted]);
 
-  // ২. রিংটোন এবং ভাইব্রেশন কন্ট্রোল
+  // ২. রিংটোন এবং সেফ ভাইব্রেশন কন্ট্রোল
   useEffect(() => {
     let vibrationInterval;
-    
-    if (call?.isReceivingCall && !callAccepted) {
-      if (userInteracted) {
-        incomingAudio.current?.play().catch(() => console.log("Audio play blocked"));
-        
-        // ভাইব্রেশন লজিক
-        if (navigator.vibrate) {
+
+    const startCallAlerts = () => {
+      // রিংটোন প্লে
+      incomingAudio.current?.play().catch(() => console.log("Audio blocked: needs user tap"));
+      
+      // ভাইব্রেশন লজিক (Try-Catch সহ যাতে ব্লক হলেও এরর না দেয়)
+      if (navigator.vibrate && userInteracted) {
+        try {
           navigator.vibrate([500, 200, 500]);
-          vibrationInterval = setInterval(() => navigator.vibrate([500, 200, 500]), 2000);
+          vibrationInterval = setInterval(() => {
+            navigator.vibrate([500, 200, 500]);
+          }, 2000);
+        } catch (e) {
+          console.warn("Vibration failed");
         }
       }
+    };
+
+    if (call?.isReceivingCall && !callAccepted) {
+      startCallAlerts();
     } else {
-      // স্টপ রিংটোন এবং ভাইব্রেশন
+      // কল শেষ বা রিসিভ হলে স্টপ করা
       incomingAudio.current?.pause();
       if (incomingAudio.current) incomingAudio.current.currentTime = 0;
       if (navigator.vibrate) navigator.vibrate(0);
-      if (vibrationInterval) clearInterval(vibrationInterval);
+      clearInterval(vibrationInterval);
     }
 
     return () => {
-      if (vibrationInterval) clearInterval(vibrationInterval);
+      clearInterval(vibrationInterval);
       if (navigator.vibrate) navigator.vibrate(0);
     };
   }, [call?.isReceivingCall, callAccepted, userInteracted]);
@@ -124,10 +137,11 @@ export default function App() {
     syncUserWithDB();
   }, [isAuthenticated, user, getAccessTokenSilently]);
 
-  // ৪. কল হ্যান্ডলার
-  const handleAnswer = async () => {
-    // পপ-আপ থেকে সরাসরি কল পেজে নিয়ে যাওয়া
+  // ৪. কল হ্যান্ডলার (Answer Button Click)
+  const handleAnswer = () => {
     const targetRoom = call.from || 'session';
+    // রিংটোন বন্ধ করে রিডাইরেক্ট করা
+    incomingAudio.current?.pause();
     navigate(`/call/${targetRoom}`);
   };
 
@@ -165,7 +179,7 @@ export default function App() {
                   />
                 </div>
                 <div>
-                  <h4 className="text-sm font-black text-white uppercase truncate max-w-[150px]">{call.name || "Unknown"}</h4>
+                  <h4 className="text-sm font-black text-white uppercase truncate max-w-[150px]">{call.name || "Unknown User"}</h4>
                   <p className="text-[10px] text-cyan-400 font-bold tracking-widest animate-pulse uppercase">Neural Link Request...</p>
                 </div>
               </div>
