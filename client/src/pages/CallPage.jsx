@@ -1,21 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import Peer from 'simple-peer'; 
-import { io } from "socket.io-client";
 import { motion, AnimatePresence } from 'framer-motion';
 import { FaMicrophone, FaVideo, FaPhoneSlash, FaMicrophoneSlash, FaVideoSlash } from 'react-icons/fa';
 import { useAuth0 } from "@auth0/auth0-react";
 import { useCall } from '../context/CallContext';
 import toast from 'react-hot-toast';
-
-// 🛠️ VITE GLOBAL FIX
-if (typeof window !== 'undefined' && !window.global) {
-    window.global = window;
-}
-
-const socket = io("https://onyx-drift-app-final-u29m.onrender.com", {
-    transports: ["websocket"],
-});
 
 const CallPage = () => {
     const { roomId } = useParams();
@@ -23,158 +12,66 @@ const CallPage = () => {
     const location = useLocation();
     const { user } = useAuth0();
     
-    // ✅ Fix: Default empty object to prevent "undefined" error
-    const { call = {} } = useCall(); 
+    // ✅ সব লজিক এখন Context থেকে আসবে, আলাদা সকেট এখানে লাগবে না
+    const { 
+        call, 
+        callAccepted, 
+        callEnded, 
+        myVideo, 
+        userVideo, 
+        stream, 
+        answerCall, 
+        callUser, 
+        leaveCall 
+    } = useCall(); 
 
     const queryParams = new URLSearchParams(location.search);
     const isAudioOnly = queryParams.get('mode') === 'audio';
     const remoteUserId = queryParams.get('to'); 
 
-    const [stream, setStream] = useState(null);
-    const [callAccepted, setCallAccepted] = useState(false);
-    const [callEnded, setCallEnded] = useState(false);
     const [isMicOn, setIsMicOn] = useState(true);
     const [isCamOn, setIsCamOn] = useState(!isAudioOnly);
-
-    const myVideo = useRef();
-    const userVideo = useRef();
-    const connectionRef = useRef();
     
-    // ✅ Fix: Local Assets for Ringtone Stability
+    // রিংটোন রেফারেন্স
     const ringtoneRef = useRef(new Audio('/sounds/incoming-call.mp3'));
 
-    const iceServers = {
-        iceServers: [
-            { urls: 'stun:stun.l.google.com:19302' },
-            { urls: 'stun:stun1.l.google.com:19302' },
-            { urls: 'stun:stun2.l.google.com:19302' },
-        ],
-    };
-
     useEffect(() => {
-        // রিংটোন হ্যান্ডলিং
+        // ১. ইনকামিং কল রিংটোন লজিক
         if (call?.isReceivingCall && !callAccepted) {
             ringtoneRef.current.loop = true;
-            ringtoneRef.current.play().catch(() => console.log("Interaction required for audio"));
+            ringtoneRef.current.play().catch(() => console.log("Interaction needed for audio"));
         }
 
-        const setupMedia = async () => {
-            try {
-                const currentStream = await navigator.mediaDevices.getUserMedia({ 
-                    video: !isAudioOnly ? { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "user" } : false, 
-                    audio: true 
-                });
-                
-                setStream(currentStream);
-                if (myVideo.current) myVideo.current.srcObject = currentStream;
-
-                // ✅ Logic Fix: Use optional chaining to safely check call object
-                if (remoteUserId) {
-                    initiateCall(currentStream, remoteUserId);
-                } else if (call?.isReceivingCall && call?.signal) {
-                    respondToCall(currentStream, call.signal);
-                }
-            } catch (err) {
-                console.error("Media Access Error:", err);
-                toast.error("Camera/Mic access denied!");
+        // ২. কল ইনিশিয়ালাইজেশন
+        const init = async () => {
+            if (remoteUserId) {
+                // আমরা কাউকে কল দিচ্ছি
+                await callUser(remoteUserId, user?.name, user?.picture, isAudioOnly);
+            } else if (call?.isReceivingCall && !callAccepted) {
+                // আমাদের কাছে কল এসেছে (Auto-answer setup বা Button Trigger)
+                // ফেসবুক স্টাইলে ইউজারকে 'Accept' ক্লিক করার সুযোগ দিতে হবে
+                // যদি এই পেজে আসা মানেই রিসিভ করা হয়, তবে:
+                await answerCall();
             }
         };
 
-        setupMedia();
-
-        socket.on("callAccepted", (signal) => {
-            setCallAccepted(true);
-            ringtoneRef.current.pause();
-            if (connectionRef.current) {
-                connectionRef.current.signal(signal);
-            }
-        });
-
-        socket.on("callEnded", () => {
-            endCallLocally();
-        });
+        init();
 
         return () => {
-            socket.off("callAccepted");
-            socket.off("callEnded");
             ringtoneRef.current.pause();
-            terminateTracks();
         };
-    }, [call?.isReceivingCall]); // Dependency added for stability
+    }, [remoteUserId, call?.isReceivingCall]);
 
-    const initiateCall = (myStream, targetId) => {
-        const PeerConstructor = Peer.default || Peer;
-        const peer = new PeerConstructor({
-            initiator: true,
-            trickle: false,
-            config: iceServers,
-            stream: myStream,
-        });
-
-        peer.on('signal', (data) => {
-            socket.emit('callUser', {
-                userToCall: targetId,
-                signalData: data,
-                from: socket.id,
-                name: user?.name,
-                pic: user?.picture,
-                type: isAudioOnly ? 'audio' : 'video'
-            });
-        });
-
-        peer.on('stream', (remoteStream) => {
-            if (userVideo.current) userVideo.current.srcObject = remoteStream;
-        });
-
-        connectionRef.current = peer;
-    };
-
-    const respondToCall = (myStream, incomingSignal) => {
-        setCallAccepted(true);
-        ringtoneRef.current.pause();
-        const PeerConstructor = Peer.default || Peer;
-        const peer = new PeerConstructor({
-            initiator: false,
-            trickle: false,
-            config: iceServers,
-            stream: myStream,
-        });
-
-        peer.on('signal', (data) => {
-            socket.emit('answerCall', { signal: data, to: call.from });
-        });
-
-        peer.on('stream', (remoteStream) => {
-            if (userVideo.current) userVideo.current.srcObject = remoteStream;
-        });
-
-        peer.signal(incomingSignal);
-        connectionRef.current = peer;
-    };
-
-    const terminateTracks = () => {
-        if (stream) {
-            stream.getTracks().forEach(track => track.stop());
+    // ৩. কল শেষ হলে নেভিগেট করা
+    useEffect(() => {
+        if (callEnded) {
+            ringtoneRef.current.pause();
+            const timer = setTimeout(() => navigate('/messages'), 2000);
+            return () => clearTimeout(timer);
         }
-    };
+    }, [callEnded, navigate]);
 
-    const endCallLocally = () => {
-        setCallEnded(true);
-        ringtoneRef.current.pause();
-        if (connectionRef.current) {
-            connectionRef.current.destroy();
-        }
-        terminateTracks();
-        navigate('/messages');
-        // window.location.reload(); // রিলোড না করে ন্যাভিগেট করাই বেটার
-    };
-
-    const handleEndCall = () => {
-        const target = remoteUserId || call?.from;
-        if (target) socket.emit("endCall", { to: target });
-        endCallLocally();
-    };
-
+    // কন্ট্রোল ফাংশন
     const toggleMic = () => {
         if (stream) {
             const audioTrack = stream.getAudioTracks()[0];
@@ -198,10 +95,14 @@ const CallPage = () => {
     return (
         <div className="fixed inset-0 bg-[#020617] overflow-hidden flex flex-col items-center justify-center font-sans z-[1000]">
             
-            {/* 📸 Remote Video Area */}
+            {/* 📸 Remote Video / Caller Info Area */}
             <AnimatePresence>
                 {callAccepted && !callEnded ? (
-                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="absolute inset-0 w-full h-full bg-black">
+                    <motion.div 
+                        initial={{ opacity: 0 }} 
+                        animate={{ opacity: 1 }} 
+                        className="absolute inset-0 w-full h-full bg-black"
+                    >
                         <video playsInline ref={userVideo} autoPlay className="w-full h-full object-cover" />
                     </motion.div>
                 ) : (
@@ -209,7 +110,7 @@ const CallPage = () => {
                         <div className="relative">
                             <div className="w-40 h-40 rounded-full border-4 border-cyan-500/10 border-t-cyan-500 animate-spin" />
                             <img 
-                                src={call?.pic || user?.picture || "/images/default-avatar.png"} 
+                                src={call?.pic || "/images/default-avatar.png"} 
                                 className="w-32 h-32 rounded-full absolute top-4 left-4 object-cover border-2 border-cyan-500 shadow-[0_0_20px_rgba(6,182,212,0.5)]" 
                                 alt="avatar" 
                             />
@@ -248,7 +149,7 @@ const CallPage = () => {
                 </button>
                 
                 <button 
-                    onClick={handleEndCall} 
+                    onClick={leaveCall} 
                     className="p-6 rounded-full bg-red-600 text-white shadow-[0_0_30px_rgba(220,38,38,0.5)] hover:scale-110 active:scale-95 transition-all"
                 >
                     <FaPhoneSlash size={28} />
