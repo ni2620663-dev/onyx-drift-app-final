@@ -59,7 +59,8 @@ const allowedOrigins = [
 
 const corsOptions = {
     origin: function (origin, callback) {
-        if (!origin || allowedOrigins.includes(origin)) {
+        // origin না থাকলে (যেমন মোবাইল অ্যাপ বা সার্ভার-টু-সার্ভার) বা লিস্টে থাকলে অ্যালাউ করবে
+        if (!origin || allowedOrigins.includes(origin.replace(/\/$/, ""))) {
             callback(null, true);
         } else {
             callback(new Error('Signal Blocked: CORS Security Policy'));
@@ -87,6 +88,7 @@ const updateNeuralPulse = async (req, res, next) => {
     try {
         const auth0Id = req.auth?.payload?.sub; 
         if (auth0Id) {
+            // await করার দরকার নেই যাতে API রেসপন্স স্লো না হয়
             User.updateOne(
                 { auth0Id: auth0Id },
                 { $set: { "deathSwitch.lastPulseTimestamp": new Date() } }
@@ -100,8 +102,9 @@ const updateNeuralPulse = async (req, res, next) => {
     📡 API ROUTES
 ========================================================== */
 app.get("/", (req, res) => res.status(200).send("🚀 OnyxDrift Neural Core Online!"));
+
+// রাউটগুলো ডিফাইন করার সময় সঠিক মিডলওয়্যার সিকোয়েন্স নিশ্চিত করা হয়েছে
 app.get("/api/posts/neural-feed", checkJwt, updateNeuralPulse, getNeuralFeed);
-app.use("/api/user", checkJwt, updateNeuralPulse, userRoutes); 
 app.use("/api/users", checkJwt, updateNeuralPulse, userRoutes); 
 app.use("/api/profile", checkJwt, updateNeuralPulse, profileRoutes);
 app.use("/api/posts", checkJwt, updateNeuralPulse, postRoutes);
@@ -129,7 +132,7 @@ const userSocketMap = {};
 
 io.on("connection", (socket) => {
     
-    // ✅ ১. নিজের সকেট আইডি ক্লায়েন্টকে জানানো (CallContext এর জন্য গুরুত্বপূর্ণ)
+    // ১. নিজের সকেট আইডি ক্লায়েন্টকে জানানো
     socket.emit("me", socket.id);
 
     // ২. অনলাইন ইউজার হ্যান্ডলিং
@@ -139,15 +142,18 @@ io.on("connection", (socket) => {
         userSocketMap[auth0Id] = socket.id; 
         socket.join(auth0Id); 
         
-        if (redis) {
-            await redis.hset("online_users", auth0Id, socket.id);
-            const allUsers = await redis.hgetall("online_users");
-            io.emit("getOnlineUsers", Object.keys(allUsers).map(id => ({ userId: id })));
-        }
+        try {
+            if (redis) {
+                await redis.hset("online_users", auth0Id, socket.id);
+                const allUsers = await redis.hgetall("online_users");
+                io.emit("getOnlineUsers", Object.keys(allUsers).map(id => ({ userId: id })));
+            }
+        } catch (e) { console.error("Redis Sync Error"); }
+        
         console.log(`User Linked: ${auth0Id} as ${socket.id}`);
     });
 
-    /* --- 📞 ONE-TO-ONE CALL SIGNALS (FIXED & SYNCED) --- */
+    /* --- 📞 CALL SIGNALS --- */
     socket.on("callUser", (data) => {
         const recipientSocketId = userSocketMap[data.userToCall];
         if (recipientSocketId) {
@@ -162,7 +168,6 @@ io.on("connection", (socket) => {
     });
 
     socket.on("answerCall", (data) => {
-        // data.to হলো কলদাতার সকেট আইডি (from)
         io.to(data.to).emit("callAccepted", data.signal);
     });
 
@@ -174,43 +179,26 @@ io.on("connection", (socket) => {
     /* --- 💬 MESSAGE & TYPING --- */
     socket.on("sendMessage", (message) => {
         if (message.receiverId) {
+            // receiverId যদি Auth0 ID হয় তবে তাকে রুমে পাঠানো হচ্ছে
             io.to(message.receiverId).emit("getMessage", message);
         }
     });
 
-    socket.on("typing", (data) => {
-        if (data.receiverId) {
-            io.to(data.receiverId).emit("typing", data);
-        }
-    });
-
-    /* --- 👥 GROUP CALLING LOGIC --- */
+    /* --- 👥 GROUP CALLING --- */
     socket.on("join-room", (payload) => {
         const { roomId } = payload;
         socket.roomId = roomId;
+        socket.join(roomId); // Socket.io এর নেটিভ রুম ফাংশন ব্যবহার
         if (roomUsers[roomId]) roomUsers[roomId].push(socket.id);
         else roomUsers[roomId] = [socket.id];
+        
         const otherUsersInRoom = roomUsers[roomId].filter(id => id !== socket.id);
         socket.emit("all-users", otherUsersInRoom);
     });
 
-    socket.on("sending-signal", payload => {
-        io.to(payload.userToSignal).emit('user-joined', { 
-            signal: payload.signal, callerID: socket.id 
-        });
-    });
-
-    socket.on("returning-signal", payload => {
-        io.to(payload.callerID).emit('receiving-returned-signal', { 
-            signal: payload.signal, id: socket.id 
-        });
-    });
-
-    // ডিসকানেক্ট হ্যান্ডলার
     socket.on("disconnect", async () => {
         if (socket.userId) {
             delete userSocketMap[socket.userId]; 
-            // ডিসকানেক্ট হলে কল অটোমেটিক এন্ড মেসেজ পাঠানো
             socket.broadcast.emit("callEnded");
         }
 
@@ -218,14 +206,15 @@ io.on("connection", (socket) => {
         if (roomId && roomUsers[roomId]) {
             roomUsers[roomId] = roomUsers[roomId].filter(id => id !== socket.id);
             socket.to(roomId).emit("user-left", socket.id);
-            if (roomUsers[roomId].length === 0) delete roomUsers[roomId];
         }
 
-        if (redis && socket.userId) {
-            await redis.hdel("online_users", socket.userId);
-            const allUsers = await redis.hgetall("online_users");
-            io.emit("getOnlineUsers", Object.keys(allUsers).map(id => ({ userId: id })));
-        }
+        try {
+            if (redis && socket.userId) {
+                await redis.hdel("online_users", socket.userId);
+                const allUsers = await redis.hgetall("online_users");
+                io.emit("getOnlineUsers", Object.keys(allUsers).map(id => ({ userId: id })));
+            }
+        } catch (e) {}
     });
 });
 

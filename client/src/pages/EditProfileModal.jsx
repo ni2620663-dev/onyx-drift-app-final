@@ -1,218 +1,156 @@
-import React, { useState, useRef, useMemo } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { FaCamera, FaTimes } from "react-icons/fa";
-import toast from "react-hot-toast";
+import React, { useState } from 'react';
+import { motion } from 'framer-motion';
+import { HiXMark } from "react-icons/hi2";
+import { FaCamera } from "react-icons/fa";
+import axios from 'axios';
+import { useAuth0 } from "@auth0/auth0-react";
+import toast from 'react-hot-toast';
 
-const EditProfileModal = ({ isOpen, onClose, user, onUpdate }) => {
-  const avatarInputRef = useRef(null);
-  const coverInputRef = useRef(null);
+const BACKEND_URL = "https://onyx-drift-app-final-u29m.onrender.com";
 
-  const [isSaving, setIsSaving] = useState(false);
-
-  // Initial Data for comparison
-  const initialData = useMemo(() => ({
+export default function EditProfileModal({ isOpen, onClose, user, onUpdate }) {
+  const { getAccessTokenSilently } = useAuth0();
+  
+  // ১. টেক্সট ডাটা স্টেট
+  const [formData, setFormData] = useState({
     name: user?.name || "",
     bio: user?.bio || "",
     location: user?.location || "",
-    website: user?.website || "",
-    avatar: user?.avatar || user?.picture || "",
-    coverImg: user?.coverImg || ""
-  }), [user]);
+    website: user?.website || ""
+  });
 
-  const [editData, setEditData] = useState(initialData);
+  // ২. ফাইল স্টেট
+  const [avatarFile, setAvatarFile] = useState(null);
+  const [coverFile, setCoverFile] = useState(null);
+  const [loading, setLoading] = useState(false);
 
-  // Change detection
-  const hasChanged = useMemo(() => {
-    return JSON.stringify(editData) !== JSON.stringify(initialData);
-  }, [editData, initialData]);
+  // ৩. আপডেট হ্যান্ডলার
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
 
-  const handleImageChange = (e, type) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    if (file.size > 2 * 1024 * 1024) { // 2MB limit
-      return toast.error("Image must be under 2MB");
-    }
-
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setEditData(prev => ({ ...prev, [type]: reader.result }));
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const handleSave = async () => {
     try {
-      setIsSaving(true);
-      await onUpdate(editData);
-      toast.success("Identity Updated 🚀");
-      onClose();
+      const token = await getAccessTokenSilently();
+      
+      // FormData তৈরি (ইমেজ পাঠানোর জন্য এটি আবশ্যক)
+      const data = new FormData();
+      data.append('name', formData.name);
+      data.append('bio', formData.bio);
+      data.append('location', formData.location);
+      data.append('website', formData.website);
+      
+      if (avatarFile) data.append('avatar', avatarFile);
+      if (coverFile) data.append('coverImg', coverFile);
+
+      await axios.put(`${BACKEND_URL}/api/profile/update`, data, {
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'multipart/form-data' // ফাইল পাঠানোর জন্য হেডার
+        }
+      });
+
+      toast.success("Neural Identity Re-synced! ⚡");
+      onUpdate(); 
+      onClose();  
     } catch (err) {
-      toast.error("Update failed");
+      toast.error("Sync Failure: Database rejected input.");
+      console.error(err);
     } finally {
-      setIsSaving(false);
+      setLoading(false);
     }
   };
 
   return (
-    <AnimatePresence>
-      {isOpen && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="fixed inset-0 bg-black/80 backdrop-blur-md z-[100] flex justify-center items-start pt-10 px-4 overflow-y-auto pb-10"
-        >
-          <motion.div
-            initial={{ scale: 0.9, opacity: 0, y: 20 }}
-            animate={{ scale: 1, opacity: 1, y: 0 }}
-            exit={{ scale: 0.9, opacity: 0, y: 20 }}
-            className="bg-black w-full max-w-lg rounded-3xl border border-white/10 shadow-[0_0_50px_rgba(0,0,0,0.5)] overflow-hidden"
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <motion.div 
+        initial={{ scale: 0.95, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        className="bg-black border border-zinc-800 w-full max-w-lg rounded-2xl overflow-hidden shadow-2xl font-mono"
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between p-4 border-b border-zinc-900 bg-black/50 backdrop-blur-md sticky top-0 z-20">
+          <div className="flex items-center gap-4">
+            <button onClick={onClose} className="text-white hover:bg-zinc-900 p-2 rounded-full transition-colors">
+              <HiXMark size={20} />
+            </button>
+            <h3 className="font-black uppercase tracking-widest text-xs text-zinc-400">Edit Identity</h3>
+          </div>
+          <button 
+            onClick={handleSubmit}
+            disabled={loading}
+            className="bg-white text-black px-6 py-1.5 rounded-full font-bold text-sm hover:bg-cyan-400 transition-all disabled:opacity-50"
           >
-            {/* Header */}
-            <div className="flex justify-between items-center p-4 border-b border-white/5 sticky top-0 bg-black/90 backdrop-blur-sm z-20">
-              <div className="flex items-center gap-6">
-                <button 
-                  onClick={onClose}
-                  className="p-2 hover:bg-white/5 rounded-full transition-colors"
-                >
-                  <FaTimes className="text-white" />
-                </button>
-                <h3 className="text-lg font-black uppercase tracking-widest text-white/90">Edit Identity</h3>
-              </div>
+            {loading ? "Syncing..." : "Save"}
+          </button>
+        </div>
 
-              <button
-                onClick={handleSave}
-                disabled={!hasChanged || isSaving}
-                className={`px-6 py-2 rounded-full font-black text-xs uppercase tracking-widest transition-all ${
-                  hasChanged && !isSaving
-                    ? "bg-cyan-500 text-black hover:bg-cyan-400 shadow-[0_0_15px_rgba(6,182,212,0.4)]"
-                    : "bg-zinc-800 text-zinc-500 cursor-not-allowed"
-                }`}
-              >
-                {isSaving ? "Syncing..." : "Save"}
-              </button>
+        <form className="overflow-y-auto max-h-[80vh] custom-scrollbar">
+          {/* Cover Image Upload */}
+          <div className="relative h-32 bg-zinc-900 group">
+            <img 
+              src={coverFile ? URL.createObjectURL(coverFile) : (user?.coverImg || "https://via.placeholder.com/1000x300")} 
+              className="w-full h-full object-cover opacity-60" 
+              alt="cover" 
+            />
+            <label className="absolute inset-0 flex items-center justify-center cursor-pointer group-hover:bg-black/20 transition-all">
+              <div className="bg-black/50 p-3 rounded-full border border-white/20 hover:scale-110 transition-transform">
+                <FaCamera className="text-white" />
+              </div>
+              <input type="file" className="hidden" onChange={(e) => setCoverFile(e.target.files[0])} accept="image/*" />
+            </label>
+          </div>
+
+          {/* Avatar Image Upload */}
+          <div className="px-6 -mt-10 relative z-10">
+            <div className="relative w-20 h-20 rounded-full border-4 border-black bg-zinc-900 overflow-hidden group">
+              <img 
+                src={avatarFile ? URL.createObjectURL(avatarFile) : (user?.avatar || user?.picture || "")} 
+                className="w-full h-full object-cover" 
+                alt="avatar" 
+              />
+              <label className="absolute inset-0 flex items-center justify-center cursor-pointer bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity">
+                <FaCamera size={14} className="text-white" />
+                <input type="file" className="hidden" onChange={(e) => setAvatarFile(e.target.files[0])} accept="image/*" />
+              </label>
+            </div>
+          </div>
+
+          {/* Input Fields */}
+          <div className="p-6 space-y-5">
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-zinc-500 uppercase ml-1">Display Name</label>
+              <input 
+                type="text"
+                value={formData.name}
+                onChange={(e) => setFormData({...formData, name: e.target.value})}
+                className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl p-3 focus:border-cyan-500/50 outline-none transition-all text-white text-sm"
+              />
             </div>
 
-            <div className="pb-6">
-              {/* Cover Photo */}
-              <div
-                className="relative h-44 bg-zinc-900 group cursor-pointer overflow-hidden"
-                onClick={() => coverInputRef.current.click()}
-              >
-                <img
-                  src={editData.coverImg || "https://via.placeholder.com/1500x500?text=+"}
-                  className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                  alt="cover"
-                />
-                <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                  <div className="bg-black/40 p-4 rounded-full backdrop-blur-md border border-white/20">
-                    <FaCamera className="text-white text-xl" />
-                  </div>
-                </div>
-                <input
-                  type="file"
-                  accept="image/*"
-                  hidden
-                  ref={coverInputRef}
-                  onChange={(e) => handleImageChange(e, "coverImg")}
-                />
-              </div>
-
-              {/* Avatar Photo */}
-              <div className="px-4 relative -mt-16 mb-8">
-                <div
-                  className="w-32 h-32 rounded-full border-4 border-black overflow-hidden group cursor-pointer relative bg-zinc-900 shadow-xl"
-                  onClick={() => avatarInputRef.current.click()}
-                >
-                  <img
-                    src={editData.avatar}
-                    className="w-full h-full object-cover group-hover:opacity-60 transition-opacity"
-                    alt="avatar"
-                  />
-                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                    <FaCamera className="text-white text-2xl" />
-                  </div>
-                </div>
-                <input
-                  type="file"
-                  accept="image/*"
-                  hidden
-                  ref={avatarInputRef}
-                  onChange={(e) => handleImageChange(e, "avatar")}
-                />
-              </div>
-
-              {/* Form Fields */}
-              <div className="px-6 space-y-5">
-                {/* Name Input */}
-                <div className="space-y-1 group">
-                  <label className="text-[10px] font-black uppercase tracking-[0.2em] text-cyan-500 ml-1">Full Name</label>
-                  <div className="bg-white/5 border border-white/10 rounded-xl p-3 focus-within:border-cyan-500/50 transition-all">
-                    <input
-                      type="text"
-                      value={editData.name}
-                      onChange={(e) => setEditData({ ...editData, name: e.target.value })}
-                      className="bg-transparent w-full outline-none text-white text-sm"
-                      placeholder="Enter your name"
-                    />
-                  </div>
-                </div>
-
-                {/* Bio Input */}
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black uppercase tracking-[0.2em] text-cyan-500 ml-1">Neural Bio</label>
-                  <div className="bg-white/5 border border-white/10 rounded-xl p-3 focus-within:border-cyan-500/50 transition-all">
-                    <textarea
-                      maxLength={160}
-                      rows={3}
-                      value={editData.bio}
-                      onChange={(e) => setEditData({ ...editData, bio: e.target.value })}
-                      className="bg-transparent w-full outline-none text-white text-sm resize-none"
-                      placeholder="Tell the grid about yourself..."
-                    />
-                    <div className="text-right text-[10px] text-zinc-600 mt-1 font-mono">
-                      {editData.bio.length}/160
-                    </div>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  {/* Location */}
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-black uppercase tracking-[0.2em] text-cyan-500 ml-1">Location</label>
-                    <div className="bg-white/5 border border-white/10 rounded-xl p-3 focus-within:border-cyan-500/50 transition-all">
-                      <input
-                        type="text"
-                        value={editData.location}
-                        onChange={(e) => setEditData({ ...editData, location: e.target.value })}
-                        className="bg-transparent w-full outline-none text-white text-sm"
-                        placeholder="Neo-City"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Website */}
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-black uppercase tracking-[0.2em] text-cyan-500 ml-1">Website</label>
-                    <div className="bg-white/5 border border-white/10 rounded-xl p-3 focus-within:border-cyan-500/50 transition-all">
-                      <input
-                        type="text"
-                        value={editData.website}
-                        onChange={(e) => setEditData({ ...editData, website: e.target.value })}
-                        className="bg-transparent w-full outline-none text-white text-sm"
-                        placeholder="link.tree/drifter"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-zinc-500 uppercase ml-1">Neural Bio</label>
+              <textarea 
+                rows="3"
+                value={formData.bio}
+                onChange={(e) => setFormData({...formData, bio: e.target.value})}
+                className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl p-3 focus:border-cyan-500/50 outline-none transition-all text-white text-sm resize-none"
+                placeholder="Broadcast your status..."
+              />
             </div>
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-zinc-500 uppercase ml-1">Location</label>
+              <input 
+                type="text"
+                value={formData.location}
+                onChange={(e) => setFormData({...formData, location: e.target.value})}
+                className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl p-3 focus:border-cyan-500/50 outline-none transition-all text-white text-sm"
+                placeholder="Neo-City, Sector 7"
+              />
+            </div>
+          </div>
+        </form>
+      </motion.div>
+    </div>
   );
-};
-
-export default EditProfileModal;
+}

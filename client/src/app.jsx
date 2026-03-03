@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, Suspense } from "react";
+import React, { useEffect, useRef, useState, Suspense, lazy } from "react";
 import { Routes, Route, useLocation, Navigate, useNavigate } from "react-router-dom";
 import { useAuth0, withAuthenticationRequired } from "@auth0/auth0-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -7,18 +7,22 @@ import axios from 'axios';
 import { HiXMark } from "react-icons/hi2";
 import { FaPhone } from "react-icons/fa";
 
+// Components
 import Sidebar from "./components/Sidebar";
-import Messenger from "./pages/Messenger";
-import PremiumHomeFeed from "./pages/PremiumHomeFeed";
-import Profile from "./pages/Profile";
-import Settings from "./pages/Settings"; 
-import ReelsFeed from "./pages/ReelsFeed";
-import Landing from "./pages/Landing"; 
-import JoinPage from "./pages/JoinPage";
-import CallPage from "./pages/CallPage";
 import CustomCursor from "./components/CustomCursor";
 import MobileNav from "./components/MobileNav";
-import AITwinSync from './components/AITwinSync';
+
+// Pages (Lazy Loading for better performance)
+const Messenger = lazy(() => import("./pages/Messenger"));
+const PremiumHomeFeed = lazy(() => import("./pages/PremiumHomeFeed"));
+// App.jsx এর ১৮ নম্বর লাইনে এটি পরিবর্তন করুন:
+const ProfilePage = lazy(() => import("./pages/Profile")); // ProfilePage এর বদলে Profile
+const Settings = lazy(() => import("./pages/Settings")); 
+const ReelsFeed = lazy(() => import("./pages/ReelsFeed"));
+const Landing = lazy(() => import("./pages/Landing")); 
+const JoinPage = lazy(() => import("./pages/JoinPage"));
+const CallPage = lazy(() => import("./pages/CallPage"));
+const AITwinSync = lazy(() => import("./components/AITwinSync"));
 
 import { useCall } from './context/CallContext';
 
@@ -27,6 +31,7 @@ const DEFAULT_AVATAR = "/images/default-avatar.png";
 const BACKEND_URL = "https://onyx-drift-app-final-u29m.onrender.com";
 const API_AUDIENCE = "https://onyx-drift-api.com";
 
+// Protected Route Wrapper
 const ProtectedRoute = ({ component: Component, ...props }) => {
   const AuthenticatedComponent = withAuthenticationRequired(Component, {
     onRedirecting: () => (
@@ -47,16 +52,14 @@ export default function App() {
   const incomingAudio = useRef(null);
   const [userInteracted, setUserInteracted] = useState(false);
 
-  // ১. ইউজার ইন্টারঅ্যাকশন হ্যান্ডলার (ব্রাউজার পলিসি আনলক করা)
+  // ১. ইউজার ইন্টারঅ্যাকশন হ্যান্ডলার
   useEffect(() => {
     const handleFirstInteraction = () => {
       if (!userInteracted) {
         setUserInteracted(true);
-        // অডিও প্রি-লোড করে ব্রাউজার পারমিশন নেওয়া
         if (incomingAudio.current) {
           incomingAudio.current.load();
         }
-        // একবার ইন্টারঅ্যাকশন হলে লিসেনার রিমুভ করে দেওয়া
         ["click", "touchstart", "keydown", "mousedown"].forEach(e => 
           window.removeEventListener(e, handleFirstInteraction)
         );
@@ -77,15 +80,13 @@ export default function App() {
     };
   }, [userInteracted]);
 
-  // ২. রিংটোন এবং সেফ ভাইব্রেশন কন্ট্রোল
+  // ২. রিংটোন এবং ভাইব্রেশন কন্ট্রোল
   useEffect(() => {
     let vibrationInterval;
 
     const startCallAlerts = () => {
-      // রিংটোন প্লে
       incomingAudio.current?.play().catch(() => console.log("Audio blocked: needs user tap"));
       
-      // ভাইব্রেশন লজিক (Try-Catch সহ যাতে ব্লক হলেও এরর না দেয়)
       if (navigator.vibrate && userInteracted) {
         try {
           navigator.vibrate([500, 200, 500]);
@@ -101,7 +102,6 @@ export default function App() {
     if (call?.isReceivingCall && !callAccepted) {
       startCallAlerts();
     } else {
-      // কল শেষ বা রিসিভ হলে স্টপ করা
       incomingAudio.current?.pause();
       if (incomingAudio.current) incomingAudio.current.currentTime = 0;
       if (navigator.vibrate) navigator.vibrate(0);
@@ -137,29 +137,28 @@ export default function App() {
     syncUserWithDB();
   }, [isAuthenticated, user, getAccessTokenSilently]);
 
-  // ৪. কল হ্যান্ডলার (Answer Button Click)
+  // ৪. কল হ্যান্ডলার
   const handleAnswer = () => {
     const targetRoom = call.from || 'session';
-    // রিংটোন বন্ধ করে রিডাইরেক্ট করা
     incomingAudio.current?.pause();
     navigate(`/call/${targetRoom}`);
   };
 
-  // ৫. পেজ কন্ডিশনস
+  // ৫. লেআউট কন্ডিশনস
   const isFullWidthPage = ["/messenger", "/messages", "/settings", "/", "/join", "/reels", "/ai-twin", "/call"].some(path => 
     location.pathname === path || location.pathname.startsWith(path + "/")
   );
   
   const isCallPage = location.pathname.startsWith("/call");
 
-  if (isLoading) return <div className="h-screen bg-[#020617] flex items-center justify-center text-cyan-500 font-mono animate-pulse">ONYX_DRIFT_OS: CONNECTING...</div>;
+  if (isLoading) return <div className="h-screen bg-[#020617] flex items-center justify-center text-cyan-500 font-mono animate-pulse uppercase">Onyx_Drift_OS: Connecting...</div>;
 
   return (
     <div className="min-h-screen bg-[#020617] text-gray-200 font-sans selection:bg-cyan-500/30 overflow-x-hidden">
       <Toaster position="top-center" reverseOrder={false} />
       <CustomCursor />
 
-      {/* 📞 Facebook Style Incoming Call Overlay */}
+      {/* 📞 Incoming Call Overlay */}
       <AnimatePresence>
         {call?.isReceivingCall && !callAccepted && !isCallPage && (
           <motion.div 
@@ -179,7 +178,7 @@ export default function App() {
                   />
                 </div>
                 <div>
-                  <h4 className="text-sm font-black text-white uppercase truncate max-w-[150px]">{call.name || "Unknown User"}</h4>
+                  <h4 className="text-sm font-black text-white uppercase truncate max-w-[150px]">{call.name || "Unknown"}</h4>
                   <p className="text-[10px] text-cyan-400 font-bold tracking-widest animate-pulse uppercase">Neural Link Request...</p>
                 </div>
               </div>
@@ -211,13 +210,18 @@ export default function App() {
               </aside>
             )}
             <main className={`flex-1 ${isFullWidthPage ? "" : "pb-24 lg:pb-10 pt-6"}`}>
-              <Suspense fallback={<div className="h-screen flex items-center justify-center text-cyan-500 font-mono">Neural Loading...</div>}>
+              <Suspense fallback={
+                <div className="h-screen flex flex-col items-center justify-center bg-[#020617]">
+                  <div className="w-10 h-10 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin mb-4" />
+                  <p className="text-cyan-500 font-mono text-xs uppercase tracking-[0.3em]">Neural Loading...</p>
+                </div>
+              }>
                 <Routes>
                   <Route path="/" element={isAuthenticated ? <Navigate to="/feed" replace /> : <Landing />} />
                   <Route path="/join" element={<JoinPage />} /> 
                   <Route path="/feed" element={<ProtectedRoute component={PremiumHomeFeed} />} />
                   <Route path="/reels" element={<ProtectedRoute component={ReelsFeed} />} />
-                  <Route path="/profile/:userId" element={<ProtectedRoute component={Profile} />} />
+                  <Route path="/profile/:userId" element={<ProtectedRoute component={ProfilePage} />} />
                   <Route path="/messages/:userId?" element={<ProtectedRoute component={Messenger} />} />
                   <Route path="/messenger/:userId?" element={<ProtectedRoute component={Messenger} />} />
                   <Route path="/settings" element={<ProtectedRoute component={Settings} />} />

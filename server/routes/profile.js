@@ -10,19 +10,17 @@ const router = express.Router();
 ========================================================== */
 router.get("/", async (req, res) => {
   try {
-    const myId = req.auth?.payload?.sub;
+    const myId = req.auth?.payload?.sub; // Auth0 আইডি
     if (!myId) return res.status(401).json({ msg: "Neural Identity missing" });
 
-    // ডাটাবেজে ইউজার খোঁজা (auth0Id দিয়ে)
     let user = await User.findOne({ auth0Id: myId }).select("-__v").lean();
 
     if (!user) {
-      // যদি ইউজার ডাটাবেজে না থাকে, তবে নতুন প্রোফাইল তৈরি করা
       const newUser = new User({
         auth0Id: myId,
         name: req.auth.payload.name || "Drifter_" + myId.slice(-4),
         nickname: req.auth.payload.nickname || "drifter_" + Math.floor(Math.random() * 10000),
-        avatar: req.auth.payload.picture || `https://ui-avatars.com/api/?name=Drifter&background=06b6d4&color=fff`,
+        avatar: req.auth.payload.picture || `https://api.dicebear.com/7.x/bottts/svg?seed=${myId}`,
         email: req.auth.payload.email || "",
         neuralRank: 1, 
         drifterLevel: "Novice Drifter",
@@ -39,17 +37,15 @@ router.get("/", async (req, res) => {
 });
 
 /* ==========================================================
-    2️⃣ GET PROFILE BY ID (URL parameter decode fixed)
+    2️⃣ GET PROFILE BY ID
 ========================================================== */
 router.get("/:id", async (req, res) => {
   try {
     const targetId = decodeURIComponent(req.params.id);
-    
-    // ডাটাবেজে ইউজার খোঁজা
     let user = await User.findOne({ auth0Id: targetId }).select("-__v").lean();
     
     if (!user) {
-      return res.status(404).json({ msg: "Drifter node not found in this sector" });
+      return res.status(404).json({ msg: "Drifter node not found" });
     }
     res.json(user);
   } catch (err) {
@@ -58,11 +54,12 @@ router.get("/:id", async (req, res) => {
 });
 
 /* ==========================================================
-    3️⃣ UPDATE PROFILE (Unified Update Logic)
+    3️⃣ UPDATE PROFILE (ইমেজ আপলোড সহ)
 ========================================================== */
-router.put("/update-profile", upload.fields([
+// ফ্রন্টএন্ডে /api/profile/update কল করা হচ্ছে, তাই রুটটি '/update' রাখা হলো
+router.put("/update", upload.fields([
   { name: 'avatar', maxCount: 1 },
-  { name: 'cover', maxCount: 1 }
+  { name: 'coverImg', maxCount: 1 } // ফ্রন্টএন্ডে coverImg পাঠানো হচ্ছে
 ]), async (req, res) => {
   try {
     const myId = req.auth?.payload?.sub;
@@ -71,12 +68,17 @@ router.put("/update-profile", upload.fields([
     const { nickname, name, bio, location, website } = req.body;
     let updateFields = { name, nickname, bio, location, website };
 
-    // মাল্টার ফাইল হ্যান্ডলিং (Cloudinary URL থাকলে সেটি আপডেট হবে)
+    // মাল্টার মাধ্যমে Cloudinary থেকে আসা URL হ্যান্ডলিং
     if (req.files) {
-      if (req.files.avatar) updateFields.avatar = req.files.avatar[0].path;
-      if (req.files.cover) updateFields.coverImg = req.files.cover[0].path;
+      if (req.files.avatar) {
+        updateFields.avatar = req.files.avatar[0].path;
+      }
+      if (req.files.coverImg) {
+        updateFields.coverImg = req.files.coverImg[0].path;
+      }
     }
 
+    // ডাটাবেস আপডেট
     const updatedUser = await User.findOneAndUpdate(
       { auth0Id: myId }, 
       { $set: updateFields },
@@ -85,14 +87,15 @@ router.put("/update-profile", upload.fields([
 
     res.json(updatedUser);
   } catch (err) {
+    console.error("Update Error:", err);
     res.status(500).json({ msg: 'Identity Sync Failed' });
   }
 });
 
 /* ==========================================================
-    🔗 4️⃣ ESTABLISH LINK (Follow/Unfollow logic)
+    🔗 4️⃣ FOLLOW/UNFOLLOW LOGIC
 ========================================================== */
-router.post("/establish-link/:targetId", async (req, res) => {
+router.post("/follow/:targetId", async (req, res) => {
   try {
     const myId = req.auth?.payload?.sub; 
     const targetId = decodeURIComponent(req.params.targetId);
@@ -105,13 +108,15 @@ router.post("/establish-link/:targetId", async (req, res) => {
     const isLinked = targetUser.followers.includes(myId);
 
     if (isLinked) {
+      // Unfollow
       await User.findOneAndUpdate({ auth0Id: myId }, { $pull: { following: targetId } });
       await User.findOneAndUpdate({ auth0Id: targetId }, { $pull: { followers: myId } });
-      return res.json({ linked: false, msg: "Neural Link Severed! 🛑" });
+      return res.json({ linked: false, msg: "Link Severed" });
     } else {
+      // Follow
       await User.findOneAndUpdate({ auth0Id: myId }, { $addToSet: { following: targetId } });
       await User.findOneAndUpdate({ auth0Id: targetId }, { $addToSet: { followers: myId } });
-      return res.json({ linked: true, msg: "Neural Link Established! ⚡" });
+      return res.json({ linked: true, msg: "Link Established" });
     }
   } catch (err) {
     res.status(500).json({ msg: "Link protocol failed" });
@@ -119,18 +124,18 @@ router.post("/establish-link/:targetId", async (req, res) => {
 });
 
 /* ==========================================================
-    🛰️ 5️⃣ GET USER SIGNALS (Posts with Author Data)
+    🛰️ 5️⃣ GET USER SIGNALS (Posts)
 ========================================================== */
 router.get("/posts/user/:userId", async (req, res) => {
   try {
     const targetUserId = decodeURIComponent(req.params.userId);
     
-    // ডাটাবেজে পোস্ট খোঁজা (authorAuth0Id ফিল্ড ব্যবহার করে)
+    // authorAuth0Id অথবা authorId আপনার মডেল অনুযায়ী চেক করুন
     const posts = await Post.find({ authorAuth0Id: targetUserId })
       .sort({ createdAt: -1 })
       .lean();
 
-    res.json(posts);
+    res.json({ posts, hasMore: false }); // ফ্রন্টএন্ডের প্রত্যাশা অনুযায়ী অবজেক্ট পাঠানো
   } catch (err) {
     res.status(500).json({ msg: "Error fetching user signals" });
   }
