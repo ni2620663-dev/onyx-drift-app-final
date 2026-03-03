@@ -10,7 +10,7 @@ const router = express.Router();
 ========================================================== */
 router.get("/", async (req, res) => {
   try {
-    const myId = req.auth?.payload?.sub; // Auth0 আইডি
+    const myId = req.auth?.payload?.sub; 
     if (!myId) return res.status(401).json({ msg: "Neural Identity missing" });
 
     let user = await User.findOne({ auth0Id: myId }).select("-__v").lean();
@@ -54,12 +54,11 @@ router.get("/:id", async (req, res) => {
 });
 
 /* ==========================================================
-    3️⃣ UPDATE PROFILE (ইমেজ আপলোড সহ)
+    3️⃣ UPDATE PROFILE
 ========================================================== */
-// ফ্রন্টএন্ডে /api/profile/update কল করা হচ্ছে, তাই রুটটি '/update' রাখা হলো
 router.put("/update", upload.fields([
   { name: 'avatar', maxCount: 1 },
-  { name: 'coverImg', maxCount: 1 } // ফ্রন্টএন্ডে coverImg পাঠানো হচ্ছে
+  { name: 'coverImg', maxCount: 1 } 
 ]), async (req, res) => {
   try {
     const myId = req.auth?.payload?.sub;
@@ -68,17 +67,11 @@ router.put("/update", upload.fields([
     const { nickname, name, bio, location, website } = req.body;
     let updateFields = { name, nickname, bio, location, website };
 
-    // মাল্টার মাধ্যমে Cloudinary থেকে আসা URL হ্যান্ডলিং
     if (req.files) {
-      if (req.files.avatar) {
-        updateFields.avatar = req.files.avatar[0].path;
-      }
-      if (req.files.coverImg) {
-        updateFields.coverImg = req.files.coverImg[0].path;
-      }
+      if (req.files.avatar) updateFields.avatar = req.files.avatar[0].path;
+      if (req.files.coverImg) updateFields.coverImg = req.files.coverImg[0].path;
     }
 
-    // ডাটাবেস আপডেট
     const updatedUser = await User.findOneAndUpdate(
       { auth0Id: myId }, 
       { $set: updateFields },
@@ -87,7 +80,6 @@ router.put("/update", upload.fields([
 
     res.json(updatedUser);
   } catch (err) {
-    console.error("Update Error:", err);
     res.status(500).json({ msg: 'Identity Sync Failed' });
   }
 });
@@ -108,18 +100,45 @@ router.post("/follow/:targetId", async (req, res) => {
     const isLinked = targetUser.followers.includes(myId);
 
     if (isLinked) {
-      // Unfollow
       await User.findOneAndUpdate({ auth0Id: myId }, { $pull: { following: targetId } });
       await User.findOneAndUpdate({ auth0Id: targetId }, { $pull: { followers: myId } });
       return res.json({ linked: false, msg: "Link Severed" });
     } else {
-      // Follow
       await User.findOneAndUpdate({ auth0Id: myId }, { $addToSet: { following: targetId } });
       await User.findOneAndUpdate({ auth0Id: targetId }, { $addToSet: { followers: myId } });
       return res.json({ linked: true, msg: "Link Established" });
     }
   } catch (err) {
     res.status(500).json({ msg: "Link protocol failed" });
+  }
+});
+
+// Followers List (Manual lookup if populate fails)
+router.get("/:id/followers", async (req, res) => {
+  try {
+    const user = await User.findOne({ auth0Id: req.params.id });
+    if (!user) return res.status(404).json([]);
+    
+    // Followers অ্যারেতে থাকা IDs দিয়ে ইউজারদের খুঁজে বের করা
+    const followers = await User.find({ auth0Id: { $in: user.followers } })
+                                .select('name nickname avatar auth0Id picture');
+    res.json(followers);
+  } catch (err) {
+    res.status(500).json([]);
+  }
+});
+
+// Following List
+router.get("/:id/following", async (req, res) => {
+  try {
+    const user = await User.findOne({ auth0Id: req.params.id });
+    if (!user) return res.status(404).json([]);
+    
+    const following = await User.find({ auth0Id: { $in: user.following } })
+                                .select('name nickname avatar auth0Id picture');
+    res.json(following);
+  } catch (err) {
+    res.status(500).json([]);
   }
 });
 
@@ -130,12 +149,12 @@ router.get("/posts/user/:userId", async (req, res) => {
   try {
     const targetUserId = decodeURIComponent(req.params.userId);
     
-    // authorAuth0Id অথবা authorId আপনার মডেল অনুযায়ী চেক করুন
+    // অরিজিনাল পোস্ট এবং মিডিয়া পোস্ট ফিল্টার করার সুবিধার্থে সব পোস্ট আনছি
     const posts = await Post.find({ authorAuth0Id: targetUserId })
       .sort({ createdAt: -1 })
       .lean();
 
-    res.json({ posts, hasMore: false }); // ফ্রন্টএন্ডের প্রত্যাশা অনুযায়ী অবজেক্ট পাঠানো
+    res.json({ posts, hasMore: false }); 
   } catch (err) {
     res.status(500).json({ msg: "Error fetching user signals" });
   }
