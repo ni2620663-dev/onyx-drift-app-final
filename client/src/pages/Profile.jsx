@@ -138,6 +138,7 @@ const ProfilePage = () => {
   const defaultBanner = "https://images.unsplash.com/photo-1614850523296-d8c1af93d400?q=80&w=2070";
   const defaultAvatar = `https://api.dicebear.com/7.x/bottts/svg?seed=${user?.name || 'Drifter'}`;
 
+  /* FIX: UPDATED RENDER LOGIC FOR MEDIA & REPLIES */
   const renderTabContent = () => {
     if (loading) return null;
 
@@ -159,15 +160,21 @@ const ProfilePage = () => {
         ) : <EmptyState msg="No Neural Replies Found" />;
 
       case "Media":
+        // Filter posts that have either an image OR a video
         const mediaPosts = userPosts.filter(p => p.image || p.video);
         return mediaPosts.length > 0 ? (
           <div className="grid grid-cols-3 gap-1 p-1">
             {mediaPosts.map(post => (
               <div key={post._id} className="aspect-square bg-zinc-900 border border-zinc-800 overflow-hidden relative group cursor-pointer">
                 {post.image ? (
-                  <img src={post.image} className="w-full h-full object-cover hover:opacity-80 transition-opacity" alt="media" />
+                  <img 
+                    src={post.image} 
+                    className="w-full h-full object-cover hover:opacity-80 transition-opacity" 
+                    alt="media" 
+                    onError={(e) => { e.target.src = 'https://via.placeholder.com/300?text=Media+Error'; }}
+                  />
                 ) : (
-                  <video src={post.video} className="w-full h-full object-cover" />
+                  <video src={post.video} className="w-full h-full object-cover" controls={false} />
                 )}
               </div>
             ))}
@@ -196,7 +203,7 @@ const ProfilePage = () => {
         );
 
       default:
-        return <EmptyState msg={`${activeTab} Module Encryption Active`} />;
+        return <EmptyState msg="Module Encryption Active" />;
     }
   };
 
