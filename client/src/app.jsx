@@ -11,12 +11,13 @@ import { FaPhone } from "react-icons/fa";
 import Sidebar from "./components/Sidebar";
 import CustomCursor from "./components/CustomCursor";
 import MobileNav from "./components/MobileNav";
+// ✅ Gesture Engine Import (আপনার কম্পোনেন্ট ফোল্ডারে NeuralGestureEngine.js নামে সেভ করবেন)
+import NeuralGestureEngine from "./components/NeuralGestureEngine"; 
 
-// Pages (Lazy Loading for better performance)
+// Pages (Lazy Loading)
 const Messenger = lazy(() => import("./pages/Messenger"));
 const PremiumHomeFeed = lazy(() => import("./pages/PremiumHomeFeed"));
-// App.jsx এর ১৮ নম্বর লাইনে এটি পরিবর্তন করুন:
-const ProfilePage = lazy(() => import("./pages/Profile")); // ProfilePage এর বদলে Profile
+const ProfilePage = lazy(() => import("./pages/Profile"));
 const Settings = lazy(() => import("./pages/Settings")); 
 const ReelsFeed = lazy(() => import("./pages/ReelsFeed"));
 const Landing = lazy(() => import("./pages/Landing")); 
@@ -157,6 +158,9 @@ export default function App() {
     <div className="min-h-screen bg-[#020617] text-gray-200 font-sans selection:bg-cyan-500/30 overflow-x-hidden">
       <Toaster position="top-center" reverseOrder={false} />
       <CustomCursor />
+
+      {/* ✅ 🖐️ Neural Gesture Controller (শুধুমাত্র লগইন থাকলে কাজ করবে) */}
+      {isAuthenticated && !isCallPage && <NeuralGestureEngine />}
 
       {/* 📞 Incoming Call Overlay */}
       <AnimatePresence>
