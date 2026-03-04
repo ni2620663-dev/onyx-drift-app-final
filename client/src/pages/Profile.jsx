@@ -127,7 +127,6 @@ const ProfilePage = () => {
     }
   };
 
-  // Helper to show empty state
   const EmptyState = ({ msg }) => (
     <div className="py-20 text-center text-zinc-600 text-[10px] uppercase tracking-widest italic font-mono">
       {msg}
@@ -138,13 +137,12 @@ const ProfilePage = () => {
   const defaultBanner = "https://images.unsplash.com/photo-1614850523296-d8c1af93d400?q=80&w=2070";
   const defaultAvatar = `https://api.dicebear.com/7.x/bottts/svg?seed=${user?.name || 'Drifter'}`;
 
-  /* FIXED: UPDATED TAB RENDERING LOGIC */
+  /* ✅ FIXED: MEDIA TAB MATCHING BACKEND KEY 'mediaUrl' */
   const renderTabContent = () => {
     if (loading) return null;
 
     switch (activeTab) {
       case "Signals":
-        // Filter main posts (not replies)
         const signals = userPosts.filter(post => !post.parentId);
         return signals.length > 0 ? (
           signals.map((post) => (
@@ -153,7 +151,6 @@ const ProfilePage = () => {
         ) : <EmptyState msg="No Signals Broadcasted" />;
 
       case "Replies":
-        // Filter posts that are replies (have parentId)
         const replies = userPosts.filter(post => post.parentId);
         return replies.length > 0 ? (
           replies.map((post) => (
@@ -162,22 +159,26 @@ const ProfilePage = () => {
         ) : <EmptyState msg="No Neural Replies Found" />;
 
       case "Media":
-        // Filter posts that contain images or videos
-        const mediaPosts = userPosts.filter(p => p.image || p.video);
+        // Backend saves it as 'mediaUrl' or 'media'
+        const mediaPosts = userPosts.filter(p => p.mediaUrl || p.media);
         return mediaPosts.length > 0 ? (
           <div className="grid grid-cols-3 gap-1 p-1">
             {mediaPosts.map(post => (
               <div key={post._id} className="aspect-square bg-zinc-900 border border-zinc-800 overflow-hidden relative group cursor-pointer">
-                {post.image ? (
+                {post.mediaType === 'video' ? (
+                  <video 
+                    src={post.mediaUrl || post.media} 
+                    className="w-full h-full object-cover" 
+                    muted
+                  />
+                ) : (
                   <img 
-                    src={post.image} 
+                    src={post.mediaUrl || post.media} 
                     className="w-full h-full object-cover hover:opacity-80 transition-opacity" 
                     alt="media" 
-                    onError={(e) => { e.target.src = 'https://via.placeholder.com/300?text=Media+Error'; }}
+                    onError={(e) => { e.target.src = 'https://via.placeholder.com/300?text=Broken+Link'; }}
                   />
-                ) : post.video ? (
-                  <video src={post.video} className="w-full h-full object-cover" controls={false} />
-                ) : null}
+                )}
               </div>
             ))}
           </div>
@@ -185,21 +186,18 @@ const ProfilePage = () => {
 
       case "Energy":
         return (
-          <div className="p-8 space-y-6">
+          <div className="p-8">
             <div className="bg-zinc-900/30 p-6 rounded-2xl border border-zinc-800/50 backdrop-blur-sm shadow-[0_0_30px_rgba(6,182,212,0.05)]">
               <h3 className="text-cyan-500 text-[10px] font-black uppercase tracking-[0.2em] mb-4">Neural Link Integrity</h3>
               <div className="w-full h-1.5 bg-black rounded-full overflow-hidden border border-zinc-800">
                 <motion.div 
                   initial={{ width: 0 }} 
                   animate={{ width: '82%' }} 
-                  transition={{ duration: 1.5, ease: "easeOut" }}
+                  transition={{ duration: 1.5 }}
                   className="h-full bg-gradient-to-r from-cyan-600 to-cyan-400 shadow-[0_0_15px_#06b6d4]" 
                 />
               </div>
-              <div className="flex justify-between mt-3">
-                <p className="text-[9px] text-zinc-500 tracking-widest uppercase">Status: Optimal</p>
-                <p className="text-[9px] text-cyan-500 font-bold tracking-widest uppercase">82% Sync</p>
-              </div>
+              <p className="text-[9px] text-zinc-500 mt-3 uppercase">Status: Optimal (82% Sync)</p>
             </div>
           </div>
         );
