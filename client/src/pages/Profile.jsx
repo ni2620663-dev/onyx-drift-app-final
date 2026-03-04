@@ -138,12 +138,13 @@ const ProfilePage = () => {
   const defaultBanner = "https://images.unsplash.com/photo-1614850523296-d8c1af93d400?q=80&w=2070";
   const defaultAvatar = `https://api.dicebear.com/7.x/bottts/svg?seed=${user?.name || 'Drifter'}`;
 
-  /* FIX: UPDATED RENDER LOGIC FOR MEDIA & REPLIES */
+  /* FIXED: UPDATED TAB RENDERING LOGIC */
   const renderTabContent = () => {
     if (loading) return null;
 
     switch (activeTab) {
       case "Signals":
+        // Filter main posts (not replies)
         const signals = userPosts.filter(post => !post.parentId);
         return signals.length > 0 ? (
           signals.map((post) => (
@@ -152,6 +153,7 @@ const ProfilePage = () => {
         ) : <EmptyState msg="No Signals Broadcasted" />;
 
       case "Replies":
+        // Filter posts that are replies (have parentId)
         const replies = userPosts.filter(post => post.parentId);
         return replies.length > 0 ? (
           replies.map((post) => (
@@ -160,7 +162,7 @@ const ProfilePage = () => {
         ) : <EmptyState msg="No Neural Replies Found" />;
 
       case "Media":
-        // Filter posts that have either an image OR a video
+        // Filter posts that contain images or videos
         const mediaPosts = userPosts.filter(p => p.image || p.video);
         return mediaPosts.length > 0 ? (
           <div className="grid grid-cols-3 gap-1 p-1">
@@ -173,9 +175,9 @@ const ProfilePage = () => {
                     alt="media" 
                     onError={(e) => { e.target.src = 'https://via.placeholder.com/300?text=Media+Error'; }}
                   />
-                ) : (
+                ) : post.video ? (
                   <video src={post.video} className="w-full h-full object-cover" controls={false} />
-                )}
+                ) : null}
               </div>
             ))}
           </div>
