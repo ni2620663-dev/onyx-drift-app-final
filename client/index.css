@@ -100,3 +100,51 @@
 }
 .custom-scrollbar::-webkit-scrollbar { width: 6px; }
 .custom-scrollbar::-webkit-scrollbar-thumb { background: #374248; }
+/* ১. সাইবার স্ক্যান লাইন অ্যানিমেশন */
+@keyframes scan {
+  0% { top: 0%; opacity: 0; }
+  50% { opacity: 1; }
+  100% { top: 100%; opacity: 0; }
+}
+
+.animate-scan {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: linear-gradient(to right, transparent, #22d3ee, transparent);
+  box-shadow: 0 0 15px #22d3ee;
+  animation: scan 2s linear infinite;
+}
+
+/* ২. স্লো রোটেশন (বুট স্ক্রিনের জন্য) */
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.animate-spin-slow {
+  animation: spin-slow 8s linear infinite;
+}
+
+/* ৩. পালস ইফেক্ট (সিকিউরিটি ওয়ার্নিংয়ের জন্য) */
+@keyframes pulse-red {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.05); }
+}
+
+.animate-pulse-red {
+  animation: pulse-red 1.5s ease-in-out infinite;
+}
+
+/* ৪. গ্লোয়িং বর্ডার ইফেক্ট */
+.cyber-border {
+  border: 1px solid rgba(34, 211, 238, 0.3);
+  box-shadow: 0 0 10px rgba(34, 211, 238, 0.1);
+  transition: all 0.3s ease;
+}
+
+.cyber-border:hover {
+  border-color: #22d3ee;
+  box-shadow: 0 0 20px rgba(34, 211, 238, 0.4);
+}

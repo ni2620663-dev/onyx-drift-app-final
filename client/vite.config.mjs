@@ -32,13 +32,13 @@ export default defineConfig({
   server: {
     port: 5173,
     host: true, 
-    // 🚨 নোট: External images (Google, Dicebear) ব্লক হওয়া ঠেকাতে 
-    // "Cross-Origin-Embedder-Policy" সরিয়ে ফেলা হয়েছে।
+    // নোট: External images (Google, Dicebear) ব্লক হওয়া ঠেকাতে 
+    // "Cross-Origin-Embedder-Policy" সরিয়ে ফেলা হয়েছে।
     headers: {}, 
   },
 
   optimizeDeps: {
-    // FFmpeg-কে অপ্টিমাইজেশন থেকে বাদ রাখা হয়েছে
+    // FFmpeg-কে অপ্টিমাইজেশন থেকে বাদ রাখা হয়েছে
     exclude: ['@ffmpeg/ffmpeg', '@ffmpeg/util'],
     
     // 🛠️ পলিফিলগুলোকে ফোর্স অপ্টিমাইজ করা হচ্ছে যাতে এরর না আসে

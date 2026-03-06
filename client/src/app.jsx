@@ -11,8 +11,8 @@ import { FaPhone } from "react-icons/fa";
 import Sidebar from "./components/Sidebar";
 import CustomCursor from "./components/CustomCursor";
 import MobileNav from "./components/MobileNav";
-// ✅ Gesture Engine Import (আপনার কম্পোনেন্ট ফোল্ডারে NeuralGestureEngine.js নামে সেভ করবেন)
-import NeuralGestureEngine from "./components/NeuralGestureEngine"; 
+// ✅ Neural Virtual Touch (আঙুলের ডগায় নিয়নের কার্সারসহ)
+import NeuralVirtualTouch from "./components/NeuralVirtualTouch"; 
 
 // Pages (Lazy Loading)
 const Messenger = lazy(() => import("./pages/Messenger"));
@@ -159,8 +159,10 @@ export default function App() {
       <Toaster position="top-center" reverseOrder={false} />
       <CustomCursor />
 
-      {/* ✅ 🖐️ Neural Gesture Controller (শুধুমাত্র লগইন থাকলে কাজ করবে) */}
-      {isAuthenticated && !isCallPage && <NeuralGestureEngine />}
+      {/* ✅ 🖐️ Neural Virtual Touch Engine 
+          এটি এখন ভিজ্যুয়াল ইন্ডিকেটর (নিয়ন কার্সার) সহ লোড হবে 
+      */}
+      {isAuthenticated && !isCallPage && <NeuralVirtualTouch />}
 
       {/* 📞 Incoming Call Overlay */}
       <AnimatePresence>

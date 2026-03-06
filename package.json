@@ -17,6 +17,7 @@
     "@ffmpeg/util": "^0.12.2",
     "@google/generative-ai": "^0.24.1",
     "@mediapipe/camera_utils": "^0.3.1675466862",
+    "@mediapipe/face_mesh": "^0.4.1633559619",
     "@mediapipe/hands": "^0.4.1675469240",
     "@stream-io/video-react-sdk": "^1.32.4",
     "@tensorflow/tfjs-backend-webgl": "^4.22.0",
@@ -29,6 +30,7 @@
     "cors": "^2.8.5",
     "date-fns": "^4.1.0",
     "dotenv": "^16.6.1",
+    "events": "^3.3.0",
     "express": "^4.22.1",
     "express-oauth2-jwt-bearer": "^1.7.2",
     "express-rate-limit": "^8.2.1",
@@ -45,7 +47,8 @@
     "simple-peer": "^9.11.1",
     "socket.io": "^4.8.1",
     "stream-browserify": "^3.0.0",
-    "sweetalert2": "^11.1.0"
+    "sweetalert2": "^11.1.0",
+    "util": "^0.12.5"
   },
   "devDependencies": {
     "concurrently": "^9.1.0",
