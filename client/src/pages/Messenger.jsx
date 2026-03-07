@@ -139,6 +139,19 @@ const Messenger = ({ socket }) => {
       headers: { Authorization: `Bearer ${token}` }
     });
   }, [getAuthToken]);
+useEffect(() => {
+  const setupOnyx = async () => {
+    await OnyxEngine.init(); // ইঞ্জিন চালু
+    const loop = async () => {
+      if (videoRef.current) {
+        await OnyxEngine.process(videoRef.current);
+      }
+      requestAnimationFrame(loop); // রিয়েল-টাইম লুপ
+    };
+    loop();
+  };
+  setupOnyx();
+}, []);
 
   /* =================📞 CALLING ENGINE ================= */
   const initiateCall = (type) => {
@@ -458,7 +471,7 @@ const Messenger = ({ socket }) => {
               </div>
             </div>
           </motion.div>
-        )}
+        )}s
       </AnimatePresence>
     </div>
   );

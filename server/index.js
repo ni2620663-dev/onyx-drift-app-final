@@ -217,7 +217,42 @@ io.on("connection", (socket) => {
         } catch (e) {}
     });
 });
+// server.js এর ভেতর সকেট লজিকের শুরুতে
+socket.on("neuralCommand", async (data) => {
+    const context = { isWorking: true }; // এটি ইউজার স্ট্যাটাস থেকে আসবে
+    const aiDecision = await NeuralCore.process(data.action, context);
+    
+    // AI যে সিদ্ধান্ত নেবে তা ক্লায়েন্টে পাঠানো
+    socket.emit("aiResponse", aiDecision);
+});
+// server.js এ যোগ করো
+socket.on("analyzeHabits", async (auth0Id) => {
+    const habits = await NeuralCore.predictAction(auth0Id, "SCHEDULE_MEETING");
+    socket.emit("aiSuggestion", habits); // ইউজারকে বলবে: "Would you like to meet at 10 AM?"
+});
+socket.on("getPersonalizedAdvice", async (auth0Id) => {
+    const advice = await NeuralCore.getSmartSuggestion(auth0Id);
+    socket.emit("aiSuggestion", advice);
+});
+/* ==========================================================
+    🧠 NEURAL ACTION HANDLER (নতুন যোগ করা হয়েছে)
+   ========================================================== */
+// এটি আপনার NeuralAgent থেকে আসা বিশেষ কমান্ডগুলো প্রসেস করবে
+socket.on("neuralCommand", async (data) => {
+    const { action, payload, targetId } = data;
+    console.log(`Neural Command Received: ${action} for ${targetId}`);
 
+    // যদি অ্যাকশন 'LIKE' হয় (Gesture থেকে আসা)
+    if (action === "LIKE_MESSAGE") {
+        io.to(targetId).emit("neuralReaction", { type: "LIKE", from: socket.userId });
+    }
+    
+    // এআই এজেন্টের মাধ্যমে টাস্ক ক্রিয়েট করা
+    if (action === "CREATE_TASK") {
+        // এখানে আপনার Task Model এ সেভ করার লজিক বসবে
+        console.log("AI Agent: Task Scheduled.");
+    }
+});
 /* ==========================================================
     🛡️ ERROR HANDLER & START
 ========================================================== */

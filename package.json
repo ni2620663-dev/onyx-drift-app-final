@@ -19,7 +19,12 @@
     "@mediapipe/camera_utils": "^0.3.1675466862",
     "@mediapipe/face_mesh": "^0.4.1633559619",
     "@mediapipe/hands": "^0.4.1675469240",
+    "@mediapipe/tasks-vision": "^0.10.32",
     "@stream-io/video-react-sdk": "^1.32.4",
+    "@tensorflow-models/face-landmarks-detection": "^1.0.6",
+    "@tensorflow-models/hand-pose-detection": "^2.0.1",
+    "@tensorflow/tfjs": "^4.22.0",
+    "@tensorflow/tfjs-backend-wasm": "^4.22.0",
     "@tensorflow/tfjs-backend-webgl": "^4.22.0",
     "@tensorflow/tfjs-converter": "^4.22.0",
     "@tensorflow/tfjs-core": "^4.22.0",
@@ -28,6 +33,7 @@
     "buffer": "^6.0.3",
     "cloudinary": "^2.9.0",
     "cors": "^2.8.5",
+    "crypto-js": "^4.2.0",
     "date-fns": "^4.1.0",
     "dotenv": "^16.6.1",
     "events": "^3.3.0",
@@ -51,6 +57,7 @@
     "util": "^0.12.5"
   },
   "devDependencies": {
+    "@types/crypto-js": "^4.2.2",
     "concurrently": "^9.1.0",
     "nodemon": "^3.1.7"
   }

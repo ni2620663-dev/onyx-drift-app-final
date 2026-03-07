@@ -2,6 +2,12 @@ import mongoose from "mongoose";
 
 const userSchema = new mongoose.Schema(
   {
+neuralPatterns: {
+    meetingTimes: [String], // ইউজার কখন সাধারণত মিটিং করে
+    frequentContacts: [String], // যাদের সাথে বেশি কথা বলে
+    busyHours: [Number] // সারাদিনের ব্যস্ত সময়
+  }
+});
     /* ==========================================================
         ১. DIGITAL IDENTITY & AUTH (মূল পরিচিতি)
     ========================================================== */

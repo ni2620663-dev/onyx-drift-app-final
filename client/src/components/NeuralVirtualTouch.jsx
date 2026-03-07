@@ -1,7 +1,8 @@
 import React, { useRef, useEffect, useCallback, useState } from "react";
-import * as HandsModule from "@mediapipe/hands";
-import * as FaceMeshModule from "@mediapipe/face_mesh";
-import * as cam from "@mediapipe/camera_utils";
+// সঠিক ইম্পোর্ট মেথড
+import { Hands } from "@mediapipe/hands";
+import { FaceMesh } from "@mediapipe/face_mesh";
+import { Camera } from "@mediapipe/camera_utils";
 import Webcam from "react-webcam";
 
 const NeuralVirtualTouch = () => {
@@ -30,25 +31,31 @@ const NeuralVirtualTouch = () => {
       setUserName("OPERATOR_RAFI");
       setStatus("ACCESS GRANTED: ADMIN_MODE");
       if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
-    }, 4000);
+    }, 3000);
   };
 
   const onResults = useCallback((handResults, faceResults) => {
+    // --- ১. ফেস এবং আইরিস (চোখ) সেন্সর লজিক ---
     if (faceResults?.multiFaceLandmarks?.[0]) {
       const face = faceResults.multiFaceLandmarks[0];
       setIsUserPresent(true);
-      const eyeDist = face[145].y - face[159].y;
-      setIsEyesOpen(eyeDist > 0.012);
 
-      if (isLoggedIn && eyeDist > 0.012 && !showMenu) {
-        const irisY = face[468].y;
-        if (irisY < 0.43) window.scrollBy({ top: -30, behavior: "auto" });
-        if (irisY > 0.47) window.scrollBy({ top: 30, behavior: "auto" });
+      // চোখের পলক ডিটেকশন (Landmarks: 159 & 145)
+      const eyeDist = Math.abs(face[159].y - face[145].y);
+      setIsEyesOpen(eyeDist > 0.015); // Sensitivity Threshold
+
+      // আইরিস ট্র্যাকিং (চোখ দিয়ে স্ক্রলিং) - Landmark 468 (বাম আইরিস সেন্টার)
+      if (isLoggedIn && eyeDist > 0.015) {
+        const iris = face[468]; 
+        // আপনি যখন স্ক্রিনের একদম উপরে বা নিচে তাকাবেন
+        if (iris.y < 0.40) window.scrollBy({ top: -45, behavior: "smooth" }); // উপরে তাকালে স্ক্রল আপ
+        if (iris.y > 0.50) window.scrollBy({ top: 45, behavior: "smooth" });  // নিচে তাকালে স্ক্রল ডাউন
       }
     } else {
       setIsUserPresent(false);
     }
 
+    // --- ২. হ্যান্ড ট্র্যাকিং এবং ক্লিক লজিক ---
     if (handResults?.multiHandLandmarks?.[0]) {
       const hand = handResults.multiHandLandmarks[0];
       const indexTip = hand[8];
@@ -59,13 +66,17 @@ const NeuralVirtualTouch = () => {
       const screenY = indexTip.y * window.innerHeight;
       setCursorPos({ x: screenX, y: screenY });
 
-      if (indexTip.y > indexBase.y + 0.02) {
+      // হাতের ইশারায় ক্লিক (ইন্ডেক্স ফিঙ্গার নিচে নামালে)
+      if (indexTip.y > indexBase.y + 0.03) {
         const element = document.elementFromPoint(screenX, screenY);
-        element?.click();
-        setStatus("ACTION: NEURAL_TAP");
+        if (element) {
+          element.click();
+          setStatus("ACTION: NEURAL_TAP");
+        }
       }
 
-      const palmOpen = Math.abs(thumbTip.x - hand[20].x) > 0.18;
+      // তালু দেখালে মেনু ওপেন (Palm Gesture)
+      const palmOpen = Math.abs(thumbTip.x - hand[20].x) > 0.20;
       if (palmOpen && !showMenu) {
         setShowMenu(true);
         if (navigator.vibrate) navigator.vibrate(50);
@@ -76,30 +87,38 @@ const NeuralVirtualTouch = () => {
   useEffect(() => {
     if (!isSystemActive) return;
 
-    const hands = new HandsModule.Hands({
-      locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands@${HandsModule.VERSION}/${f}`,
+    // মডিউল কনফিগারেশন
+    const hands = new Hands({
+      locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`,
     });
-    const faceMesh = new FaceMeshModule.FaceMesh({
-      locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@${FaceMeshModule.VERSION}/${f}`,
+    const faceMesh = new FaceMesh({
+      locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${f}`,
     });
 
-    hands.setOptions({ maxNumHands: 1, modelComplexity: 0, minDetectionConfidence: 0.5 });
-    faceMesh.setOptions({ refineLandmarks: true, minDetectionConfidence: 0.5 });
+    hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.6 });
+    
+    // আইরিস ট্র্যাকিংয়ের জন্য refineLandmarks: true থাকা বাধ্যতামূলক
+    faceMesh.setOptions({ 
+        refineLandmarks: true, 
+        minDetectionConfidence: 0.6, 
+        minTrackingConfidence: 0.6 
+    });
 
-    let lastH = null;
-    let lastF = null;
+    let lastHand = null;
+    let lastFace = null;
 
-    hands.onResults(res => { lastH = res; if(lastF) onResults(lastH, lastF); });
-    faceMesh.onResults(res => { lastF = res; if(lastH) onResults(lastH, lastF); });
+    hands.onResults(res => { lastHand = res; if(lastFace) onResults(lastHand, lastFace); });
+    faceMesh.onResults(res => { lastFace = res; if(lastHand) onResults(lastHand, lastFace); });
 
     const runCamera = async () => {
       if (webcamRef.current?.video) {
-        cameraRef.current = new cam.Camera(webcamRef.current.video, {
+        cameraRef.current = new Camera(webcamRef.current.video, {
           onFrame: async () => {
             if (isProcessing.current) return;
             isProcessing.current = true;
             try {
               const img = webcamRef.current.video;
+              // পারফরম্যান্সের জন্য ইন্টারলিভড ফ্রেম প্রসেসিং
               if (frameCount.current % 2 === 0) {
                 await hands.send({ image: img });
               } else {
@@ -107,12 +126,12 @@ const NeuralVirtualTouch = () => {
               }
               frameCount.current++;
             } catch (e) {
-              // এরর ইগনোর করা হয়েছে যেন লুপ না ভাঙে
+                console.warn("Processing frame skipped");
             } finally {
               isProcessing.current = false;
             }
           },
-          width: 480, height: 360,
+          width: 640, height: 480,
         });
         await cameraRef.current.start();
       }
@@ -130,77 +149,86 @@ const NeuralVirtualTouch = () => {
   const isBlurry = isLoggedIn && (!isUserPresent || !isEyesOpen);
 
   return (
-    <div className={`min-h-screen transition-all duration-700 bg-[#020202] text-cyan-400 font-mono overflow-hidden ${isBlurry ? 'blur-[50px] scale-110 grayscale' : 'blur-0'}`}>
+    <div className={`min-h-screen transition-all duration-700 bg-[#020202] text-cyan-400 font-mono overflow-hidden ${isBlurry ? 'blur-[60px] scale-110 grayscale' : 'blur-0'}`}>
+      
+      {/* ১. ইনিশিয়ালাইজেশন স্ক্রিন */}
       {!isSystemActive && (
         <div className="fixed inset-0 flex items-center justify-center bg-black z-[5000]">
           <div className="text-center">
             <div className="w-16 h-16 border-t-2 border-cyan-500 rounded-full animate-spin mx-auto mb-6" />
-            <button onClick={() => setIsSystemActive(true)} className="px-12 py-4 border-2 border-cyan-500 text-cyan-500 tracking-[0.5em] hover:bg-cyan-500 hover:text-black transition-all">
+            <button onClick={() => setIsSystemActive(true)} className="px-12 py-4 border-2 border-cyan-500 text-cyan-500 tracking-[0.5em] hover:bg-cyan-500 hover:text-black transition-all font-black">
               INITIALIZE NEURAL_LINK
             </button>
           </div>
         </div>
       )}
 
+      {/* ২. বায়োমেট্রিক স্ক্যানিং (Authentication) */}
       {isSystemActive && !isLoggedIn && (
         <div className="fixed inset-0 flex flex-col items-center justify-center bg-black/95 z-[4000]">
-          <div className="relative w-64 h-64 flex items-center justify-center">
-            <div className={`absolute inset-0 border-2 rounded-full border-dashed animate-spin-slow ${authStage === 'SCANNING' ? 'border-yellow-500' : 'border-cyan-900'}`} />
-            <div className={`w-40 h-40 border rounded-full flex flex-col items-center justify-center ${authStage === 'SCANNING' ? 'border-red-500 shadow-[0_0_30px_red]' : 'border-cyan-500/20'}`}>
-              <span className="text-4xl mb-2">{authStage === 'SCANNING' ? '👁️' : '🔒'}</span>
-              <span className="text-[10px] tracking-widest">{authStage === 'SCANNING' ? 'SCANNING' : 'LOCKED'}</span>
+          <div className="relative w-72 h-72 flex items-center justify-center">
+            <div className={`absolute inset-0 border-2 rounded-full border-dashed animate-spin-slow ${authStage === 'SCANNING' ? 'border-yellow-500' : 'border-cyan-900/50'}`} />
+            <div className={`w-48 h-48 border rounded-full flex flex-col items-center justify-center transition-all duration-500 ${authStage === 'SCANNING' ? 'border-red-500 shadow-[0_0_50px_rgba(239,68,68,0.4)]' : 'border-cyan-500/20'}`}>
+              <span className="text-5xl mb-3 animate-pulse">{authStage === 'SCANNING' ? '👁️' : '🔒'}</span>
+              <span className="text-[10px] tracking-[0.5em]">{authStage === 'SCANNING' ? 'SCANNING' : 'LOCKED'}</span>
             </div>
-            {authStage === 'SCANNING' && <div className="animate-scan" />}
+            {authStage === 'SCANNING' && <div className="absolute w-full h-1 bg-cyan-500/50 top-0 animate-scan-line" />}
           </div>
-          <button onClick={startAuthentication} className="mt-12 tracking-[0.5em] text-[10px] uppercase hover:text-white transition-all">
-            {authStage === 'SCANNING' ? 'Syncing...' : '[ START SCAN ]'}
+          <button onClick={startAuthentication} className="mt-16 px-8 py-2 border border-cyan-500/30 tracking-[0.8em] text-[10px] uppercase hover:bg-cyan-500 hover:text-black transition-all">
+            {authStage === 'SCANNING' ? 'Authorizing...' : '[ INITIATE SCAN ]'}
           </button>
         </div>
       )}
 
+      {/* ৩. মেইন ইউজার ইন্টারফেস (Dashboard) */}
       {isLoggedIn && (
-        <div className="p-10">
-          <header className="flex justify-between items-end border-b border-cyan-900/40 pb-6 mb-12">
+        <div className="p-10 max-w-6xl mx-auto">
+          <header className="flex justify-between items-end border-b border-cyan-900/40 pb-8 mb-12">
             <div>
-              <div className="text-[10px] text-cyan-800 tracking-[0.5em]">SYSTEM_OS_v1.0</div>
-              <h1 className="text-2xl font-black tracking-tighter uppercase">Operator: {userName}</h1>
+              <div className="text-[10px] text-cyan-800 tracking-[1em] mb-2 uppercase">Neural_OS_v1.0.4</div>
+              <h1 className="text-3xl font-black tracking-tighter uppercase text-white">Operator: <span className="text-cyan-400">{userName}</span></h1>
             </div>
-            <div className="text-right text-[10px] text-cyan-700 tracking-widest leading-loose">
-              STATUS: {status}<br/>
-              MODE: FRAME_INTERLEAVED
+            <div className="text-right text-[10px] text-cyan-600 tracking-widest font-bold">
+              STATUS: <span className="text-cyan-400">{status}</span><br/>
+              UI_MODE: FULL_EYE_TRACKING
             </div>
           </header>
+
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-            {['Files', 'Net', 'Security', 'Neural', 'Cores', 'Logs', 'Maps', 'Dev'].map(item => (
-              <div key={item} className="h-32 border border-cyan-900 bg-cyan-950/5 rounded-2xl flex flex-col items-center justify-center hover:bg-cyan-400 hover:text-black transition-all group">
-                <div className="w-6 h-6 border border-current mb-3 rotate-45 group-hover:rotate-0 transition-all duration-500" />
-                <span className="text-[10px] tracking-[0.3em] uppercase">{item}</span>
+            {['Files', 'Network', 'Security', 'Neural_Link', 'Cores', 'System_Logs', 'Satellite', 'Terminal'].map(item => (
+              <div key={item} className="h-40 border border-cyan-900/50 bg-cyan-950/5 rounded-3xl flex flex-col items-center justify-center hover:bg-cyan-500 hover:text-black hover:scale-105 transition-all cursor-none group">
+                <div className="w-8 h-8 border border-current mb-4 rotate-45 group-hover:rotate-0 transition-all duration-700" />
+                <span className="text-[10px] tracking-[0.4em] uppercase font-bold">{item}</span>
               </div>
             ))}
           </div>
         </div>
       )}
 
+      {/* ৪. নিয়ন আইরিস কার্সার (Neon Cursor) */}
       <div 
-        className="fixed top-0 left-0 w-6 h-6 pointer-events-none z-[10000] flex items-center justify-center transition-transform duration-75"
-        style={{ transform: `translate(${cursorPos.x - 12}px, ${cursorPos.y - 12}px)` }}
+        className="fixed top-0 left-0 w-8 h-8 pointer-events-none z-[10000] flex items-center justify-center transition-transform duration-75 ease-out"
+        style={{ transform: `translate(${cursorPos.x - 16}px, ${cursorPos.y - 16}px)` }}
       >
-        <div className="w-full h-full border border-cyan-400 rounded-full animate-ping absolute opacity-20" />
-        <div className="w-1.5 h-1.5 bg-white rounded-full shadow-[0_0_10px_white]" />
+        <div className="w-full h-full border border-cyan-400 rounded-full animate-ping absolute opacity-30" />
+        <div className="w-2 h-2 bg-white rounded-full shadow-[0_0_15px_#fff,0_0_30px_#22d3ee]" />
       </div>
 
-      <div className="fixed bottom-6 right-6 w-32 h-32 rounded-full border border-cyan-500/20 overflow-hidden bg-black/50 shadow-2xl">
-        <Webcam ref={webcamRef} mirrored={true} className="w-full h-full object-cover opacity-20 grayscale" />
-        <div className="animate-scan" />
+      {/* ৫. ফেস ক্যামেরা প্রিভিউ (Mini Cam) */}
+      <div className="fixed bottom-8 left-8 w-32 h-32 rounded-3xl border border-cyan-500/30 overflow-hidden bg-black/80 shadow-2xl z-[5001]">
+        <Webcam ref={webcamRef} mirrored={true} className="w-full h-full object-cover opacity-40 grayscale contrast-125" />
+        <div className="absolute inset-0 bg-gradient-to-t from-cyan-500/20 to-transparent pointer-events-none" />
       </div>
 
+      {/* ৬. আই-লিঙ্ক লস্ট অ্যালার্ট (Privacy Blur Overlay) */}
       {isBlurry && (
-        <div className="fixed inset-0 flex items-center justify-center z-[20000] bg-black/40 backdrop-blur-md">
-            <div className="text-center p-10 border border-red-500/30 rounded-3xl bg-black/60">
-              <div className="text-red-500 text-5xl mb-4 animate-pulse">⚠️</div>
-              <div className="text-red-500 font-mono text-xs tracking-[0.4em] font-bold uppercase">
-                {!isUserPresent ? "USER_ABSENT" : "PRIVACY_LOCK"}
+        <div className="fixed inset-0 flex items-center justify-center z-[20000] bg-black/20 backdrop-blur-xl transition-all duration-1000">
+            <div className="text-center p-12 border border-red-500/20 rounded-[3rem] bg-black/80 shadow-[0_0_100px_rgba(239,68,68,0.15)]">
+              <div className="text-red-600 text-6xl mb-6 animate-pulse font-light">!</div>
+              <div className="text-red-500 font-mono text-xs tracking-[0.6em] font-black uppercase">
+                {!isUserPresent ? "BIO_SIGNAL_LOST" : "NEURAL_LINK_DISCONNECTED"}
               </div>
+              <div className="text-red-900 text-[8px] mt-4 tracking-widest uppercase">Looking for operator's gaze...</div>
             </div>
         </div>
       )}
