@@ -2,12 +2,12 @@ import mongoose from "mongoose";
 
 const userSchema = new mongoose.Schema(
   {
-neuralPatterns: {
-    meetingTimes: [String], // ইউজার কখন সাধারণত মিটিং করে
-    frequentContacts: [String], // যাদের সাথে বেশি কথা বলে
-    busyHours: [Number] // সারাদিনের ব্যস্ত সময়
-  }
-});
+    neuralPatterns: {
+      meetingTimes: [String], // ইউজার কখন সাধারণত মিটিং করে
+      frequentContacts: [String], // যাদের সাথে বেশি কথা বলে
+      busyHours: [Number] // সারাদিনের ব্যস্ত সময়
+    },
+
     /* ==========================================================
         ১. DIGITAL IDENTITY & AUTH (মূল পরিচিতি)
     ========================================================== */
@@ -27,7 +27,7 @@ neuralPatterns: {
       type: String, 
       trim: true, 
       unique: true, 
-      sparse: true // nickname না থাকলেও সমস্যা নেই, থাকলে ইউনিক হতে হবে
+      sparse: true 
     },
     email: { 
       type: String, 
@@ -196,7 +196,7 @@ neuralPatterns: {
 );
 
 /* ==========================================================
-    🚀 OPTIMIZED INDEXING (সার্চ স্পিড বাড়ানোর জন্য)
+    🚀 OPTIMIZED INDEXING (সার্চ স্পিড বাড়ানোর জন্য)
 ========================================================== */
 userSchema.index({ name: 1, nickname: 1 });
 userSchema.index({ createdAt: -1, isVerified: -1 });

@@ -1,7 +1,11 @@
 // src/components/LoginComponent.jsx (নতুন Auth0 ভার্সন)
 import React from 'react';
 import { useAuth0 } from '@auth0/auth0-react';
-
+const startNeuralAuth = async () => {
+    console.log("Button Clicked! Checking sensors..."); // এটি কনসোলে আসছে কি?
+    setIsProcessing(true);
+    // ...
+}
 const LoginComponent = () => {
     const { loginWithRedirect } = useAuth0();
 
