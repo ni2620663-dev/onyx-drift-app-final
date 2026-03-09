@@ -4,7 +4,7 @@ import {
   FaHome, FaEnvelope, FaCompass, FaCog, FaSignOutAlt, FaRocket, FaUserPlus, FaFire,
   FaMicrophone, FaMicrophoneSlash, FaEye, FaEyeSlash
 } from 'react-icons/fa'; 
-import { HiOutlineChartBar } from 'react-icons/hi2';
+import { FaHome, FaUser, FaCog } from 'react-icons/fa'; // উদাহরণস্বরূপ
 import { useAuth0 } from '@auth0/auth0-react';
 import Webcam from "react-webcam";
 import { FaceMesh } from "@mediapipe/face_mesh";
