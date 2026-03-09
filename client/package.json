@@ -27,6 +27,7 @@
     "axios": "^1.13.2",
     "bcryptjs": "^3.0.3",
     "crypto-js": "^4.2.0",
+    "date-fns": "^4.1.0",
     "framer-motion": "^11.0.0",
     "lucide-react": "^0.400.0",
     "react": "^18.3.1",
