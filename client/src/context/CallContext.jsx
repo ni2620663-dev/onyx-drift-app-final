@@ -1,17 +1,15 @@
 import React, { createContext, useState, useRef, useEffect, useContext } from 'react';
 import { io } from 'socket.io-client';
-// পরিবর্তন করুন এভাবে:
-import SimplePeer from 'simple-peer';
+import SimplePeer from 'simple-peer'; // সঠিক ইমপোর্ট
 
 // ১. Vite & WebRTC Polyfills
 if (typeof window !== 'undefined') {
     window.global = window;
-    window.process = { env: {} }; // Simple-peer internal dependencies এর জন্য
+    window.process = { env: {} }; 
 }
 
 const SocketContext = createContext();
 
-// সকেট ইউআরএল (আপনার প্রোভাইড করা ইউআরএল)
 const socket = io('https://onyx-drift-app-final-u29m.onrender.com', {
     transports: ['websocket'],
     secure: true
@@ -29,15 +27,12 @@ const ContextProvider = ({ children }) => {
     const connectionRef = useRef();
 
     useEffect(() => {
-        // নিজের সকেট আইডি সেট করা
         socket.on('me', (id) => setMe(id));
 
-        // ইনকামিং কল লিসেনার
         socket.on('incomingCall', ({ from, name, signal, pic, type }) => {
             setCall({ isReceivingCall: true, from, name, signal, pic, type });
         });
 
-        // কল এন্ডেড লিসেনার
         socket.on('callEnded', () => {
             resetCallState();
         });
@@ -49,10 +44,8 @@ const ContextProvider = ({ children }) => {
         };
     }, []);
 
-    // ২. মিডিয়া স্ট্রিম হ্যান্ডলিং (ক্যামেরা/মাইক্রোফোন)
     const getMedia = async (isAudioOnly = false) => {
         try {
-            // আগের কোনো স্ট্রিম থাকলে সেটা বন্ধ করা (WebMediaPlayer এরর ফিক্স করতে)
             if (stream) {
                 stream.getTracks().forEach(track => track.stop());
             }
@@ -73,13 +66,13 @@ const ContextProvider = ({ children }) => {
         }
     };
 
-    // ৩. কল রিসিভ করা (Answer Call)
     const answerCall = async () => {
         setCallAccepted(true);
         const userStream = await getMedia(call.type === 'audio');
         if (!userStream) return;
 
-        const peer = new Peer({ 
+        // এখানে 'Peer' এর পরিবর্তে 'SimplePeer' ব্যবহার করা হয়েছে
+        const peer = new SimplePeer({ 
             initiator: false, 
             trickle: false, 
             stream: userStream 
@@ -99,12 +92,11 @@ const ContextProvider = ({ children }) => {
         connectionRef.current = peer;
     };
 
-    // ৪. কল করা (Initiate Call)
     const callUser = async (id, name, pic, isAudioOnly = false) => {
         const userStream = await getMedia(isAudioOnly);
         if (!userStream) return;
 
-        const peer = new Peer({ 
+        const peer = new SimplePeer({ 
             initiator: true, 
             trickle: false, 
             stream: userStream 
@@ -135,22 +127,16 @@ const ContextProvider = ({ children }) => {
         connectionRef.current = peer;
     };
 
-    // ৫. কল এন্ড করা
     const leaveCall = () => {
         setCallEnded(true);
-        
         if (connectionRef.current) {
             connectionRef.current.destroy();
         }
-
-        // সকেটকে জানানো যে কল শেষ
         const target = call.from || me;
         socket.emit("endCall", { to: target });
-
         resetCallState();
     };
 
-    // স্টেট রিসেট ফাংশন (ফেসবুক স্টাইল - পেজ রিলোড ছাড়াই)
     const resetCallState = () => {
         if (stream) {
             stream.getTracks().forEach(track => track.stop());
@@ -163,8 +149,6 @@ const ContextProvider = ({ children }) => {
         
         if (myVideo.current) myVideo.current.srcObject = null;
         if (userVideo.current) userVideo.current.srcObject = null;
-
-        // কল শেষ হলে মেসেজ পেজে নিয়ে যাওয়া
         window.location.href = '/messages';
     };
 
