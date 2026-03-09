@@ -1,6 +1,7 @@
 import React, { createContext, useState, useRef, useEffect, useContext } from 'react';
 import { io } from 'socket.io-client';
-import Peer from 'simple-peer/simplepeer.min.js'; // ✅ এটি এরর ফিক্স করবে
+// পরিবর্তন করুন এভাবে:
+import SimplePeer from 'simple-peer';
 
 // ১. Vite & WebRTC Polyfills
 if (typeof window !== 'undefined') {
