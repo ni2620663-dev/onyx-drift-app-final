@@ -1,10 +1,10 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
-  FaHome, FaEnvelope, FaCompass, FaCog, FaSignOutAlt, FaRocket, FaUserPlus, FaFire,
-  FaMicrophone, FaMicrophoneSlash, FaEye, FaEyeSlash
+  FaHome, FaEnvelope, FaCompass, FaCog, FaSignOutAlt, 
+  FaUserPlus, FaFire, FaEye, FaEyeSlash
 } from 'react-icons/fa'; 
-import { FaHome, FaUser, FaCog } from 'react-icons/fa'; // উদাহরণস্বরূপ
+import { HiOutlineChartBar } from 'react-icons/hi'; // এটি যোগ করা হয়েছে
 import { useAuth0 } from '@auth0/auth0-react';
 import Webcam from "react-webcam";
 import { FaceMesh } from "@mediapipe/face_mesh";
@@ -64,8 +64,6 @@ const Sidebar = () => {
 
     recognition.onresult = (event) => {
       const command = event.results[event.results.length - 1][0].transcript.toLowerCase();
-      console.log("Command received:", command);
-      
       menuItems.forEach(item => {
         if (command.includes(item.name.toLowerCase())) navigate(item.path);
       });
@@ -74,9 +72,8 @@ const Sidebar = () => {
       }
     };
 
-    // এটি অটোমেটিক রিস্টার্ট নিশ্চিত করে
     recognition.onend = () => {
-      try { recognition.start(); } catch (e) { console.log("Restarting voice engine..."); }
+      try { recognition.start(); } catch (e) { console.log("Voice Engine Restarting..."); }
     };
 
     try { recognition.start(); } catch (e) { console.log("Voice Engine Initialized"); }
