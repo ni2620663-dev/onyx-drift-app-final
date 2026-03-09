@@ -1,25 +1,27 @@
 // src/core/OnyxEngine.js
-import { FaceMesh } from "@mediapipe/face_mesh";
-import { Hands } from "@mediapipe/hands";
+// MediaPipe-এর ক্লায়েন্ট সাইড লাইব্রেরিগুলো ইমপোর্ট করুন
+import "@mediapipe/face_mesh";
+import "@mediapipe/hands";
 
 const OnyxEngine = {
   faceMesh: null,
   hands: null,
   
   async init(onResults) {
-    const basePath = `/models/mediapipe/`;
+    // উইন্ডো অবজেক্ট থেকে কনস্ট্রাক্টরগুলো সরাসরি এক্সেস করুন 
+    // এটি বিল্ড টুলের 'tree-shaking' বা মডিউল ইস্যু এড়িয়ে চলে
+    const { FaceMesh, Hands } = window;
+
+    if (!FaceMesh || !Hands) {
+      throw new Error("MediaPipe libraries not loaded globally.");
+    }
 
     this.faceMesh = new FaceMesh({
-      locateFile: (file) => {
-        // ফাইলটি লোড হওয়ার সময় পূর্ণ পাথ রিটার্ন করবে
-        return `${basePath}${file}`;
-      },
+      locateFile: (file) => `/models/mediapipe/${file}`,
     });
 
     this.hands = new Hands({
-      locateFile: (file) => {
-        return `${basePath}${file}`;
-      },
+      locateFile: (file) => `/models/mediapipe/${file}`,
     });
 
     this.faceMesh.setOptions({ 
@@ -39,6 +41,7 @@ const OnyxEngine = {
     this.faceMesh.onResults((results) => onResults("FACE", results));
     this.hands.onResults((results) => onResults("HANDS", results));
 
+    // ফাইলগুলো আগে থেকে লোড হওয়ার জন্য ইনিশিয়ালাইজেশন
     await Promise.all([
       this.faceMesh.initialize(),
       this.hands.initialize()

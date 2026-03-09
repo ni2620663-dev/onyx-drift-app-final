@@ -4,7 +4,6 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "preinstall": "npm config set legacy-peer-deps true",
     "build": "vite build",
     "preview": "vite preview"
   },
@@ -24,39 +23,24 @@
     "@tensorflow-models/hand-pose-detection": "^2.0.1",
     "@tensorflow/tfjs": "^4.22.0",
     "@tensorflow/tfjs-backend-webgl": "^4.22.0",
-    "@vitejs/plugin-react": "^5.0.0",
     "@zegocloud/zego-uikit-prebuilt": "^2.17.2",
-    "autoprefixer": "^10.4.14",
     "axios": "^1.13.2",
     "bcryptjs": "^3.0.3",
-    "buffer": "^6.0.3",
     "crypto-js": "^4.2.0",
-    "date-fns": "^4.1.0",
     "framer-motion": "^11.0.0",
-    "html2canvas": "^1.4.1",
     "lucide-react": "^0.400.0",
-    "moment": "^2.30.1",
-    "postcss": "^8.4.31",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-hot-toast": "^2.6.0",
-    "react-icons": "^5.5.0",
-    "react-is": "^18.3.1",
-    "react-media-recorder": "^1.7.2",
     "react-router-dom": "^6.22.0",
-    "react-toastify": "^10.0.0",
-    "react-webcam": "^7.2.0",
-    "recharts": "^2.12.0",
-    "simple-peer": "^9.11.1",
     "socket.io-client": "^4.7.5",
-    "sockjs-client": "^1.6.1",
-    "stompjs": "^2.3.3",
-    "tailwindcss": "^4.0.0",
-    "three": "^0.160.0",
-    "vite": "^5.1.0"
+    "three": "^0.160.0"
   },
   "devDependencies": {
+    "@vitejs/plugin-react": "^5.0.0",
     "@tailwindcss/postcss": "^4.0.0",
-    "dotenv": "^16.4.5"
+    "autoprefixer": "^10.4.14",
+    "postcss": "^8.4.31",
+    "tailwindcss": "^4.0.0",
+    "vite": "^5.1.0"
   }
 }
