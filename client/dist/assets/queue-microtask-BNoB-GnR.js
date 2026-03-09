@@ -1,0 +1,1 @@
+/*! queue-microtask. MIT License. Feross Aboukhadijeh <https://feross.org/opensource> */let e;var i=typeof queueMicrotask=="function"?queueMicrotask.bind(window):o=>(e||(e=Promise.resolve())).then(o).catch(t=>setTimeout(()=>{throw t},0));export{i as q};

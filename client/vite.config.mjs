@@ -1,17 +1,17 @@
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
-import path from 'path'
-import { fileURLToPath } from 'url'
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 // ES Modules-এ __dirname সেটআপ
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = path.dirname(__filename)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 export default defineConfig({
   plugins: [react()],
   
   define: {
-    // 🛠️ Simple-peer এবং Node.js লাইব্রেরির গ্লোবাল অবজেক্ট ফিক্স
+    // 🛠️ Simple-peer এবং অন্যান্য Node.js লাইব্রেরির গ্লোবাল অবজেক্ট ফিক্স
     global: 'window',
     'process.env': {},
   },
@@ -20,42 +20,52 @@ export default defineConfig({
     alias: {
       '@': path.resolve(__dirname, './src'),
       
-      // 🛠️ পলিফিল ম্যাপিং (Browser-এ Node.js ফিচার চালানোর জন্য)
+      // 🛠️ পলিফিল ম্যাপিং
       stream: 'stream-browserify',
       buffer: 'buffer',
       util: 'util',
       events: 'events',
       process: 'process/browser',
+      // react-webcam রেজোলিউশন নিশ্চিত করা
+      'react-webcam': 'react-webcam'
     },
   },
 
   server: {
     port: 5173,
-    host: true, 
-    // নোট: External images (Google, Dicebear) ব্লক হওয়া ঠেকাতে 
-    // "Cross-Origin-Embedder-Policy" সরিয়ে ফেলা হয়েছে।
-    headers: {}, 
+    host: true,
   },
 
   optimizeDeps: {
-    // FFmpeg-কে অপ্টিমাইজেশন থেকে বাদ রাখা হয়েছে
+    // FFmpeg-কে অপ্টিমাইজেশন থেকে বাদ রাখা
     exclude: ['@ffmpeg/ffmpeg', '@ffmpeg/util'],
     
-    // 🛠️ পলিফিলগুলোকে ফোর্স অপ্টিমাইজ করা হচ্ছে যাতে এরর না আসে
+    // 🛠️ পলিফিলগুলোকে ফোর্স অপ্টিমাইজ করা
     include: [
       'simple-peer', 
       'buffer', 
       'stream-browserify', 
       'util', 
       'events', 
-      'process'
+      'process',
+      'react-webcam' // অপ্টিমাইজেশনে যোগ করা হয়েছে
     ], 
   },
 
   build: {
+    // Rollup options
     rollupOptions: {
-      external: [],
+      // react-webcam কে এক্সটারনাল করবেন না, এতে বিল্ড ফাইল ক্র্যাশ করবে
+      external: [], 
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            return id.toString().split('node_modules/')[1].split('/')[0].toString();
+          }
+        }
+      }
     },
     chunkSizeWarningLimit: 2000,
+    sourcemap: false, // প্রোডাকশনে বিল্ড দ্রুত করার জন্য
   },
-})
+});
