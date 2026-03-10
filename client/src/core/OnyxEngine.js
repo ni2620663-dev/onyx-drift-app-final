@@ -8,8 +8,8 @@ const OnyxEngine = {
 
   async init(onResults) {
     try {
-      // লোকাল পাবলিক ফোল্ডার থেকে ফাইল লোড করার কনফিগারেশন
-      const locateFile = (file) => `/mediapipe/${file}`;
+      // পাথ আপডেট করা হয়েছে: /models/mediapipe/
+      const locateFile = (file) => `/models/mediapipe/${file}`;
 
       this.faceMesh = new FaceMesh({ locateFile });
       this.hands = new Hands({ locateFile });
@@ -32,19 +32,19 @@ const OnyxEngine = {
       this.hands.onResults((results) => onResults("HANDS", results));
 
       // লাইব্রেরি ইনিশিয়াল করা
-      await Promise.all([this.faceMesh.initialize(), this.hands.initialize()]);
+      await this.faceMesh.initialize();
+      await this.hands.initialize();
       
       this.isInitialized = true;
       console.log("🚀 OnyxEngine: Neural Core Synchronized.");
       
     } catch (err) {
       console.error("Neural OS Warm-up Failed:", err);
-      // এখানে প্রয়োজনে রি-ট্রাই লজিক রাখতে পারেন
+      this.isInitialized = false;
     }
   },
 
   async process(videoElement) {
-    // ক্যামেরা ফিড রেডি না থাকলে প্রসেস করবেন না
     if (!this.isInitialized || !videoElement || videoElement.readyState !== 4) return;
     
     try {
@@ -53,7 +53,6 @@ const OnyxEngine = {
         this.hands.send({ image: videoElement })
       ]);
     } catch (err) {
-      // ফ্রেম প্রসেসিং এরর হলে সেটি পপুলেট করবেন না
       console.debug("Neural Processing skip:", err.message);
     }
   }
