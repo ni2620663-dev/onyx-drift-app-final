@@ -12,7 +12,7 @@
 
     <script>
       /* ==========================================================
-          🧠 NEURAL OS GATEKEEPER - ইনিশিয়ালাইজেশন এবং পলিফিল
+          🧠 NEURAL OS GATEKEEPER - ইনিশিয়ালাইজেশন এবং পলিফিল
       ========================================================== */
       
       // Global Object Fix
@@ -27,17 +27,16 @@
 
       /**
        * ⚡ MediaPipe File Locator Fix
-       * এই ফাংশনটি ব্রাউজারের WASM ফেসড ও বিন ফাইলগুলোকে সঠিক CDN থেকে খুঁজে বের করবে।
+       * এই ফাংশনটি WASM এবং বাইনারি ফাইলগুলোকে CDN থেকে সঠিক MIME টাইপে লোড নিশ্চিত করে।
        */
       window.locateMediaPipeFile = function(file, solution) {
-        const base = "https://cdn.jsdelivr.net/npm/@mediapipe";
-        // নির্দিষ্ট ফোল্ডার এবং ফাইল পাথ নিশ্চিত করা
-        return `${base}/${solution}/${file}`;
+        // CDN এর ফাইলগুলো যাতে সঠিকভাবে লোড হয়
+        return `https://cdn.jsdelivr.net/npm/@mediapipe/${solution}/${file}`;
       };
     </script>
     
     <script type="module">
-      import { Buffer } from 'buffer';
+      import { Buffer } from 'https://cdn.jsdelivr.net/npm/buffer@6.0.3/+esm';
       window.Buffer = Buffer;
     </script>
   </head>
