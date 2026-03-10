@@ -1,0 +1,82 @@
+#include <stdint.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <math.h>
+#include <sys/time.h>
+#include <unistd.h>
+
+#include <arm_neon.h>
+
+// The object struct
+typedef struct object {
+  uint32_t id;
+  float weight;
+  float32x4_t position;
+  float32x4_t velocity;
+  void *model_data;
+} object_t;
+
+// Helper function to return a random float number from 0.0f to a.
+float randf(float a) {
+  return ((float)rand()/(float)(RAND_MAX)) * a;
+}
+
+const float box_hi[4] = {  10.0f,  10.0f,  10.0f,  10.0f };
+
+#define N           100000 // number of particles
+#define SECONDS     100    // duration in seconds
+#define STEPSPERSEC 1000   // steps per second or time resolution
+
+void init_objects(object_t *objects) {
+  // Give initial speeds and positions
+  for (size_t i=0; i < N; i++) {
+    float o[4];
+    objects[i].id = i;
+    objects[i].weight = randf(2.0f);
+    // initial positions in box [-10, 10], velocity in [-1, 1]
+    o[0] = randf(2.0f * box_hi[0]) - box_hi[0];
+    o[1] = randf(2.0f * box_hi[1]) - box_hi[1];
+    o[2] = randf(2.0f * box_hi[2]) - box_hi[2];
+    o[3] = 0.0f;
+    objects[i].position = vld1q_f32(o);
+    o[0] = randf(2.0) - 1.0f;
+    o[1] = randf(2.0) - 1.0f;
+    o[2] = randf(2.0) - 1.0f;
+    o[3] = 0.0f;
+    objects[i].velocity = vld1q_f32(o);
+  }
+}
+
+void simulate_objects(object_t *objects, float duration, float step) {
+
+  float current_time = 0.0f;
+
+  float32x4_t dt = vdupq_n_f32(step);
+  uint32x4_t one = vdupq_n_u32(1);
+  uint32x4_t ctr = vdupq_n_u32(0);
+
+  float32x4_t box_hi_v = vld1q_f32(box_hi);
+  float32x4_t box_lo_v = vnegq_f32(box_hi_v);
+
+  while (current_time < duration) {
+    // Move the object in msec steps
+    for (size_t i=0; i < N; i++) {
+      objects[i].position = vfmaq_f32(objects[i].position, objects[i].velocity, dt);
+
+      uint32x4_t gt_mask = vcgtq_f32(objects[i].position, box_hi_v);
+      uint32x4_t lt_mask = vcltq_f32(objects[i].position, box_lo_v);
+      uint32x4_t col_mask = vorrq_u32(gt_mask, lt_mask);
+
+      float32x4_t neg_velocity = vnegq_f32(objects[i].velocity);
+      objects[i].velocity = vbslq_f32(col_mask, neg_velocity, objects[i].velocity);
+
+      ctr = vaddq_u32(ctr, vandq_u32(col_mask, one));
+    }
+    current_time += step;
+  }
+  uint32_t collisions[4];
+  vst1q_u32((uint32_t *) &collisions, ctr);
+  printf("Total border collisions: x: %d, y: %d, z: %d\n", collisions[0], collisions[1], collisions[2]);
+}
+
+... original main function below this ...

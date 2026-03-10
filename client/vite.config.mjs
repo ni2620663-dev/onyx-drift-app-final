@@ -2,7 +2,6 @@ import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { viteStaticCopy } from 'vite-plugin-static-copy';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -11,24 +10,10 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
 
   return {
-    plugins: [
-      react(),
-      // MediaPipe এর অ্যাসেটগুলো সরাসরি dist ফোল্ডারে কপি করার জন্য এটি যোগ করুন
-      viteStaticCopy({
-        targets: [
-          {
-            src: 'node_modules/@mediapipe/face_mesh/*.{wasm,binarypb}',
-            dest: 'mediapipe'
-          },
-          {
-            src: 'node_modules/@mediapipe/hands/*.{wasm,binarypb}',
-            dest: 'mediapipe'
-          }
-        ]
-      })
-    ],
+    plugins: [react()],
 
     define: {
+      // MediaPipe এবং অন্যান্য লাইব্রেরির জন্য global এবং process.env নিশ্চিত করা
       'global': 'window',
       'process.env': JSON.stringify(env),
     },
@@ -36,20 +21,20 @@ export default defineConfig(({ mode }) => {
     resolve: {
       alias: {
         '@': path.resolve(__dirname, './src'),
-        // Node.js মডিউলগুলোর জন্য ব্রাউজার কমপ্যাটিবল ভার্সন ব্যবহার করুন
+        // ব্রাউজার সামঞ্জস্যতার জন্য পলিফিল এলিয়াস
         'stream': 'stream-browserify',
         'buffer': 'buffer',
         'events': 'events',
+        'util': 'util', // এটি যোগ করা হয়েছে 'Module util externalized' এরর বন্ধ করতে
       },
     },
 
     server: {
       port: 5173,
       host: true,
-      // সিকিউরিটি হেডার এখানে সরাসরি দেওয়ার বদলে vercel.json-এ রাখা বেশি কার্যকর
-      headers: {
-        'Cross-Origin-Opener-Policy': 'same-origin',
-        'Cross-Origin-Resource-Policy': 'cross-origin'
+      // HMR এবং ফাইল ওয়াচিং ঠিক রাখতে
+      watch: {
+        usePolling: true,
       },
     },
 
@@ -58,28 +43,41 @@ export default defineConfig(({ mode }) => {
         'buffer', 
         'stream-browserify', 
         'events',
+        'util',
         '@mediapipe/face_mesh',
         '@mediapipe/hands',
         '@mediapipe/camera_utils'
       ],
+      // CommonJS মডিউলগুলোকে সঠিকভাবে হ্যান্ডেল করতে
+      esbuildOptions: {
+        define: {
+          global: 'globalThis'
+        }
+      }
     },
 
     build: {
       outDir: 'dist',
+      // বড় ফাইলগুলোর জন্য সোর্স ম্যাপ তৈরি বন্ধ রাখা ভালো (অপশনাল)
+      sourcemap: false,
       commonjsOptions: {
         transformMixedEsModules: true,
       },
       rollupOptions: {
         output: {
           manualChunks(id) {
+            // MediaPipe লাইব্রেরিগুলোকে আলাদা ফাইলে রাখা যাতে মেইন বান্ডেল ছোট থাকে
+            if (id.includes('@mediapipe')) {
+              return 'mediapipe_core';
+            }
             if (id.includes('node_modules')) {
-              if (id.includes('@mediapipe')) return 'mediapipe_core';
               return 'vendor';
             }
           }
         }
       },
-      chunkSizeWarningLimit: 3000,
+      // MediaPipe এর বড় সাইজের জন্য ওয়ার্নিং লিমিট বাড়ানো হয়েছে
+      chunkSizeWarningLimit: 4000,
     },
   };
 });

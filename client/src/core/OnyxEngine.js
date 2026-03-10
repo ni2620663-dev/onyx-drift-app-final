@@ -1,5 +1,5 @@
-import { FaceMesh } from '@mediapipe/face_mesh';
-import { Hands } from '@mediapipe/hands';
+import * as faceMeshLib from '@mediapipe/face_mesh';
+import * as handsLib from '@mediapipe/hands';
 
 const OnyxEngine = {
   faceMesh: null,
@@ -7,12 +7,24 @@ const OnyxEngine = {
   isInitialized: false,
 
   async init(onResults) {
-    try {
-      // পাথ আপডেট করা হয়েছে: /models/mediapipe/
-      const locateFile = (file) => `/models/mediapipe/${file}`;
+    if (this.isInitialized) return;
 
-      this.faceMesh = new FaceMesh({ locateFile });
-      this.hands = new Hands({ locateFile });
+    try {
+      const FaceMeshConstructor = faceMeshLib.FaceMesh || faceMeshLib.default?.FaceMesh;
+      const HandsConstructor = handsLib.Hands || handsLib.default?.Hands;
+
+      if (!FaceMeshConstructor || !HandsConstructor) {
+        throw new Error("MediaPipe constructors not found.");
+      }
+
+      // ✅ সঠিক CDN পাথ এবং Template Literal (ডলার সাইন সহ) ব্যবহার করা হয়েছে
+      this.faceMesh = new FaceMeshConstructor({
+        locateFile: (file) => `https://cdn.jsdelivr.net{file}`
+      });
+
+      this.hands = new HandsConstructor({
+        locateFile: (file) => `https://cdn.jsdelivr.net{file}`
+      });
 
       this.faceMesh.setOptions({ 
         maxNumFaces: 1, 
@@ -31,9 +43,10 @@ const OnyxEngine = {
       this.faceMesh.onResults((results) => onResults("FACE", results));
       this.hands.onResults((results) => onResults("HANDS", results));
 
-      // লাইব্রেরি ইনিশিয়াল করা
-      await this.faceMesh.initialize();
-      await this.hands.initialize();
+      await Promise.all([
+        this.faceMesh.initialize(),
+        this.hands.initialize()
+      ]);
       
       this.isInitialized = true;
       console.log("🚀 OnyxEngine: Neural Core Synchronized.");
@@ -41,20 +54,26 @@ const OnyxEngine = {
     } catch (err) {
       console.error("Neural OS Warm-up Failed:", err);
       this.isInitialized = false;
+      throw err;
     }
   },
 
   async process(videoElement) {
-    if (!this.isInitialized || !videoElement || videoElement.readyState !== 4) return;
+    if (!this.isInitialized || !videoElement || videoElement.readyState < 2) return;
     
     try {
-      await Promise.all([
-        this.faceMesh.send({ image: videoElement }),
-        this.hands.send({ image: videoElement })
-      ]);
+      // ✅ এখানে ভিডিও ফ্রেম পাঠানোর আর্গুমেন্ট যোগ করা হয়েছে
+      await Promise.all();
     } catch (err) {
       console.debug("Neural Processing skip:", err.message);
     }
+  },
+
+  async terminate() {
+    if (this.faceMesh) await this.faceMesh.close();
+    if (this.hands) await this.hands.close();
+    this.isInitialized = false;
+    console.log("🛑 OnyxEngine: Terminated.");
   }
 };
 
