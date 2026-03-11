@@ -2,49 +2,30 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <base href="/" />
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>OnyxDrift | Neural Network</title>
 
-    <!-- 
-      🚀 দ্রষ্টব্য: এখানে মিডিয়াপাইপের পুরনো CDN লিঙ্কগুলো (@0.4.x) সরিয়ে ফেলা হয়েছে। 
-      এগুলো এখন আপনার 'public/mediapipe' ফোল্ডার থেকে বা Vite এর মাধ্যমে লোড হবে।
-    -->
-
     <script>
-      /* ==========================================================
-          🧠 NEURAL OS GATEKEEPER - গ্লোবাল কনফিগারেশন
-      ========================================================== */
-      
-      // Global Object Fix (Vite/MediaPipe এর জন্য প্রয়োজন)
       window.global = window;
-      
-      // Process Object Polyfill
       window.process = window.process || { 
         env: { NODE_ENV: 'development' },
-        nextTick: (fn) => setTimeout(fn, 0),
-        browser: true
+        browser: true 
       };
 
       /**
        * ⚡ MediaPipe File Locator
-       * আপনার কোড যদি লোকাল ফাইল পায় তবে সেটি ব্যবহার করবে। 
+       * আপনার স্ক্রিনশট অনুযায়ী ফাইলগুলো এখন সরাসরি public/ ফোল্ডারে আছে।
        */
       window.locateMediaPipeFile = function(file) {
-        return `/mediapipe/${file}`;
+        // ফাইলটি সরাসরি রুট থেকে কল করা হচ্ছে যাতে সাব-ডিরেক্টরি কনফ্লিক্ট না হয়
+        return `${window.location.origin}/${file}`;
       };
-    </script>
-    
-    <!-- Buffer Polyfill for Browser -->
-    <script type="module">
-      import { Buffer } from 'https://cdn.jsdelivr.net/npm/buffer@6.0.3/+esm';
-      window.Buffer = Buffer;
     </script>
   </head>
   <body class="bg-[#020617] text-white">
     <div id="root"></div>
-    
-    <!-- আপনার মেইন এন্ট্রি পয়েন্ট -->
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

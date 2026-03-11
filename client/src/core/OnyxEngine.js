@@ -1,5 +1,5 @@
-import * as faceMeshLib from '@mediapipe/face_mesh';
-import * as handsLib from '@mediapipe/hands';
+import { FaceMesh } from '@mediapipe/face_mesh';
+import { Hands } from '@mediapipe/hands';
 
 const OnyxEngine = {
   faceMesh: null,
@@ -10,22 +10,18 @@ const OnyxEngine = {
     if (this.isInitialized) return;
 
     try {
-      const FaceMeshConstructor = faceMeshLib.FaceMesh || faceMeshLib.default?.FaceMesh;
-      const HandsConstructor = handsLib.Hands || handsLib.default?.Hands;
+      // CDN ব্যবহার করে ফাইল পাথ কনফিগারেশন
+      const baseCdnUrl = "https://cdn.jsdelivr.net/npm/@mediapipe/";
 
-      if (!FaceMeshConstructor || !HandsConstructor) {
-        throw new Error("MediaPipe constructors not found.");
-      }
-
-      // ✅ সঠিক CDN পাথ এবং Template Literal (ডলার সাইন সহ) ব্যবহার করা হয়েছে
-      this.faceMesh = new FaceMeshConstructor({
-        locateFile: (file) => `https://cdn.jsdelivr.net{file}`
+      this.faceMesh = new FaceMesh({
+        locateFile: (file) => `${baseCdnUrl}face_mesh/${file}`
       });
 
-      this.hands = new HandsConstructor({
-        locateFile: (file) => `https://cdn.jsdelivr.net{file}`
+      this.hands = new Hands({
+        locateFile: (file) => `${baseCdnUrl}hands/${file}`
       });
 
+      // অপশন সেটআপ
       this.faceMesh.setOptions({ 
         maxNumFaces: 1, 
         refineLandmarks: true, 
@@ -43,29 +39,32 @@ const OnyxEngine = {
       this.faceMesh.onResults((results) => onResults("FACE", results));
       this.hands.onResults((results) => onResults("HANDS", results));
 
-      await Promise.all([
-        this.faceMesh.initialize(),
-        this.hands.initialize()
-      ]);
+      // সিরিয়াল বুটিং (WASM লোড হওয়ার জন্য অপেক্ষা)
+      console.log("🧬 OnyxEngine: Booting Neural Core via CDN...");
+      
+      await this.faceMesh.initialize();
+      await this.hands.initialize();
       
       this.isInitialized = true;
-      console.log("🚀 OnyxEngine: Neural Core Synchronized.");
+      console.log("🚀 OnyxEngine: Neural Core Fully Operational.");
       
     } catch (err) {
-      console.error("Neural OS Warm-up Failed:", err);
+      console.error("❌ Neural OS Critical Failure:", err);
       this.isInitialized = false;
       throw err;
     }
   },
 
   async process(videoElement) {
+    // ইমেজ প্রসেসিং চেক
     if (!this.isInitialized || !videoElement || videoElement.readyState < 2) return;
     
     try {
-      // ✅ এখানে ভিডিও ফ্রেম পাঠানোর আর্গুমেন্ট যোগ করা হয়েছে
-      await Promise.all();
+      // ধারাবাহিকভাবে প্রসেস করা যাতে ওভারলোড না হয়
+      await this.faceMesh.send({ image: videoElement });
+      await this.hands.send({ image: videoElement });
     } catch (err) {
-      console.debug("Neural Processing skip:", err.message);
+      console.debug("Onyx Engine skipped frame:", err.message);
     }
   },
 

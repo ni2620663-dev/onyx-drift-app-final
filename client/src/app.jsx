@@ -1,6 +1,6 @@
-import React, { useEffect, useRef, useState, Suspense, lazy, useCallback } from "react";
+import React, { useEffect, useRef, useState, Suspense, lazy, useCallback, useMemo } from "react";
 import { Routes, Route, useLocation, Navigate, useNavigate } from "react-router-dom";
-import { useAuth0, withAuthenticationRequired } from "@auth0/auth0-react";
+import { useAuth0 } from "@auth0/auth0-react";
 import { Toaster } from 'react-hot-toast';
 import { Mic, MicOff } from 'lucide-react';
 
@@ -17,8 +17,8 @@ import { NeuralCore } from "./services/NeuralCore";
 // Components
 import Sidebar from "./components/Sidebar";
 import CustomCursor from "./components/CustomCursor";
+import ProtectedRoute from "./components/ProtectedRoute";
 
-// Lazy Loaded Pages
 const Messenger = lazy(() => import("./pages/Messenger"));
 const PremiumHomeFeed = lazy(() => import("./pages/PremiumHomeFeed"));
 const ProfilePage = lazy(() => import("./pages/Profile"));
@@ -30,9 +30,9 @@ const CallPage = lazy(() => import("./pages/CallPage"));
 const AITwinSync = lazy(() => import("./components/AITwinSync"));
 
 /* ==========================================================
-    🎤 Global Voice Intelligence Engine
+   🎤 Global Voice Intelligence Engine
 ========================================================== */
-const GlobalVoiceAssistant = ({ onCommand }) => {
+const GlobalVoiceAssistant = React.memo(({ onCommand }) => {
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef(null);
 
@@ -47,11 +47,13 @@ const GlobalVoiceAssistant = ({ onCommand }) => {
       onCommand(transcript);
     };
 
-    if (isListening) recognitionRef.current.start();
-    else recognitionRef.current.stop();
+    return () => { if (recognitionRef.current) recognitionRef.current.stop(); };
+  }, [onCommand]);
 
-    return () => recognitionRef.current?.stop();
-  }, [isListening, onCommand]);
+  useEffect(() => {
+    if (isListening) { try { recognitionRef.current?.start(); } catch (e) {} } 
+    else { recognitionRef.current?.stop(); }
+  }, [isListening]);
 
   return (
     <div className="fixed bottom-24 right-6 z-[99999]">
@@ -63,10 +65,10 @@ const GlobalVoiceAssistant = ({ onCommand }) => {
       </button>
     </div>
   );
-};
+});
 
 /* ==========================================================
-    🚀 Main Application Core (OnyxDrift)
+   🚀 Main Application Core (OnyxDrift)
 ========================================================== */
 export default function App() {
   const { isAuthenticated, isLoading, user } = useAuth0();
@@ -75,6 +77,7 @@ export default function App() {
   const videoRef = useRef(null);
   const animationFrameRef = useRef(null);
   const lastGestureTime = useRef(0);
+  const isEngineInitialized = useRef(false);
 
   const handleNeuralCommand = useCallback(async (commandInput) => {
     const userContext = {
@@ -83,36 +86,36 @@ export default function App() {
       gazeTarget: IntentManager.latestState?.gaze?.focusedElement || null,
       lastGesture: IntentManager.latestState?.gesture || null
     };
-
     try {
       const decision = await NeuralCore.process(commandInput, userContext);
       ActionDispatcher.execute(decision, navigate);
-    } catch (err) {
-      console.error("Action Execution Failed:", err);
-    }
+    } catch (err) { console.error("Action Execution Failed:", err); }
   }, [location.pathname, navigate]);
 
   useEffect(() => {
-    if (!isAuthenticated) return;
+    if (!isAuthenticated || !user || isEngineInitialized.current) return;
+
+    let isMounted = true;
+    isEngineInitialized.current = true;
 
     const startOnyxPipeline = async () => {
       try {
-        // ১. সিকিউরিটি এবং প্রাইভেসি
         await PrivacyVault.initializeVault();
         const access = await OnyxGatekeeper.verifySession(user);
-        if (access !== "AUTHORIZED") return;
+        if (access !== "AUTHORIZED" || !isMounted) return;
 
-        // ২. ক্যামেরা স্ট্রিম
         const stream = await navigator.mediaDevices.getUserMedia({ 
           video: { width: 640, height: 480, frameRate: 30 } 
         });
         
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
+          // AbortError এড়াতে প্রমিজ হ্যান্ডলিং
+          await videoRef.current.play().catch(e => console.warn("Stream play interrupted:", e.name));
         }
 
-        // ৩. ইঞ্জিন ইনিশিয়ালাইজেশন
         await OnyxEngine.init((type, results) => {
+          if (!isMounted) return;
           if (type === "FACE" && results.multiFaceLandmarks?.[0]) {
             const nose = results.multiFaceLandmarks[0][4];
             const focusedId = GazeFocusEngine.detectFocus(nose.x * window.innerWidth, nose.y * window.innerHeight);
@@ -128,44 +131,49 @@ export default function App() {
           }
         });
 
-        // ৪. রেন্ডার লুপ
         const processFrame = async () => {
-          if (videoRef.current?.readyState === 4) {
-            await OnyxEngine.process(videoRef.current);
+          if (!isMounted) return;
+          if (videoRef.current && videoRef.current.readyState === 4) {
+             await OnyxEngine.process(videoRef.current);
           }
           animationFrameRef.current = requestAnimationFrame(processFrame);
         };
         processFrame();
 
-      } catch (err) {
-        console.error("Neural OS Initialization Failed:", err);
+      } catch (err) { 
+        if (err.name !== 'AbortError') console.error("Neural OS Initialization Failed:", err);
+        isEngineInitialized.current = false; 
       }
     };
 
     startOnyxPipeline();
 
     return () => {
-      cancelAnimationFrame(animationFrameRef.current);
+      isMounted = false;
+      isEngineInitialized.current = false;
+      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
       if (videoRef.current?.srcObject) {
         videoRef.current.srcObject.getTracks().forEach(track => track.stop());
       }
+      OnyxEngine.terminate();
     };
   }, [isAuthenticated, user, handleNeuralCommand]);
 
-  if (isLoading) return <div className="h-screen flex items-center justify-center bg-[#020617] text-cyan-500 font-mono">INITIALIZING_ONYX_CORE...</div>;
+  const isFullWidthPage = useMemo(() => {
+    const fullWidthPaths = ["/messenger", "/messages", "/settings", "/join", "/reels", "/ai-twin", "/call"];
+    return location.pathname === "/" || fullWidthPaths.some(path => location.pathname.startsWith(path));
+  }, [location.pathname]);
 
-  const isFullWidthPage = ["/messenger", "/messages", "/settings", "/", "/join", "/reels", "/ai-twin", "/call"].some(path => location.pathname.startsWith(path));
+  if (isLoading) return <div className="h-screen flex items-center justify-center bg-[#020617] text-cyan-500 font-mono">INITIALIZING_ONYX_CORE...</div>;
 
   return (
     <div className="min-h-screen bg-[#020617] text-gray-200 overflow-x-hidden">
       <Toaster position="top-center" />
       <CustomCursor />
       
-      {/* 🧠 Neural Vision Pipeline - Background Processing */}
-      
       <video 
         ref={videoRef} 
-        className="fixed opacity-0 pointer-events-none" 
+        style={{ position: 'fixed', top: '-9999px', left: '-9999px' }} 
         autoPlay 
         playsInline 
         muted 
@@ -183,16 +191,16 @@ export default function App() {
         <main className="flex-1 relative">
           <Suspense fallback={<div className="h-screen flex items-center justify-center text-cyan-500 font-mono">NEURAL_STREAM_SYNCING...</div>}>
             <Routes>
-              <Route path="/" element={isAuthenticated ? <Navigate to="/feed" /> : <Landing />} />
+              <Route path="/" element={isAuthenticated ? <Navigate to="/feed" replace /> : <Landing />} />
               <Route path="/join" element={<JoinPage />} /> 
-              <Route path="/feed" element={<ProtectedRoute component={PremiumHomeFeed} />} />
-              <Route path="/reels" element={<ProtectedRoute component={ReelsFeed} />} />
-              <Route path="/profile/:userId" element={<ProtectedRoute component={ProfilePage} />} />
-              <Route path="/messages/:userId?" element={<ProtectedRoute component={Messenger} />} />
-              <Route path="/settings" element={<ProtectedRoute component={Settings} />} />
-              <Route path="/call/:roomId" element={<ProtectedRoute component={CallPage} />} />
-              <Route path="/ai-twin" element={<ProtectedRoute component={AITwinSync} />} />
-              <Route path="*" element={<Navigate to="/" />} />
+              <Route path="/feed" element={<ProtectedRoute><PremiumHomeFeed /></ProtectedRoute>} />
+              <Route path="/reels" element={<ProtectedRoute><ReelsFeed /></ProtectedRoute>} />
+              <Route path="/profile/:userId" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
+              <Route path="/messages/:userId?" element={<ProtectedRoute><Messenger /></ProtectedRoute>} />
+              <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+              <Route path="/call/:roomId" element={<ProtectedRoute><CallPage /></ProtectedRoute>} />
+              <Route path="/ai-twin" element={<ProtectedRoute><AITwinSync /></ProtectedRoute>} />
+              <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </Suspense>
         </main>
@@ -200,10 +208,3 @@ export default function App() {
     </div>
   );
 }
-
-const ProtectedRoute = ({ component: Component }) => {
-  const AuthenticatedComponent = withAuthenticationRequired(Component, {
-    onRedirecting: () => <div className="h-screen bg-[#020617]" />
-  });
-  return <AuthenticatedComponent />;
-};

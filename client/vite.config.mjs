@@ -10,32 +10,36 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
 
   return {
+    publicDir: 'public', // public ফোল্ডার থেকে ফাইল সার্ভ নিশ্চিত করে
+
     plugins: [react()],
 
     define: {
-      // MediaPipe এবং অন্যান্য লাইব্রেরির জন্য global এবং process.env নিশ্চিত করা
-      'global': 'window',
+      'global': 'globalThis',
       'process.env': JSON.stringify(env),
     },
 
     resolve: {
       alias: {
         '@': path.resolve(__dirname, './src'),
-        // ব্রাউজার সামঞ্জস্যতার জন্য পলিফিল এলিয়াস
         'stream': 'stream-browserify',
         'buffer': 'buffer',
         'events': 'events',
-        'util': 'util', // এটি যোগ করা হয়েছে 'Module util externalized' এরর বন্ধ করতে
+        'util': 'util',
+        'process': 'process/browser',
       },
     },
 
     server: {
       port: 5173,
       host: true,
-      // HMR এবং ফাইল ওয়াচিং ঠিক রাখতে
-      watch: {
-        usePolling: true,
+      fs: {
+        strict: false, // ফাইল সিস্টেম এক্সেস সহজ করে
       },
+      // 🚀 এটিই আসল সমাধান: ডটওয়ালা ফাইলকে (যেমন .js, .wasm) রাউট মনে করবে না
+      historyApiFallback: {
+        disableDotRule: true 
+      }
     },
 
     optimizeDeps: {
@@ -44,11 +48,10 @@ export default defineConfig(({ mode }) => {
         'stream-browserify', 
         'events',
         'util',
+        'process',
         '@mediapipe/face_mesh',
         '@mediapipe/hands',
-        '@mediapipe/camera_utils'
       ],
-      // CommonJS মডিউলগুলোকে সঠিকভাবে হ্যান্ডেল করতে
       esbuildOptions: {
         define: {
           global: 'globalThis'
@@ -58,25 +61,15 @@ export default defineConfig(({ mode }) => {
 
     build: {
       outDir: 'dist',
-      // বড় ফাইলগুলোর জন্য সোর্স ম্যাপ তৈরি বন্ধ রাখা ভালো (অপশনাল)
       sourcemap: false,
       commonjsOptions: {
         transformMixedEsModules: true,
       },
       rollupOptions: {
         output: {
-          manualChunks(id) {
-            // MediaPipe লাইব্রেরিগুলোকে আলাদা ফাইলে রাখা যাতে মেইন বান্ডেল ছোট থাকে
-            if (id.includes('@mediapipe')) {
-              return 'mediapipe_core';
-            }
-            if (id.includes('node_modules')) {
-              return 'vendor';
-            }
-          }
+          manualChunks: undefined 
         }
       },
-      // MediaPipe এর বড় সাইজের জন্য ওয়ার্নিং লিমিট বাড়ানো হয়েছে
       chunkSizeWarningLimit: 4000,
     },
   };
