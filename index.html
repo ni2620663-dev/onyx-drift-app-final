@@ -9,8 +9,13 @@
       body { margin: 0; background-color: #010409; color: white; }
     </style>
 
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
+
     <script>
-      // আপনার নিজস্ব মডেল ফাইলগুলো লোড করার জন্য কাস্টম পাথ রিজিভলভার
       window.loadOnyxModel = function(fileName) {
         return `/models/${fileName}`; 
       };

@@ -1,8 +1,4 @@
 import React, { useRef, useEffect, useCallback, useState } from "react";
-// মিডিয়াপাইপ ইম্পোর্টস সঠিকভাবে নেমস্পেস আকারে নেওয়া হয়েছে
-import * as HandsModule from "@mediapipe/hands";
-import * as FaceMeshModule from "@mediapipe/face_mesh";
-import { Camera } from "@mediapipe/camera_utils";
 import Webcam from "react-webcam";
 
 const NeuralVirtualTouch = () => {
@@ -45,7 +41,6 @@ const NeuralVirtualTouch = () => {
   const onResults = useCallback((hRes, fRes) => {
     if (hRes) lastHandResults.current = hRes;
     if (fRes) lastFaceResults.current = fRes;
-
     const handsData = lastHandResults.current;
     const faceData = lastFaceResults.current;
 
@@ -54,12 +49,10 @@ const NeuralVirtualTouch = () => {
       setIsUserPresent(true);
       const eyeDist = Math.abs(face[159].y - face[145].y);
       setIsEyesOpen(eyeDist > 0.012);
-
       if (isLoggedIn && eyeDist > 0.015 && face[468]) {
         const irisY = face[468].y; 
         const neutralY = 0.48; 
         const threshold = 0.06;
-
         if (irisY < neutralY - threshold) window.scrollBy(0, -30);
         else if (irisY > neutralY + threshold) window.scrollBy(0, 30);
       }
@@ -71,15 +64,12 @@ const NeuralVirtualTouch = () => {
       const hand = handsData.multiHandLandmarks[0];
       const indexTip = hand[8];
       const indexBase = hand[5];
-
       const targetX = (1 - indexTip.x) * window.innerWidth;
       const targetY = indexTip.y * window.innerHeight;
-      
       setCursorPos(prev => ({
         x: prev.x + (targetX - prev.x) * 0.4,
         y: prev.y + (targetY - prev.y) * 0.4
       }));
-
       const currentTarget = document.elementFromPoint(targetX, targetY);
       if (currentTarget && currentTarget === lastTargetRef.current) {
         if (!dwellTimerRef.current) {
@@ -100,29 +90,25 @@ const NeuralVirtualTouch = () => {
         setDwellProgress(0);
         lastTargetRef.current = currentTarget;
       }
-
-      if (indexTip.y > indexBase.y + 0.06) {
-        executeGlobalClick(targetX, targetY);
-      }
+      if (indexTip.y > indexBase.y + 0.06) executeGlobalClick(targetX, targetY);
     }
   }, [isLoggedIn, executeGlobalClick]);
 
   useEffect(() => {
-    if (!isSystemActive || !webcamRef.current) return;
+    if (!isSystemActive || !webcamRef.current || !window.Hands || !window.FaceMesh) return;
 
-    // ইম্পোর্ট করা মডিউল থেকে কনস্ট্রাকটর সঠিকভাবে কল করা হচ্ছে
-    const hands = new HandsModule.Hands({ locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}` });
-    const faceMesh = new FaceMeshModule.FaceMesh({ locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${f}` });
+    // সরাসরি window থেকে কনস্ট্রাকটর ব্যবহার
+    const hands = new window.Hands({ locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}` });
+    const faceMesh = new window.FaceMesh({ locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${f}` });
 
     hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.7 });
     faceMesh.setOptions({ refineLandmarks: true, minDetectionConfidence: 0.7 });
-
     hands.onResults(res => onResults(res, null));
     faceMesh.onResults(res => onResults(null, res));
 
     const runCamera = async () => {
       try {
-        cameraRef.current = new Camera(webcamRef.current.video, {
+        cameraRef.current = new window.Camera(webcamRef.current.video, {
           onFrame: async () => {
             if (isProcessing.current) return;
             isProcessing.current = true;
@@ -137,7 +123,6 @@ const NeuralVirtualTouch = () => {
         await cameraRef.current.start();
       } catch (err) { setStatus("CAMERA_ERROR"); }
     };
-
     runCamera();
     return () => {
       cameraRef.current?.stop();
@@ -161,7 +146,6 @@ const NeuralVirtualTouch = () => {
 
   return (
     <div className={`min-h-screen transition-all duration-700 bg-[#020202] text-cyan-400 font-mono overflow-hidden ${isBlurry ? 'blur-[45px] scale-105 pointer-events-none' : 'blur-0'}`}>
-      
       {!isSystemActive && (
         <div className="fixed inset-0 flex items-center justify-center bg-black z-[5000]">
           <button onClick={() => setIsSystemActive(true)} className="px-12 py-4 border-2 border-cyan-500 text-cyan-500 hover:bg-cyan-500 hover:text-black transition-all font-bold tracking-widest">
@@ -169,7 +153,6 @@ const NeuralVirtualTouch = () => {
           </button>
         </div>
       )}
-
       {isSystemActive && !isLoggedIn && (
         <div className="fixed inset-0 flex flex-col items-center justify-center bg-black/95 z-[4000]">
           <div className="w-56 h-56 border-2 border-cyan-500/20 rounded-full flex items-center justify-center relative">
@@ -181,7 +164,6 @@ const NeuralVirtualTouch = () => {
           </button>
         </div>
       )}
-
       {isLoggedIn && (
         <div className="p-10">
           <header className="flex justify-between items-center border-b border-cyan-900/40 pb-6">
@@ -194,7 +176,6 @@ const NeuralVirtualTouch = () => {
               <div>STATUS: <span className="text-cyan-400">{status}</span></div>
             </div>
           </header>
-          
           <main className="mt-24 max-w-5xl mx-auto">
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                {['Messenger', 'YouTube', 'AITwin', 'Feed', 'System', 'Logout'].map(app => (
@@ -206,9 +187,7 @@ const NeuralVirtualTouch = () => {
           </main>
         </div>
       )}
-
       <Webcam ref={webcamRef} className="hidden" />
-
       <div 
         className="fixed top-0 left-0 pointer-events-none z-[10000] flex flex-col items-center" 
         style={{ transform: `translate(${cursorPos.x}px, ${cursorPos.y}px)`, transition: 'transform 0.08s ease-out' }}
@@ -216,13 +195,11 @@ const NeuralVirtualTouch = () => {
         <div className={`w-4 h-4 border-2 border-cyan-400 rounded-full flex items-center justify-center ${dwellProgress > 0 ? 'scale-150' : 'scale-100'} transition-transform`}>
            <div className="w-1 h-1 bg-white rounded-full shadow-[0_0_10px_white]"></div>
         </div>
-
         {dwellProgress > 0 && (
           <div className="mt-4 w-12 h-1.5 bg-cyan-900/50 rounded-full overflow-hidden border border-cyan-500/20">
             <div className="h-full bg-cyan-400 transition-all duration-75" style={{ width: `${dwellProgress}%` }} />
           </div>
         )}
-        
         {dwellProgress > 0 && (
           <span className="mt-1 text-[8px] font-bold text-cyan-500 animate-pulse uppercase">Linking...</span>
         )}
@@ -230,5 +207,4 @@ const NeuralVirtualTouch = () => {
     </div>
   );
 };
-
 export default NeuralVirtualTouch;
