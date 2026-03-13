@@ -21,6 +21,29 @@ export const detectBeats = async (audioUrl) => {
       }
     }
   }
+// লজিক: অডিওর ভলিউম স্পাইক বা বিট ডিটেক্ট করা
+export const getBeatTimestamps = async (audioUrl) => {
+  const audioContext = new AudioContext();
+  const response = await fetch(audioUrl);
+  const arrayBuffer = await response.arrayBuffer();
+  const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+  
+  const rawData = audioBuffer.getChannelData(0);
+  const samples = 44100; // 1 second
+  const beats = [];
+  
+  // প্রতি ১ সেকেন্ডে মিউজিকের তীব্রতা অ্যানালাইসিস
+  for (let i = 0; i < rawData.length; i += samples) {
+    let sum = 0;
+    for (let j = 0; j < samples; j++) {
+      sum += Math.abs(rawData[i + j]);
+    }
+    if (sum / samples > 0.15) { // Threshold
+      beats.push(i / samples);
+    }
+  }
+  return beats;
+};
 
   return peaks; // বিটের সময়ের লিস্ট: [0.5, 1.2, 1.8, ...]
 };
