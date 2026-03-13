@@ -1,4 +1,5 @@
 import React, { useRef, useEffect, useCallback, useState } from "react";
+// মিডিয়াপাইপ ইম্পোর্টস সঠিকভাবে নেমস্পেস আকারে নেওয়া হয়েছে
 import * as HandsModule from "@mediapipe/hands";
 import * as FaceMeshModule from "@mediapipe/face_mesh";
 import { Camera } from "@mediapipe/camera_utils";
@@ -10,7 +11,6 @@ const NeuralVirtualTouch = () => {
   const isProcessing = useRef(false);
   const frameCount = useRef(0);
   
-  // Persistence Refs
   const dwellTimerRef = useRef(null);
   const lastTargetRef = useRef(null);
   const lastHandResults = useRef(null);
@@ -27,7 +27,6 @@ const NeuralVirtualTouch = () => {
   const [isEyesOpen, setIsEyesOpen] = useState(true);
   const [userName, setUserName] = useState("UNKNOWN_OPERATOR");
 
-  // ১. উন্নত গ্লোবাল ক্লিক ফাংশন
   const executeGlobalClick = useCallback((x, y) => {
     const element = document.elementFromPoint(x, y);
     if (element) {
@@ -43,7 +42,6 @@ const NeuralVirtualTouch = () => {
     }
   }, []);
 
-  // ২. সেন্ট্রাল প্রসেসিং ইঞ্জিন
   const onResults = useCallback((hRes, fRes) => {
     if (hRes) lastHandResults.current = hRes;
     if (fRes) lastFaceResults.current = fRes;
@@ -51,7 +49,6 @@ const NeuralVirtualTouch = () => {
     const handsData = lastHandResults.current;
     const faceData = lastFaceResults.current;
 
-    // --- FACE TRACKING ---
     if (faceData?.multiFaceLandmarks?.[0]) {
       const face = faceData.multiFaceLandmarks[0];
       setIsUserPresent(true);
@@ -70,7 +67,6 @@ const NeuralVirtualTouch = () => {
       setIsUserPresent(false);
     }
 
-    // --- HAND TRACKING ---
     if (handsData?.multiHandLandmarks?.[0]) {
       const hand = handsData.multiHandLandmarks[0];
       const indexTip = hand[8];
@@ -114,6 +110,7 @@ const NeuralVirtualTouch = () => {
   useEffect(() => {
     if (!isSystemActive || !webcamRef.current) return;
 
+    // ইম্পোর্ট করা মডিউল থেকে কনস্ট্রাকটর সঠিকভাবে কল করা হচ্ছে
     const hands = new HandsModule.Hands({ locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}` });
     const faceMesh = new FaceMeshModule.FaceMesh({ locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${f}` });
 
