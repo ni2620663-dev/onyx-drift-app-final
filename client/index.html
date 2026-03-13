@@ -1,31 +1,59 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <base href="/" />
-    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>OnyxDrift | Neural Network</title>
 
-    <script>
-      window.global = window;
-      window.process = window.process || { 
-        env: { NODE_ENV: 'development' },
-        browser: true 
-      };
+<head>
 
-      /**
-       * ⚡ MediaPipe File Locator
-       * আপনার স্ক্রিনশট অনুযায়ী ফাইলগুলো এখন সরাসরি public/ ফোল্ডারে আছে।
-       */
-      window.locateMediaPipeFile = function(file) {
-        // ফাইলটি সরাসরি রুট থেকে কল করা হচ্ছে যাতে সাব-ডিরেক্টরি কনফ্লিক্ট না হয়
-        return `${window.location.origin}/${file}`;
-      };
-    </script>
-  </head>
-  <body class="bg-[#020617] text-white">
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
+  <meta charset="UTF-8" />
+  <base href="/" />
+
+  <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <title>OnyxDrift | Neural Network</title>
+
+  <!-- MediaPipe Core Libraries -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+
+  <script>
+    /* Fix for libraries expecting Node environment */
+    window.global = window;
+
+    window.process = window.process || {
+      env: { NODE_ENV: "development" },
+      browser: true
+    };
+
+    /**
+     * MediaPipe File Locator
+     * Loads model and WASM files from CDN
+     */
+    window.locateMediaPipeFile = function (file) {
+
+      if (file.includes("face_mesh")) {
+        return "https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/" + file;
+      }
+
+      if (file.includes("hands")) {
+        return "https://cdn.jsdelivr.net/npm/@mediapipe/hands/" + file;
+      }
+
+      return file;
+    };
+
+  </script>
+
+</head>
+
+<body class="bg-[#020617] text-white">
+
+  <!-- React Root -->
+  <div id="root"></div>
+
+  <!-- React App Entry -->
+  <script type="module" src="/src/main.jsx"></script>
+
+</body>
+
 </html>

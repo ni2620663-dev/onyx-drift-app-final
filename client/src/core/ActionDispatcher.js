@@ -1,64 +1,56 @@
-import toast from 'react-hot-toast';
-
 /**
- * ActionDispatcher: OnyxDrift-এর নিউরাল কোর থেকে আসা 
- * সিদ্ধান্তগুলোকে বাস্তবে কার্যকর করার কেন্দ্রীয় হাব।
+ * ⚡ ActionDispatcher: The Execution Layer
+ * অকার্যকর অ্যাকশন ফিল্টার করে এবং নিউরাল কমান্ড এক্সিকিউট করে।
  */
+import { toast } from 'react-hot-toast';
+
 export const ActionDispatcher = {
-  /**
-   * @param {Object} decision - NeuralCore থেকে প্রাপ্ত সিদ্ধান্ত { action, path, command, roomId }
-   * @param {Function} navigate - react-router-dom এর useNavigate হুক
-   */
   execute(decision, navigate) {
-    if (!decision || !decision.action) {
-      console.warn("Onyx-OS: Empty or invalid decision received.");
-      return;
-    }
+    // ১. সেফগার্ড: সিদ্ধান্ত বা সিদ্ধান্তহীন অবস্থায় রিটার্ন করবে
+    if (!decision || typeof decision !== 'object') return;
 
-    console.log("Onyx-OS: Dispatching action ->", decision.action);
+    // ২. অ্যাকশন টাইপ বের করা
+    const actionType = decision.action || decision.type;
 
-    switch (decision.action) {
-      // ১. অটো রিপ্লাই লজিক
-      case 'AUTO_REPLY':
-        toast.success("AI: Auto-reply sent to keep your focus.", {
-          icon: '🤖',
-          style: { background: '#0f172a', color: '#22d3ee', border: '1px solid #0891b2' }
-        });
-        // TODO: আপনার মেসেজিং API কল করুন এখানে
+    // ৩. যদি কোনো টাইপ না থাকে, তাহলে সাইলেন্টলি রিটার্ন (এরর স্প্যামিং বন্ধ)
+    if (!actionType) return;
+
+    switch (actionType) {
+      case "USER_INTENT_DETECTED":
+        this.handleWakeUp(decision.power || "normal");
         break;
 
-      // ২. ডু নট ডিস্টার্ব (DND) মোড
-      case 'ACTIVATE_DND':
-        toast.info("AI: DND Mode activated. Neural focus secured.", {
-          icon: '🛡️'
-        });
-        // TODO: সিস্টেম সাইলেন্ট বা নোটিফিকেশন মিউট লজিক
-        break;
-
-      // ৩. অ্যাপের ভেতরে নেভিগেশন
-      case 'NAVIGATE':
-        if (decision.path && navigate) {
-          navigate(decision.path);
-          toast.success(`Switching to ${decision.path.replace('/', '')}`);
+      case "NAVIGATE":
+        if (decision.target) {
+          toast.success(`Navigating to ${decision.target}...`, {
+            style: { background: '#0f172a', color: '#06b6d4', border: '1px solid #06b6d4' }
+          });
+          if (navigate) navigate(decision.target);
         }
         break;
 
-      // ৪. ভিডিও বা ভয়েস কল শুরু করা
-      case 'EXECUTE_CALL':
-        if (decision.roomId && navigate) {
-          navigate(`/call/${decision.roomId}`);
-          toast.success("Establishing secure neural link...");
-        }
+      case "TOGGLE_THEME":
+        document.documentElement.classList.toggle('dark');
+        toast("Theme Toggled", { icon: '🌓' });
         break;
 
-      // ৫. কাস্টম কমান্ড এক্সিকিউশন
-      case 'EXECUTE':
-        console.log("Onyx-OS: Executing system command ->", decision.command);
-        // এখানে ভলিউম কন্ট্রোল বা মিউজিক প্লে এর মতো কমান্ড রাখা যায়
+      case "NOTIFY":
+        toast(decision.message || "System Alert", { icon: '🤖' });
         break;
 
       default:
-        console.warn("Onyx-OS: Unknown action ->", decision.action);
+        // শুধুমাত্র তখনই ওয়ার্নিং দেখাবো যদি টাইপটি সত্যিই গুরুত্বপূর্ণ হয়
+        if (actionType !== "UNKNOWN") {
+          console.warn(`⚠️ ActionDispatcher: Received unhandled action type: ${actionType}`);
+        }
     }
+  },
+
+  handleWakeUp(power) {
+    toast.success("Onyx System Awakened", {
+      icon: '🧠',
+      style: { background: '#1e293b', color: '#8b5cf6', border: '1px solid #8b5cf6' }
+    });
+    console.log(`🧠 NeuralCore: Wake-up sequence triggered with power level: ${power}`);
   }
 };

@@ -7,14 +7,14 @@ import {
 import axios from 'axios';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import OnyxEngine from "../core/OnyxEngine"; // ইম্পোর্ট করা হলো
+// ফাইল স্ট্রাকচারের সাথে মিল রেখে OnyxBridge ইমপোর্ট করা হয়েছে
+import OnyxBridge from "../core/OnyxBridge"; 
 
 const Settings = () => {
-  const [darkMode, setDarkMode] = useState(true);
   const [ghostMode, setGhostMode] = useState(false);
   const [autopilot, setAutopilot] = useState(true);
   const [aiPersonality, setAiPersonality] = useState(50);
-  const [sensitivity, setSensitivity] = useState(0.8); // Neural Calibration State
+  const [sensitivity, setSensitivity] = useState(0.8);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
@@ -69,7 +69,12 @@ const Settings = () => {
 
   const handleSensitivityChange = (val) => {
     setSensitivity(val);
-    OnyxEngine.setSensitivity(val);
+    // OnyxBridge ব্যবহার করে সেনসিটিভিটি আপডেট করা হচ্ছে
+    if (OnyxBridge && typeof OnyxBridge.setSensitivity === 'function') {
+      OnyxBridge.setSensitivity(val);
+    } else {
+      console.warn("OnyxBridge: setSensitivity method not found");
+    }
   };
 
   const handleChangePassword = async () => {
@@ -88,7 +93,6 @@ const Settings = () => {
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('token');
     localStorage.clear();
     sessionStorage.clear();
     navigate('/login');
@@ -104,10 +108,10 @@ const Settings = () => {
       </div>
 
       <div className="p-6 space-y-8">
-        {/* NEW: Neural Calibration Section */}
+        {/* Neural Calibration Section */}
         <section>
           <p className="text-cyan-400/70 text-[10px] font-black uppercase tracking-[0.3em] mb-4 px-2">Neural Calibration</p>
-          <div className="bg-[#0d1117] p-6 rounded-[2.5rem] border border-cyan-500/20 shadow-[0_0_30px_rgba(6,182,212,0.05)]">
+          <div className="bg-[#0d1117] p-6 rounded-[2.5rem] border border-cyan-500/20">
             <div className="flex items-center gap-4 mb-4">
               <div className="p-3 bg-cyan-500/10 rounded-2xl text-cyan-400"><Zap size={22} /></div>
               <div>
@@ -120,7 +124,7 @@ const Settings = () => {
               onChange={(e) => handleSensitivityChange(parseFloat(e.target.value))}
               className="w-full h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-cyan-500"
             />
-            <div className="flex justify-between mt-3 text-[8px] font-black uppercase text-gray-600 tracking-tighter">
+            <div className="flex justify-between mt-3 text-[8px] font-black uppercase text-gray-600">
               <span>Precise</span>
               <span className="text-cyan-400">Current: {sensitivity}</span>
               <span>Fast</span>
@@ -159,7 +163,7 @@ const Settings = () => {
         <section>
           <p className="text-cyan-500/50 text-[10px] font-black uppercase tracking-[0.3em] mb-4 px-2">Neural Security</p>
           <div className="bg-[#0d1117] rounded-[2.5rem] overflow-hidden border border-cyan-500/20">
-            <div className="p-6 flex items-center justify-between border-b border-white/5 hover:bg-white/[0.02]">
+            <div className="p-6 flex items-center justify-between border-b border-white/5 hover:bg-white/[0.03]">
               <div className="flex items-center gap-4">
                 <div className="p-3 bg-cyan-500/10 rounded-2xl text-cyan-400"><EyeOff size={22} /></div>
                 <div>
@@ -177,16 +181,11 @@ const Settings = () => {
           <LogOut size={18} /> Terminate Session
         </motion.button>
       </div>
-
-      <style jsx>{`
-        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #161b22; border-radius: 10px; }
-      `}</style>
     </div>
   );
 };
 
-const SettingItem = ({ icon: Icon, title, subtitle, onClick, color = "text-blue-400", bg = "bg-blue-500/10" }) => (
+const SettingItem = ({ icon: Icon, title, subtitle, onClick, color, bg }) => (
   <div onClick={onClick} className="flex items-center justify-between p-6 hover:bg-white/[0.03] cursor-pointer transition-all border-b border-white/5 last:border-0">
     <div className="flex items-center gap-4">
       <div className={`p-3 ${bg} rounded-2xl ${color}`}><Icon size={22} /></div>
@@ -199,7 +198,7 @@ const SettingItem = ({ icon: Icon, title, subtitle, onClick, color = "text-blue-
   </div>
 );
 
-const Switch = ({ active, toggle, disabled, color = "bg-cyan-500" }) => (
+const Switch = ({ active, toggle, disabled, color }) => (
   <div onClick={!disabled ? toggle : null} className={`w-12 h-6 rounded-full p-1 transition-all duration-500 cursor-pointer flex items-center ${active ? `${color} shadow-[0_0_10px_rgba(255,255,255,0.2)]` : 'bg-[#161b22] border border-white/5'}`}>
     <motion.div animate={{ x: active ? 24 : 0 }} className={`w-4 h-4 rounded-full shadow-sm ${active ? 'bg-white' : 'bg-gray-600'}`} />
   </div>

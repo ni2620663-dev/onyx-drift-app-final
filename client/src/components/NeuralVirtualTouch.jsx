@@ -1,5 +1,4 @@
 import React, { useRef, useEffect, useCallback, useState } from "react";
-// সঠিক ইম্পোর্ট মেথড
 import { Hands } from "@mediapipe/hands";
 import { FaceMesh } from "@mediapipe/face_mesh";
 import { Camera } from "@mediapipe/camera_utils";
@@ -10,228 +9,241 @@ const NeuralVirtualTouch = () => {
   const cameraRef = useRef(null);
   const isProcessing = useRef(false);
   const frameCount = useRef(0);
+  
+  // Persistence Refs (Re-render ছাড়াই ডাটা রাখার জন্য)
+  const dwellTimerRef = useRef(null);
+  const lastTargetRef = useRef(null);
+  const lastHandResults = useRef(null);
+  const lastFaceResults = useRef(null);
 
   const [isSystemActive, setIsSystemActive] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [authStage, setAuthStage] = useState("IDLE");
   const [cursorPos, setCursorPos] = useState({ x: -100, y: -100 });
+  const [dwellProgress, setDwellProgress] = useState(0); // মাউসের মতো প্রোগ্রেস বার
   const [status, setStatus] = useState("SYSTEM_LOCKED");
-  const [showMenu, setShowMenu] = useState(false);
-
+  
   const [isUserPresent, setIsUserPresent] = useState(true);
   const [isEyesOpen, setIsEyesOpen] = useState(true);
   const [userName, setUserName] = useState("UNKNOWN_OPERATOR");
 
-  const startAuthentication = () => {
-    setAuthStage("SCANNING");
-    setStatus("SYNCING BIOMETRICS...");
-    setTimeout(() => {
-      setAuthStage("GRANTED");
-      setIsLoggedIn(true);
-      setUserName("OPERATOR_RAFI");
-      setStatus("ACCESS GRANTED: ADMIN_MODE");
-      if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
-    }, 3000);
-  };
+  // ১. উন্নত গ্লোবাল ক্লিক ফাংশন
+  const executeGlobalClick = useCallback((x, y) => {
+    const element = document.elementFromPoint(x, y);
+    if (element) {
+      const events = ['mousedown', 'mouseup', 'click'];
+      events.forEach(type => {
+        element.dispatchEvent(new MouseEvent(type, {
+          view: window, bubbles: true, cancelable: true, clientX: x, clientY: y
+        }));
+      });
+      if (element.tagName === 'INPUT' || element.tagName === 'TEXTAREA') element.focus();
+      setStatus("ACTION: NEURAL_TAP");
+      setDwellProgress(0); // রিসেট
+    }
+  }, []);
 
-  const onResults = useCallback((handResults, faceResults) => {
-    // --- ১. ফেস এবং আইরিস (চোখ) সেন্সর লজিক ---
-    if (faceResults?.multiFaceLandmarks?.[0]) {
-      const face = faceResults.multiFaceLandmarks[0];
+  // ২. সেন্ট্রাল প্রসেসিং ইঞ্জিন (Sync ফিক্সড)
+  const onResults = useCallback((hRes, fRes) => {
+    // ক্যাশ আপডেট
+    if (hRes) lastHandResults.current = hRes;
+    if (fRes) lastFaceResults.current = fRes;
+
+    const handsData = lastHandResults.current;
+    const faceData = lastFaceResults.current;
+
+    // --- FACE TRACKING (Gaze Scroll) ---
+    if (faceData?.multiFaceLandmarks?.[0]) {
+      const face = faceData.multiFaceLandmarks[0];
       setIsUserPresent(true);
-
-      // চোখের পলক ডিটেকশন (Landmarks: 159 & 145)
       const eyeDist = Math.abs(face[159].y - face[145].y);
-      setIsEyesOpen(eyeDist > 0.015); // Sensitivity Threshold
+      setIsEyesOpen(eyeDist > 0.012);
 
-      // আইরিস ট্র্যাকিং (চোখ দিয়ে স্ক্রলিং) - Landmark 468 (বাম আইরিস সেন্টার)
-      if (isLoggedIn && eyeDist > 0.015) {
-        const iris = face[468]; 
-        // আপনি যখন স্ক্রিনের একদম উপরে বা নিচে তাকাবেন
-        if (iris.y < 0.40) window.scrollBy({ top: -45, behavior: "smooth" }); // উপরে তাকালে স্ক্রল আপ
-        if (iris.y > 0.50) window.scrollBy({ top: 45, behavior: "smooth" });  // নিচে তাকালে স্ক্রল ডাউন
+      if (isLoggedIn && eyeDist > 0.015 && face[468]) {
+        const irisY = face[468].y; 
+        const neutralY = 0.48; // সেন্ট্রাল পয়েন্ট
+        const threshold = 0.06;
+
+        if (irisY < neutralY - threshold) window.scrollBy(0, -30);
+        else if (irisY > neutralY + threshold) window.scrollBy(0, 30);
       }
     } else {
       setIsUserPresent(false);
     }
 
-    // --- ২. হ্যান্ড ট্র্যাকিং এবং ক্লিক লজিক ---
-    if (handResults?.multiHandLandmarks?.[0]) {
-      const hand = handResults.multiHandLandmarks[0];
+    // --- HAND TRACKING (Cursor & Dwell) ---
+    if (handsData?.multiHandLandmarks?.[0]) {
+      const hand = handsData.multiHandLandmarks[0];
       const indexTip = hand[8];
       const indexBase = hand[5];
-      const thumbTip = hand[4];
 
-      const screenX = (1 - indexTip.x) * window.innerWidth;
-      const screenY = indexTip.y * window.innerHeight;
-      setCursorPos({ x: screenX, y: screenY });
+      // কার্সর পজিশন স্মুথিং
+      const targetX = (1 - indexTip.x) * window.innerWidth;
+      const targetY = indexTip.y * window.innerHeight;
+      
+      setCursorPos(prev => ({
+        x: prev.x + (targetX - prev.x) * 0.4,
+        y: prev.y + (targetY - prev.y) * 0.4
+      }));
 
-      // হাতের ইশারায় ক্লিক (ইন্ডেক্স ফিঙ্গার নিচে নামালে)
-      if (indexTip.y > indexBase.y + 0.03) {
-        const element = document.elementFromPoint(screenX, screenY);
-        if (element) {
-          element.click();
-          setStatus("ACTION: NEURAL_TAP");
+      // ৩. ডুইল ক্লিক লজিক উইথ প্রোগ্রেস বার
+      const currentTarget = document.elementFromPoint(targetX, targetY);
+      if (currentTarget && currentTarget === lastTargetRef.current) {
+        if (!dwellTimerRef.current) {
+          let progress = 0;
+          dwellTimerRef.current = setInterval(() => {
+            progress += 5;
+            setDwellProgress(progress);
+            if (progress >= 100) {
+              executeGlobalClick(targetX, targetY);
+              clearInterval(dwellTimerRef.current);
+              dwellTimerRef.current = null;
+            }
+          }, 60); // ১.২ সেকেন্ডে ১০০% হবে
         }
+      } else {
+        clearInterval(dwellTimerRef.current);
+        dwellTimerRef.current = null;
+        setDwellProgress(0);
+        lastTargetRef.current = currentTarget;
       }
 
-      // তালু দেখালে মেনু ওপেন (Palm Gesture)
-      const palmOpen = Math.abs(thumbTip.x - hand[20].x) > 0.20;
-      if (palmOpen && !showMenu) {
-        setShowMenu(true);
-        if (navigator.vibrate) navigator.vibrate(50);
+      // ৪. ম্যানুয়াল ক্লিক (আঙ্গুল দ্রুত ভাঁজ করলে)
+      if (indexTip.y > indexBase.y + 0.06) {
+        executeGlobalClick(targetX, targetY);
       }
     }
-  }, [isLoggedIn, showMenu]);
+  }, [isLoggedIn, executeGlobalClick]);
 
   useEffect(() => {
-    if (!isSystemActive) return;
+    if (!isSystemActive || !webcamRef.current) return;
 
-    // মডিউল কনফিগারেশন
-    const hands = new Hands({
-      locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`,
-    });
-    const faceMesh = new FaceMesh({
-      locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${f}`,
-    });
+    const hands = new Hands({ locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}` });
+    const faceMesh = new FaceMesh({ locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${f}` });
 
-    hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.6 });
-    
-    // আইরিস ট্র্যাকিংয়ের জন্য refineLandmarks: true থাকা বাধ্যতামূলক
-    faceMesh.setOptions({ 
-        refineLandmarks: true, 
-        minDetectionConfidence: 0.6, 
-        minTrackingConfidence: 0.6 
-    });
+    hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.7 });
+    faceMesh.setOptions({ refineLandmarks: true, minDetectionConfidence: 0.7 });
 
-    let lastHand = null;
-    let lastFace = null;
-
-    hands.onResults(res => { lastHand = res; if(lastFace) onResults(lastHand, lastFace); });
-    faceMesh.onResults(res => { lastFace = res; if(lastHand) onResults(lastHand, lastFace); });
+    hands.onResults(res => onResults(res, null));
+    faceMesh.onResults(res => onResults(null, res));
 
     const runCamera = async () => {
-      if (webcamRef.current?.video) {
+      try {
         cameraRef.current = new Camera(webcamRef.current.video, {
           onFrame: async () => {
             if (isProcessing.current) return;
             isProcessing.current = true;
             try {
-              const img = webcamRef.current.video;
-              // পারফরম্যান্সের জন্য ইন্টারলিভড ফ্রেম প্রসেসিং
-              if (frameCount.current % 2 === 0) {
-                await hands.send({ image: img });
-              } else {
-                await faceMesh.send({ image: img });
-              }
+              if (frameCount.current % 2 === 0) await hands.send({ image: webcamRef.current.video });
+              else await faceMesh.send({ image: webcamRef.current.video });
               frameCount.current++;
-            } catch (e) {
-                console.warn("Processing frame skipped");
-            } finally {
-              isProcessing.current = false;
-            }
+            } finally { isProcessing.current = false; }
           },
           width: 640, height: 480,
         });
         await cameraRef.current.start();
-      }
+      } catch (err) { setStatus("CAMERA_ERROR"); }
     };
 
     runCamera();
-
     return () => {
-      if (cameraRef.current) cameraRef.current.stop();
+      cameraRef.current?.stop();
       hands.close();
       faceMesh.close();
+      if (dwellTimerRef.current) clearInterval(dwellTimerRef.current);
     };
   }, [isSystemActive, onResults]);
+
+  const startAuthentication = () => {
+    setAuthStage("SCANNING");
+    setTimeout(() => {
+      setAuthStage("GRANTED");
+      setIsLoggedIn(true);
+      setUserName("OPERATOR_RAFI");
+      setStatus("ACCESS_GRANTED");
+    }, 2500);
+  };
 
   const isBlurry = isLoggedIn && (!isUserPresent || !isEyesOpen);
 
   return (
-    <div className={`min-h-screen transition-all duration-700 bg-[#020202] text-cyan-400 font-mono overflow-hidden ${isBlurry ? 'blur-[60px] scale-110 grayscale' : 'blur-0'}`}>
+    <div className={`min-h-screen transition-all duration-700 bg-[#020202] text-cyan-400 font-mono overflow-hidden ${isBlurry ? 'blur-[45px] scale-105 pointer-events-none' : 'blur-0'}`}>
       
-      {/* ১. ইনিশিয়ালাইজেশন স্ক্রিন */}
+      {/* ১. স্টার্ট বাটন */}
       {!isSystemActive && (
         <div className="fixed inset-0 flex items-center justify-center bg-black z-[5000]">
-          <div className="text-center">
-            <div className="w-16 h-16 border-t-2 border-cyan-500 rounded-full animate-spin mx-auto mb-6" />
-            <button onClick={() => setIsSystemActive(true)} className="px-12 py-4 border-2 border-cyan-500 text-cyan-500 tracking-[0.5em] hover:bg-cyan-500 hover:text-black transition-all font-black">
-              INITIALIZE NEURAL_LINK
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* ২. বায়োমেট্রিক স্ক্যানিং (Authentication) */}
-      {isSystemActive && !isLoggedIn && (
-        <div className="fixed inset-0 flex flex-col items-center justify-center bg-black/95 z-[4000]">
-          <div className="relative w-72 h-72 flex items-center justify-center">
-            <div className={`absolute inset-0 border-2 rounded-full border-dashed animate-spin-slow ${authStage === 'SCANNING' ? 'border-yellow-500' : 'border-cyan-900/50'}`} />
-            <div className={`w-48 h-48 border rounded-full flex flex-col items-center justify-center transition-all duration-500 ${authStage === 'SCANNING' ? 'border-red-500 shadow-[0_0_50px_rgba(239,68,68,0.4)]' : 'border-cyan-500/20'}`}>
-              <span className="text-5xl mb-3 animate-pulse">{authStage === 'SCANNING' ? '👁️' : '🔒'}</span>
-              <span className="text-[10px] tracking-[0.5em]">{authStage === 'SCANNING' ? 'SCANNING' : 'LOCKED'}</span>
-            </div>
-            {authStage === 'SCANNING' && <div className="absolute w-full h-1 bg-cyan-500/50 top-0 animate-scan-line" />}
-          </div>
-          <button onClick={startAuthentication} className="mt-16 px-8 py-2 border border-cyan-500/30 tracking-[0.8em] text-[10px] uppercase hover:bg-cyan-500 hover:text-black transition-all">
-            {authStage === 'SCANNING' ? 'Authorizing...' : '[ INITIATE SCAN ]'}
+          <button onClick={() => setIsSystemActive(true)} className="px-12 py-4 border-2 border-cyan-500 text-cyan-500 hover:bg-cyan-500 hover:text-black transition-all font-bold tracking-widest">
+            INITIALIZE NEURAL_LINK
           </button>
         </div>
       )}
 
-      {/* ৩. মেইন ইউজার ইন্টারফেস (Dashboard) */}
+      {/* ২. অথেনটিকেশন স্ক্রিন */}
+      {isSystemActive && !isLoggedIn && (
+        <div className="fixed inset-0 flex flex-col items-center justify-center bg-black/95 z-[4000]">
+          <div className="w-56 h-56 border-2 border-cyan-500/20 rounded-full flex items-center justify-center relative">
+            <div className="absolute inset-0 border-2 border-cyan-500 rounded-full animate-ping opacity-20" />
+            <span className="text-5xl">{authStage === 'SCANNING' ? '🔋' : '🔒'}</span>
+          </div>
+          <button onClick={startAuthentication} className="mt-12 px-10 py-3 border border-cyan-500/40 text-[10px] uppercase tracking-[0.5em]">
+            {authStage === 'SCANNING' ? 'Syncing Biometrics...' : '[ INITIATE SCAN ]'}
+          </button>
+        </div>
+      )}
+
+      {/* ৩. মেইন ড্যাশবোর্ড */}
       {isLoggedIn && (
-        <div className="p-10 max-w-6xl mx-auto">
-          <header className="flex justify-between items-end border-b border-cyan-900/40 pb-8 mb-12">
+        <div className="p-10">
+          <header className="flex justify-between items-center border-b border-cyan-900/40 pb-6">
             <div>
-              <div className="text-[10px] text-cyan-800 tracking-[1em] mb-2 uppercase">Neural_OS_v1.0.4</div>
-              <h1 className="text-3xl font-black tracking-tighter uppercase text-white">Operator: <span className="text-cyan-400">{userName}</span></h1>
+              <div className="text-[10px] text-cyan-800 tracking-[1em] uppercase">Neural_OS_v2.1</div>
+              <h1 className="text-2xl font-black text-white italic">OPERATOR: <span className="text-cyan-400">{userName}</span></h1>
             </div>
-            <div className="text-right text-[10px] text-cyan-600 tracking-widest font-bold">
-              STATUS: <span className="text-cyan-400">{status}</span><br/>
-              UI_MODE: FULL_EYE_TRACKING
+            <div className="text-xs text-right">
+              <div className="text-cyan-900 mb-1 tracking-widest">CORE_TEMP: 32°C</div>
+              <div>STATUS: <span className="text-cyan-400">{status}</span></div>
             </div>
           </header>
-
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-            {['Files', 'Network', 'Security', 'Neural_Link', 'Cores', 'System_Logs', 'Satellite', 'Terminal'].map(item => (
-              <div key={item} className="h-40 border border-cyan-900/50 bg-cyan-950/5 rounded-3xl flex flex-col items-center justify-center hover:bg-cyan-500 hover:text-black hover:scale-105 transition-all cursor-none group">
-                <div className="w-8 h-8 border border-current mb-4 rotate-45 group-hover:rotate-0 transition-all duration-700" />
-                <span className="text-[10px] tracking-[0.4em] uppercase font-bold">{item}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* ৪. নিয়ন আইরিস কার্সার (Neon Cursor) */}
-      <div 
-        className="fixed top-0 left-0 w-8 h-8 pointer-events-none z-[10000] flex items-center justify-center transition-transform duration-75 ease-out"
-        style={{ transform: `translate(${cursorPos.x - 16}px, ${cursorPos.y - 16}px)` }}
-      >
-        <div className="w-full h-full border border-cyan-400 rounded-full animate-ping absolute opacity-30" />
-        <div className="w-2 h-2 bg-white rounded-full shadow-[0_0_15px_#fff,0_0_30px_#22d3ee]" />
-      </div>
-
-      {/* ৫. ফেস ক্যামেরা প্রিভিউ (Mini Cam) */}
-      <div className="fixed bottom-8 left-8 w-32 h-32 rounded-3xl border border-cyan-500/30 overflow-hidden bg-black/80 shadow-2xl z-[5001]">
-        <Webcam ref={webcamRef} mirrored={true} className="w-full h-full object-cover opacity-40 grayscale contrast-125" />
-        <div className="absolute inset-0 bg-gradient-to-t from-cyan-500/20 to-transparent pointer-events-none" />
-      </div>
-
-      {/* ৬. আই-লিঙ্ক লস্ট অ্যালার্ট (Privacy Blur Overlay) */}
-      {isBlurry && (
-        <div className="fixed inset-0 flex items-center justify-center z-[20000] bg-black/20 backdrop-blur-xl transition-all duration-1000">
-            <div className="text-center p-12 border border-red-500/20 rounded-[3rem] bg-black/80 shadow-[0_0_100px_rgba(239,68,68,0.15)]">
-              <div className="text-red-600 text-6xl mb-6 animate-pulse font-light">!</div>
-              <div className="text-red-500 font-mono text-xs tracking-[0.6em] font-black uppercase">
-                {!isUserPresent ? "BIO_SIGNAL_LOST" : "NEURAL_LINK_DISCONNECTED"}
-              </div>
-              <div className="text-red-900 text-[8px] mt-4 tracking-widest uppercase">Looking for operator's gaze...</div>
+          
+          <main className="mt-24 max-w-5xl mx-auto">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+               {['Messenger', 'YouTube', 'AITwin', 'Feed', 'System', 'Logout'].map(app => (
+                 <div key={app} className="p-16 border border-cyan-900/30 bg-cyan-950/5 hover:border-cyan-500 hover:bg-cyan-500/10 transition-all duration-500 cursor-pointer text-center font-bold tracking-widest uppercase">
+                   {app}
+                 </div>
+               ))}
             </div>
+          </main>
         </div>
       )}
+
+      <Webcam ref={webcamRef} className="hidden" />
+
+      {/* ৪. নিউরাল কার্সর উইথ লোডিং বার (মাউসের মতো বার) */}
+      <div 
+        className="fixed top-0 left-0 pointer-events-none z-[10000] flex flex-col items-center" 
+        style={{ transform: `translate(${cursorPos.x}px, ${cursorPos.y}px)`, transition: 'transform 0.08s ease-out' }}
+      >
+        {/* মেইন কার্সর ডট */}
+        <div className={`w-4 h-4 border-2 border-cyan-400 rounded-full flex items-center justify-center ${dwellProgress > 0 ? 'scale-150' : 'scale-100'} transition-transform`}>
+           <div className="w-1 h-1 bg-white rounded-full shadow-[0_0_10px_white]"></div>
+        </div>
+
+        {/* মাউসের মতো প্রোগ্রেস বার (নিচে) */}
+        {dwellProgress > 0 && (
+          <div className="mt-4 w-12 h-1.5 bg-cyan-900/50 rounded-full overflow-hidden border border-cyan-500/20">
+            <div 
+              className="h-full bg-cyan-400 transition-all duration-75" 
+              style={{ width: `${dwellProgress}%` }}
+            />
+          </div>
+        )}
+        
+        {/* কার্সর স্ট্যাটাস টেক্সট */}
+        {dwellProgress > 0 && (
+          <span className="mt-1 text-[8px] font-bold text-cyan-500 animate-pulse uppercase">Linking...</span>
+        )}
+      </div>
     </div>
   );
 };

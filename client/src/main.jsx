@@ -6,7 +6,7 @@ import App from "./app.jsx";
 import { AuthProvider } from "./context/AuthContext"; 
 import { ContextProvider } from "./context/CallContext"; 
 import "./index.css"; 
-
+import 'regenerator-runtime/runtime';
 /* ==========================================================
   🛠️ NODE.JS POLYFILLS FOR BROWSER (Vite/WebRTC Fix)
   এটি ছাড়া simple-peer ব্রাউজারে 'call' বা 'undefined' এরর দেয়।

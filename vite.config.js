@@ -10,10 +10,8 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
 
   return {
-    publicDir: 'public', // public ফোল্ডার থেকে ফাইল সার্ভ নিশ্চিত করে
-
     plugins: [react()],
-
+  
     define: {
       'global': 'globalThis',
       'process.env': JSON.stringify(env),
@@ -22,10 +20,11 @@ export default defineConfig(({ mode }) => {
     resolve: {
       alias: {
         '@': path.resolve(__dirname, './src'),
+        // ব্রাউজার সামঞ্জস্যের জন্য পলিফিলস
+        'util': 'util/', 
         'stream': 'stream-browserify',
         'buffer': 'buffer',
         'events': 'events',
-        'util': 'util',
         'process': 'process/browser',
       },
     },
@@ -33,16 +32,12 @@ export default defineConfig(({ mode }) => {
     server: {
       port: 5173,
       host: true,
-      fs: {
-        strict: false, // ফাইল সিস্টেম এক্সেস সহজ করে
-      },
-      // 🚀 এটিই আসল সমাধান: ডটওয়ালা ফাইলকে (যেমন .js, .wasm) রাউট মনে করবে না
-      historyApiFallback: {
-        disableDotRule: true 
-      }
+      strictPort: true,
+      historyApiFallback: true, 
     },
 
     optimizeDeps: {
+      // ৫-০-৪ এরর এবং ডিপেন্ডেন্সি সমস্যার জন্য এখানে নতুন লাইব্রেরিগুলো যুক্ত করা হয়েছে
       include: [
         'buffer', 
         'stream-browserify', 
@@ -51,6 +46,9 @@ export default defineConfig(({ mode }) => {
         'process',
         '@mediapipe/face_mesh',
         '@mediapipe/hands',
+        '@mediapipe/camera_utils',
+        'react-speech-recognition', // ভয়েস কন্ট্রোলের জন্য বাধ্যতামূলক
+        'regenerator-runtime/runtime' // অ্যাসিঙ্ক্রোনাস ভয়েস কমান্ডের জন্য
       ],
       esbuildOptions: {
         define: {
@@ -62,15 +60,21 @@ export default defineConfig(({ mode }) => {
     build: {
       outDir: 'dist',
       sourcemap: false,
+      chunkSizeWarningLimit: 4000,
       commonjsOptions: {
         transformMixedEsModules: true,
       },
       rollupOptions: {
         output: {
-          manualChunks: undefined 
+          manualChunks(id) {
+            // বড় ডিপেন্ডেন্সিগুলোকে আলাদা করে পারফরম্যান্স বাড়ানো
+            if (id.includes('node_modules')) {
+              if (id.includes('@mediapipe')) return 'mediapipe'; // মিডিয়াপাইপ আলাদা চাঙ্ক
+              return 'vendor';
+            }
+          }
         }
       },
-      chunkSizeWarningLimit: 4000,
     },
   };
 });

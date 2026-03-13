@@ -3,22 +3,22 @@ import { Routes, Route, useLocation, Navigate, useNavigate } from "react-router-
 import { useAuth0 } from "@auth0/auth0-react";
 import { Toaster } from 'react-hot-toast';
 import { Mic, MicOff } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion'; 
 
-// Core Services
-import OnyxEngine from "./core/OnyxEngine"; 
-import PrivacyVault from "./core/PrivacyVault";
-import OnyxGatekeeper from "./core/OnyxGatekeeper";
-import IntentManager from "./core/IntentManager"; 
-import GazeFocusEngine from "./core/GazeFocusEngine";
-import HandGestureEngine from "./core/HandGestureEngine"; 
-import { ActionDispatcher } from "./core/ActionDispatcher";
-import { NeuralCore } from "./services/NeuralCore"; 
+import 'regenerator-runtime/runtime';
+import SpeechRecognition, { useSpeechRecognition } from 'react-speech-recognition';
+
+// Master Voice Hook
+import useMasterVoiceController from "./hooks/MasterVoiceController";
 
 // Components
 import Sidebar from "./components/Sidebar";
 import CustomCursor from "./components/CustomCursor";
 import ProtectedRoute from "./components/ProtectedRoute";
+import NeuralVirtualTouch from "./components/NeuralVirtualTouch";
+import MobileNav from "./components/MobileNav"; // MobileNav ইম্পোর্ট করা হলো
 
+// Pages
 const Messenger = lazy(() => import("./pages/Messenger"));
 const PremiumHomeFeed = lazy(() => import("./pages/PremiumHomeFeed"));
 const ProfilePage = lazy(() => import("./pages/Profile"));
@@ -30,190 +30,129 @@ const CallPage = lazy(() => import("./pages/CallPage"));
 const AITwinSync = lazy(() => import("./components/AITwinSync"));
 
 /* ==========================================================
-   🎤 Global Voice Intelligence Engine
+    🎤 Global Voice Intelligence (Master Assistant)
 ========================================================== */
-const GlobalVoiceAssistant = React.memo(({ onCommand }) => {
-  const [isListening, setIsListening] = useState(false);
-  const recognitionRef = useRef(null);
+const GlobalVoiceAssistant = React.memo(({ actions }) => {
+  const { transcript, listening, browserSupportsSpeechRecognition } = useSpeechRecognition();
+  
+  useMasterVoiceController(actions, transcript);
 
-  useEffect(() => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) return;
-    
-    recognitionRef.current = new SpeechRecognition();
-    recognitionRef.current.continuous = true;
-    recognitionRef.current.onresult = (e) => {
-      const transcript = e.results[e.results.length - 1][0].transcript;
-      onCommand(transcript);
-    };
-    return () => { try { recognitionRef.current?.stop(); } catch(e) {} };
-  }, [onCommand]);
-
-  useEffect(() => {
-    if (isListening) {
-      try { recognitionRef.current?.start(); } catch (e) { console.warn("Mic already started"); }
+  const toggleListening = () => {
+    if (listening) {
+      SpeechRecognition.stopListening();
     } else {
-      try { recognitionRef.current?.stop(); } catch (e) {}
+      SpeechRecognition.startListening({ continuous: true, language: 'en-US' });
     }
-  }, [isListening]);
+  };
+
+  if (!browserSupportsSpeechRecognition) return null;
 
   return (
-    <div className="fixed bottom-24 right-6 z-[99999]">
-      <button onClick={() => setIsListening(!isListening)} 
-              className={`w-14 h-14 rounded-full border flex items-center justify-center transition-all ${isListening ? 'bg-cyan-500 text-black shadow-[0_0_20px_#06b6d4]' : 'bg-zinc-900/80 text-cyan-500'}`}>
-        {isListening ? <Mic size={24} /> : <MicOff size={24} />}
+    <div className="fixed bottom-24 right-6 z-[99999] flex flex-col items-end gap-3">
+      <AnimatePresence>
+        {listening && transcript && (
+          <motion.div 
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 10 }}
+            className="bg-black/90 border border-cyan-500/30 px-4 py-2 rounded-xl text-[10px] text-cyan-400 font-mono uppercase tracking-tighter shadow-[0_0_15px_rgba(6,182,212,0.2)]"
+          >
+            {transcript.length > 30 ? transcript.substring(transcript.length - 30) : transcript}
+          </motion.div>
+        )}
+      </AnimatePresence>
+      
+      <button 
+        onClick={toggleListening} 
+        className={`w-14 h-14 rounded-full border-2 flex items-center justify-center transition-all duration-500 ${
+          listening 
+            ? 'bg-cyan-500 text-black border-white shadow-[0_0_30px_#06b6d4] scale-110' 
+            : 'bg-zinc-950/80 text-cyan-500 border-cyan-900/50 hover:border-cyan-500'
+        }`}
+      >
+        {listening ? <Mic size={24} className="animate-pulse" /> : <MicOff size={24} className="opacity-50" />}
       </button>
     </div>
   );
 });
 
 /* ==========================================================
-   🚀 Main Application Core (OnyxDrift)
+    🚀 Main Application Core (OnyxDrift)
 ========================================================== */
 export default function App() {
-  const { isAuthenticated, isLoading, user } = useAuth0();
+  const { isAuthenticated, isLoading, user, logout: auth0Logout } = useAuth0();
   const location = useLocation();
   const navigate = useNavigate();
-  const videoRef = useRef(null);
-  const animationFrameRef = useRef(null);
-  const lastGestureTime = useRef(0);
-  const isEngineInitialized = useRef(false);
-  
-  // ১. পাথ এবং কমান্ডকে স্ট্যাবল রাখতে Ref ব্যবহার
-  const locationRef = useRef(location.pathname);
-  const handleCommandRef = useRef(null);
 
-  useEffect(() => {
-    locationRef.current = location.pathname;
-  }, [location.pathname]);
-
-  const handleNeuralCommand = useCallback(async (commandInput) => {
-    const userContext = {
-      isWorking: !document.hasFocus(),
-      currentApp: locationRef.current, // Ref থেকে লেটেস্ট পাথ নিবে
-      gazeTarget: IntentManager.latestState?.gaze?.focusedElement || null,
-      lastGesture: IntentManager.latestState?.gesture || null
-    };
-    try {
-      const decision = await NeuralCore.process(commandInput, userContext);
-      ActionDispatcher.execute(decision, navigate);
-    } catch (err) { console.error("Action Execution Failed:", err); }
-  }, [navigate]);
-
-  useEffect(() => {
-    handleCommandRef.current = handleNeuralCommand;
-  }, [handleNeuralCommand]);
-
-  useEffect(() => {
-    if (!isAuthenticated || !user || isEngineInitialized.current) return;
-
-    let isMounted = true;
-    isEngineInitialized.current = true;
-
-    const startOnyxPipeline = async () => {
-      try {
-        await PrivacyVault.initializeVault();
-        const access = await OnyxGatekeeper.verifySession(user);
-        if (access !== "AUTHORIZED" || !isMounted) return;
-
-        const stream = await navigator.mediaDevices.getUserMedia({ 
-          video: { width: 640, height: 480, frameRate: 30 } 
-        });
-        
-        if (videoRef.current && isMounted) {
-          videoRef.current.srcObject = stream;
-          // অনলোড প্লেব্যাক প্যাচ
-          videoRef.current.onloadedmetadata = () => {
-            videoRef.current.play().catch(e => console.warn("Playback interrupted:", e.name));
-          };
-        }
-
-        await OnyxEngine.init((type, results) => {
-          if (!isMounted) return;
-          const safeHandleCommand = handleCommandRef.current;
-
-          if (type === "FACE" && results.multiFaceLandmarks?.[0]) {
-            const nose = results.multiFaceLandmarks[0][4];
-            const focusedId = GazeFocusEngine.detectFocus(nose.x * window.innerWidth, nose.y * window.innerHeight);
-            IntentManager.updateSensorData("gaze", { focusedElement: focusedId });
-          } else if (type === "HANDS" && results.multiHandLandmarks?.[0]) {
-            const gesture = HandGestureEngine.detectGesture(results.multiHandLandmarks[0]);
-            const now = Date.now();
-            if (gesture !== "NONE" && now - lastGestureTime.current > 2000) {
-              IntentManager.updateSensorData("gesture", gesture);
-              if (gesture === "THUMBS_UP") safeHandleCommand?.("LIKE_ACTION");
-              lastGestureTime.current = now;
-            }
-          }
-        });
-
-        const processFrame = async () => {
-          if (!isMounted) return;
-          if (videoRef.current?.readyState === 4) {
-            await OnyxEngine.process(videoRef.current);
-          }
-          animationFrameRef.current = requestAnimationFrame(processFrame);
-        };
-        processFrame();
-
-      } catch (err) { 
-        if (isMounted) {
-          console.error("Neural OS Initialization Failed:", err);
-          isEngineInitialized.current = false; 
-        }
+  const voiceActions = useMemo(() => ({
+    navigate: (path) => navigate(path),
+    searchUser: (query) => navigate(`/feed?search=${query}`),
+    initiateCall: () => navigate('/call'),
+    handleLike: () => {
+      const likeBtn = document.querySelector('[data-action="like"]') || document.querySelector('.heart-icon');
+      if (likeBtn) likeBtn.click();
+    },
+    logout: () => {
+      if(window.confirm("Disconnect Neural Link (Logout)?")) {
+        auth0Logout({ returnTo: window.location.origin });
       }
-    };
-
-    startOnyxPipeline();
-
-    return () => {
-      isMounted = false;
-      // আনমাউন্ট হলে ক্লিনআপ, কিন্তু isEngineInitialized রিসেট হবে না যাতে রি-রেন্ডারে সমস্যা না হয়
-      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
-      if (videoRef.current?.srcObject) {
-        videoRef.current.srcObject.getTracks().forEach(t => t.stop());
-      }
-      OnyxEngine.terminate();
-    };
-  }, [isAuthenticated, user]); 
+    }
+  }), [navigate, auth0Logout]);
 
   const isFullWidthPage = useMemo(() => {
-    const paths = ["/messenger", "/messages", "/settings", "/join", "/reels", "/ai-twin", "/call"];
-    return location.pathname === "/" || paths.some(path => location.pathname.startsWith(path));
+    const paths = ["/", "/join", "/messenger", "/reels", "/call", "/settings"];
+    return paths.some(path => location.pathname === path || location.pathname.startsWith(path));
   }, [location.pathname]);
 
-  if (isLoading) return <div className="h-screen flex items-center justify-center bg-[#020617] text-cyan-500 font-mono">INITIALIZING_ONYX_CORE...</div>;
+  if (isLoading) {
+    return (
+      <div className="h-screen flex flex-col items-center justify-center bg-[#020617] text-cyan-500 font-mono tracking-[0.5em]">
+        <div className="w-10 h-10 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin mb-6" />
+        <span className="animate-pulse">BOOTING_ONYX_SYSTEM...</span>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-[#020617] text-gray-200 overflow-x-hidden">
-      <Toaster position="top-center" />
+    <div className="min-h-screen bg-[#020617] text-gray-200 selection:bg-cyan-500/30 overflow-x-hidden">
+      <Toaster position="top-right" toastOptions={{ style: { background: '#020617', border: '1px solid #0891b2', color: '#06b6d4', fontFamily: 'monospace', fontSize: '12px' } }} />
+      
       <CustomCursor />
+      <NeuralVirtualTouch />
+      {isAuthenticated && <GlobalVoiceAssistant actions={voiceActions} />}
       
-      <video 
-        ref={videoRef} 
-        style={{ position: 'fixed', top: '-9999px', left: '-9999px', opacity: 0, pointerEvents: 'none' }} 
-        playsInline 
-        muted 
-      />
-      
-      {isAuthenticated && <GlobalVoiceAssistant onCommand={handleNeuralCommand} />}
-      
-      <div className="flex">
-        {!isFullWidthPage && <Sidebar />}
-        <main className={`flex-1 ${!isFullWidthPage ? 'ml-64' : ''}`}>
-          <Suspense fallback={<div className="p-8 text-cyan-500 font-mono">LOADING_MODULE...</div>}>
-            <Routes>
-              <Route path="/" element={<Landing />} />
-              <Route path="/join" element={<JoinPage />} />
-              <Route path="/feed" element={<ProtectedRoute><PremiumHomeFeed /></ProtectedRoute>} />
-              <Route path="/reels" element={<ProtectedRoute><ReelsFeed /></ProtectedRoute>} />
-              <Route path="/messenger/*" element={<ProtectedRoute><Messenger /></ProtectedRoute>} />
-              <Route path="/profile/:username" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
-              <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
-              <Route path="/ai-twin" element={<ProtectedRoute><AITwinSync /></ProtectedRoute>} />
-              <Route path="/call" element={<ProtectedRoute><CallPage /></ProtectedRoute>} />
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
+      <div className="flex w-full min-h-screen">
+        {/* ডেস্কটপ সাইডবার (শুধুমাত্র MD স্ক্রিন বা তার উপরে দেখাবে) */}
+        {!isFullWidthPage && isAuthenticated && (
+          <div className="hidden md:block fixed left-0 top-0 h-full w-64 z-40 bg-[#020617]/95 border-r border-cyan-900/20">
+            <Sidebar user={user} />
+          </div>
+        )}
+        
+        {/* মোবাইল নেভিগেশন (শুধুমাত্র মোবাইলে দেখাবে) */}
+        {!isFullWidthPage && isAuthenticated && (
+          <div className="md:hidden fixed bottom-0 left-0 w-full z-50">
+            <MobileNav />
+          </div>
+        )}
+        
+        {/* মেইন কন্টেন্ট এরিয়া */}
+        <main className={`flex-1 min-h-screen transition-all duration-300 ${(!isFullWidthPage && isAuthenticated) ? 'md:pl-64' : 'pl-0'}`}>
+          <Suspense fallback={<div className="h-full flex items-center justify-center text-cyan-500 font-mono text-xs animate-pulse">Syncing...</div>}>
+             <div className="w-full h-full">
+              <Routes>
+                <Route path="/" element={<Landing />} />
+                <Route path="/join" element={<JoinPage />} />
+                <Route path="/feed" element={<ProtectedRoute><PremiumHomeFeed /></ProtectedRoute>} />
+                <Route path="/reels" element={<ProtectedRoute><ReelsFeed /></ProtectedRoute>} />
+                <Route path="/messenger/*" element={<ProtectedRoute><Messenger /></ProtectedRoute>} />
+                <Route path="/profile/:username" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
+                <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+                <Route path="/ai-twin" element={<ProtectedRoute><AITwinSync /></ProtectedRoute>} />
+                <Route path="/call" element={<ProtectedRoute><CallPage /></ProtectedRoute>} />
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
+            </div>
           </Suspense>
         </main>
       </div>
