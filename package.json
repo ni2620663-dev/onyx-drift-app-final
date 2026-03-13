@@ -59,6 +59,7 @@
     "@types/crypto-js": "^4.2.2",
     "concurrently": "^9.1.0",
     "nodemon": "^3.1.7",
+    "vite-plugin-node-polyfills": "^0.25.0",
     "vite-plugin-static-copy": "^3.2.0"
   }
 }

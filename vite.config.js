@@ -2,6 +2,7 @@ import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { nodePolyfills } from 'vite-plugin-node-polyfills';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -10,8 +11,14 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
 
   return {
-    plugins: [react()],
-  
+    plugins: [
+      react(),
+      nodePolyfills({
+        // এটিই আপনার util এবং stream এররগুলো অটোমেটিক সমাধান করবে
+        protocolImports: true,
+      }),
+    ],
+
     define: {
       'global': 'globalThis',
       'process.env': JSON.stringify(env),
@@ -20,12 +27,7 @@ export default defineConfig(({ mode }) => {
     resolve: {
       alias: {
         '@': path.resolve(__dirname, './src'),
-        // ব্রাউজার সামঞ্জস্যের জন্য পলিফিলস
-        'util': 'util/', 
-        'stream': 'stream-browserify',
-        'buffer': 'buffer',
-        'events': 'events',
-        'process': 'process/browser',
+        // অতিরিক্ত alias এখন আর প্রয়োজন নেই কারণ nodePolyfills প্লাগইনটি তা হ্যান্ডেল করবে
       },
     },
 
@@ -37,18 +39,12 @@ export default defineConfig(({ mode }) => {
     },
 
     optimizeDeps: {
-      // ৫-০-৪ এরর এবং ডিপেন্ডেন্সি সমস্যার জন্য এখানে নতুন লাইব্রেরিগুলো যুক্ত করা হয়েছে
       include: [
-        'buffer', 
-        'stream-browserify', 
-        'events',
-        'util',
-        'process',
         '@mediapipe/face_mesh',
         '@mediapipe/hands',
         '@mediapipe/camera_utils',
-        'react-speech-recognition', // ভয়েস কন্ট্রোলের জন্য বাধ্যতামূলক
-        'regenerator-runtime/runtime' // অ্যাসিঙ্ক্রোনাস ভয়েস কমান্ডের জন্য
+        'react-speech-recognition',
+        'regenerator-runtime/runtime'
       ],
       esbuildOptions: {
         define: {
@@ -67,9 +63,8 @@ export default defineConfig(({ mode }) => {
       rollupOptions: {
         output: {
           manualChunks(id) {
-            // বড় ডিপেন্ডেন্সিগুলোকে আলাদা করে পারফরম্যান্স বাড়ানো
             if (id.includes('node_modules')) {
-              if (id.includes('@mediapipe')) return 'mediapipe'; // মিডিয়াপাইপ আলাদা চাঙ্ক
+              if (id.includes('@mediapipe')) return 'mediapipe';
               return 'vendor';
             }
           }
