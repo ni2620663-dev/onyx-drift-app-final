@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useCallback, useState } from "react";
-import { Hands } from "@mediapipe/hands";
-import { FaceMesh } from "@mediapipe/face_mesh";
+import * as HandsModule from "@mediapipe/hands";
+import * as FaceMeshModule from "@mediapipe/face_mesh";
 import { Camera } from "@mediapipe/camera_utils";
 import Webcam from "react-webcam";
 
@@ -10,7 +10,7 @@ const NeuralVirtualTouch = () => {
   const isProcessing = useRef(false);
   const frameCount = useRef(0);
   
-  // Persistence Refs (Re-render ছাড়াই ডাটা রাখার জন্য)
+  // Persistence Refs
   const dwellTimerRef = useRef(null);
   const lastTargetRef = useRef(null);
   const lastHandResults = useRef(null);
@@ -20,7 +20,7 @@ const NeuralVirtualTouch = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [authStage, setAuthStage] = useState("IDLE");
   const [cursorPos, setCursorPos] = useState({ x: -100, y: -100 });
-  const [dwellProgress, setDwellProgress] = useState(0); // মাউসের মতো প্রোগ্রেস বার
+  const [dwellProgress, setDwellProgress] = useState(0); 
   const [status, setStatus] = useState("SYSTEM_LOCKED");
   
   const [isUserPresent, setIsUserPresent] = useState(true);
@@ -39,20 +39,19 @@ const NeuralVirtualTouch = () => {
       });
       if (element.tagName === 'INPUT' || element.tagName === 'TEXTAREA') element.focus();
       setStatus("ACTION: NEURAL_TAP");
-      setDwellProgress(0); // রিসেট
+      setDwellProgress(0); 
     }
   }, []);
 
-  // ২. সেন্ট্রাল প্রসেসিং ইঞ্জিন (Sync ফিক্সড)
+  // ২. সেন্ট্রাল প্রসেসিং ইঞ্জিন
   const onResults = useCallback((hRes, fRes) => {
-    // ক্যাশ আপডেট
     if (hRes) lastHandResults.current = hRes;
     if (fRes) lastFaceResults.current = fRes;
 
     const handsData = lastHandResults.current;
     const faceData = lastFaceResults.current;
 
-    // --- FACE TRACKING (Gaze Scroll) ---
+    // --- FACE TRACKING ---
     if (faceData?.multiFaceLandmarks?.[0]) {
       const face = faceData.multiFaceLandmarks[0];
       setIsUserPresent(true);
@@ -61,7 +60,7 @@ const NeuralVirtualTouch = () => {
 
       if (isLoggedIn && eyeDist > 0.015 && face[468]) {
         const irisY = face[468].y; 
-        const neutralY = 0.48; // সেন্ট্রাল পয়েন্ট
+        const neutralY = 0.48; 
         const threshold = 0.06;
 
         if (irisY < neutralY - threshold) window.scrollBy(0, -30);
@@ -71,13 +70,12 @@ const NeuralVirtualTouch = () => {
       setIsUserPresent(false);
     }
 
-    // --- HAND TRACKING (Cursor & Dwell) ---
+    // --- HAND TRACKING ---
     if (handsData?.multiHandLandmarks?.[0]) {
       const hand = handsData.multiHandLandmarks[0];
       const indexTip = hand[8];
       const indexBase = hand[5];
 
-      // কার্সর পজিশন স্মুথিং
       const targetX = (1 - indexTip.x) * window.innerWidth;
       const targetY = indexTip.y * window.innerHeight;
       
@@ -86,7 +84,6 @@ const NeuralVirtualTouch = () => {
         y: prev.y + (targetY - prev.y) * 0.4
       }));
 
-      // ৩. ডুইল ক্লিক লজিক উইথ প্রোগ্রেস বার
       const currentTarget = document.elementFromPoint(targetX, targetY);
       if (currentTarget && currentTarget === lastTargetRef.current) {
         if (!dwellTimerRef.current) {
@@ -99,7 +96,7 @@ const NeuralVirtualTouch = () => {
               clearInterval(dwellTimerRef.current);
               dwellTimerRef.current = null;
             }
-          }, 60); // ১.২ সেকেন্ডে ১০০% হবে
+          }, 60); 
         }
       } else {
         clearInterval(dwellTimerRef.current);
@@ -108,7 +105,6 @@ const NeuralVirtualTouch = () => {
         lastTargetRef.current = currentTarget;
       }
 
-      // ৪. ম্যানুয়াল ক্লিক (আঙ্গুল দ্রুত ভাঁজ করলে)
       if (indexTip.y > indexBase.y + 0.06) {
         executeGlobalClick(targetX, targetY);
       }
@@ -118,8 +114,8 @@ const NeuralVirtualTouch = () => {
   useEffect(() => {
     if (!isSystemActive || !webcamRef.current) return;
 
-    const hands = new Hands({ locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}` });
-    const faceMesh = new FaceMesh({ locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${f}` });
+    const hands = new HandsModule.Hands({ locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}` });
+    const faceMesh = new FaceMeshModule.FaceMesh({ locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${f}` });
 
     hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.7 });
     faceMesh.setOptions({ refineLandmarks: true, minDetectionConfidence: 0.7 });
@@ -169,7 +165,6 @@ const NeuralVirtualTouch = () => {
   return (
     <div className={`min-h-screen transition-all duration-700 bg-[#020202] text-cyan-400 font-mono overflow-hidden ${isBlurry ? 'blur-[45px] scale-105 pointer-events-none' : 'blur-0'}`}>
       
-      {/* ১. স্টার্ট বাটন */}
       {!isSystemActive && (
         <div className="fixed inset-0 flex items-center justify-center bg-black z-[5000]">
           <button onClick={() => setIsSystemActive(true)} className="px-12 py-4 border-2 border-cyan-500 text-cyan-500 hover:bg-cyan-500 hover:text-black transition-all font-bold tracking-widest">
@@ -178,7 +173,6 @@ const NeuralVirtualTouch = () => {
         </div>
       )}
 
-      {/* ২. অথেনটিকেশন স্ক্রিন */}
       {isSystemActive && !isLoggedIn && (
         <div className="fixed inset-0 flex flex-col items-center justify-center bg-black/95 z-[4000]">
           <div className="w-56 h-56 border-2 border-cyan-500/20 rounded-full flex items-center justify-center relative">
@@ -191,7 +185,6 @@ const NeuralVirtualTouch = () => {
         </div>
       )}
 
-      {/* ৩. মেইন ড্যাশবোর্ড */}
       {isLoggedIn && (
         <div className="p-10">
           <header className="flex justify-between items-center border-b border-cyan-900/40 pb-6">
@@ -209,7 +202,7 @@ const NeuralVirtualTouch = () => {
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                {['Messenger', 'YouTube', 'AITwin', 'Feed', 'System', 'Logout'].map(app => (
                  <div key={app} className="p-16 border border-cyan-900/30 bg-cyan-950/5 hover:border-cyan-500 hover:bg-cyan-500/10 transition-all duration-500 cursor-pointer text-center font-bold tracking-widest uppercase">
-                   {app}
+                    {app}
                  </div>
                ))}
             </div>
@@ -219,27 +212,20 @@ const NeuralVirtualTouch = () => {
 
       <Webcam ref={webcamRef} className="hidden" />
 
-      {/* ৪. নিউরাল কার্সর উইথ লোডিং বার (মাউসের মতো বার) */}
       <div 
         className="fixed top-0 left-0 pointer-events-none z-[10000] flex flex-col items-center" 
         style={{ transform: `translate(${cursorPos.x}px, ${cursorPos.y}px)`, transition: 'transform 0.08s ease-out' }}
       >
-        {/* মেইন কার্সর ডট */}
         <div className={`w-4 h-4 border-2 border-cyan-400 rounded-full flex items-center justify-center ${dwellProgress > 0 ? 'scale-150' : 'scale-100'} transition-transform`}>
            <div className="w-1 h-1 bg-white rounded-full shadow-[0_0_10px_white]"></div>
         </div>
 
-        {/* মাউসের মতো প্রোগ্রেস বার (নিচে) */}
         {dwellProgress > 0 && (
           <div className="mt-4 w-12 h-1.5 bg-cyan-900/50 rounded-full overflow-hidden border border-cyan-500/20">
-            <div 
-              className="h-full bg-cyan-400 transition-all duration-75" 
-              style={{ width: `${dwellProgress}%` }}
-            />
+            <div className="h-full bg-cyan-400 transition-all duration-75" style={{ width: `${dwellProgress}%` }} />
           </div>
         )}
         
-        {/* কার্সর স্ট্যাটাস টেক্সট */}
         {dwellProgress > 0 && (
           <span className="mt-1 text-[8px] font-bold text-cyan-500 animate-pulse uppercase">Linking...</span>
         )}
