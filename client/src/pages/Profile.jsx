@@ -6,7 +6,8 @@ import axios from 'axios';
 import { FaArrowLeft, FaMapMarkerAlt, FaCalendarAlt, FaCamera } from 'react-icons/fa';
 import { HiBadgeCheck } from 'react-icons/hi';
 import { HiXMark } from "react-icons/hi2";
-import { supabase } from '../../supabaseClient';
+// ভুল পাথটি সরিয়ে এটি লিখুন:
+import { supabase } from '../supabaseClient';
 import EditProfileModal from "./EditProfileModal";
 import SignalCard from "./SignalCard";
 
