@@ -3,11 +3,10 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth0 } from "@auth0/auth0-react";
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
-import { 
-  FaArrowLeft, FaMapMarkerAlt, FaCalendarAlt, FaCamera 
-} from 'react-icons/fa';
+import { FaArrowLeft, FaMapMarkerAlt, FaCalendarAlt, FaCamera } from 'react-icons/fa';
 import { HiBadgeCheck } from 'react-icons/hi';
-import { HiXMark } from "react-icons/hi2"; // Modal close icon
+import { HiXMark } from "react-icons/hi2";
+import { supabase } from '../../supabaseClient';
 import EditProfileModal from "./EditProfileModal";
 import SignalCard from "./SignalCard";
 
@@ -81,29 +80,30 @@ const ProfilePage = () => {
   const fetchProfileData = useCallback(async () => {
     try {
       setLoading(true);
+      
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', profileId)
+        .single();
+
+      if (profileError) throw profileError;
+      setUser(profileData);
+
       const token = await getAccessTokenSilently({
         authorizationParams: { audience: API_AUDIENCE },
       });
-
-      const profileRes = await axios.get(`${BACKEND_URL}/api/profile/${profileId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setUser(profileRes.data);
-
       const postsRes = await axios.get(`${BACKEND_URL}/api/profile/posts/user/${profileId}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       setUserPosts(postsRes.data.posts || []);
 
-      if (profileRes.data.followers && currentUser?.sub) {
-        setIsFollowing(profileRes.data.followers.includes(currentUser.sub));
-      }
     } catch (err) {
       console.error("Neural Identity Sync Error:", err);
     } finally {
       setLoading(false);
     }
-  }, [profileId, getAccessTokenSilently, currentUser?.sub]);
+  }, [profileId, getAccessTokenSilently]);
 
   useEffect(() => {
     if (profileId) fetchProfileData();
@@ -137,7 +137,6 @@ const ProfilePage = () => {
   const defaultBanner = "https://images.unsplash.com/photo-1614850523296-d8c1af93d400?q=80&w=2070";
   const defaultAvatar = `https://api.dicebear.com/7.x/bottts/svg?seed=${user?.name || 'Drifter'}`;
 
-  /* ✅ FIXED: MEDIA TAB MATCHING BACKEND KEY 'mediaUrl' */
   const renderTabContent = () => {
     if (loading) return null;
 
@@ -159,25 +158,15 @@ const ProfilePage = () => {
         ) : <EmptyState msg="No Neural Replies Found" />;
 
       case "Media":
-        // Backend saves it as 'mediaUrl' or 'media'
         const mediaPosts = userPosts.filter(p => p.mediaUrl || p.media);
         return mediaPosts.length > 0 ? (
           <div className="grid grid-cols-3 gap-1 p-1">
             {mediaPosts.map(post => (
               <div key={post._id} className="aspect-square bg-zinc-900 border border-zinc-800 overflow-hidden relative group cursor-pointer">
                 {post.mediaType === 'video' ? (
-                  <video 
-                    src={post.mediaUrl || post.media} 
-                    className="w-full h-full object-cover" 
-                    muted
-                  />
+                  <video src={post.mediaUrl || post.media} className="w-full h-full object-cover" muted />
                 ) : (
-                  <img 
-                    src={post.mediaUrl || post.media} 
-                    className="w-full h-full object-cover hover:opacity-80 transition-opacity" 
-                    alt="media" 
-                    onError={(e) => { e.target.src = 'https://via.placeholder.com/300?text=Broken+Link'; }}
-                  />
+                  <img src={post.mediaUrl || post.media} className="w-full h-full object-cover hover:opacity-80 transition-opacity" alt="media" />
                 )}
               </div>
             ))}
@@ -190,12 +179,7 @@ const ProfilePage = () => {
             <div className="bg-zinc-900/30 p-6 rounded-2xl border border-zinc-800/50 backdrop-blur-sm shadow-[0_0_30px_rgba(6,182,212,0.05)]">
               <h3 className="text-cyan-500 text-[10px] font-black uppercase tracking-[0.2em] mb-4">Neural Link Integrity</h3>
               <div className="w-full h-1.5 bg-black rounded-full overflow-hidden border border-zinc-800">
-                <motion.div 
-                  initial={{ width: 0 }} 
-                  animate={{ width: '82%' }} 
-                  transition={{ duration: 1.5 }}
-                  className="h-full bg-gradient-to-r from-cyan-600 to-cyan-400 shadow-[0_0_15px_#06b6d4]" 
-                />
+                <motion.div initial={{ width: 0 }} animate={{ width: '82%' }} transition={{ duration: 1.5 }} className="h-full bg-gradient-to-r from-cyan-600 to-cyan-400 shadow-[0_0_15px_#06b6d4]" />
               </div>
               <p className="text-[9px] text-zinc-500 mt-3 uppercase">Status: Optimal (82% Sync)</p>
             </div>
@@ -207,18 +191,8 @@ const ProfilePage = () => {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-black text-white max-w-2xl mx-auto border-x border-zinc-900 pb-20 font-mono">
-      
-      {/* 🔝 Sticky Navbar */}
       <div className="sticky top-0 z-50 bg-black/80 backdrop-blur-md p-3 flex items-center gap-8 border-b border-zinc-900">
         <button onClick={() => window.history.back()} className="hover:bg-zinc-900 p-2 rounded-full transition-all">
           <FaArrowLeft size={16} />
@@ -231,14 +205,9 @@ const ProfilePage = () => {
         </div>
       </div>
 
-      {/* 🖼 Header Images */}
       <div className="relative group">
         <div className="h-40 md:h-48 bg-zinc-900 overflow-hidden relative border-b border-zinc-900">
-          <img 
-            src={user?.coverImg || defaultBanner} 
-            className="w-full h-full object-cover opacity-80" 
-            alt="cover" 
-          />
+          <img src={user?.coverImg || defaultBanner} className="w-full h-full object-cover opacity-80" alt="cover" />
           {isReallyMe && (
             <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40">
                <button onClick={() => setIsEditModalOpen(true)} className="bg-black/60 p-3 rounded-full border border-white/20 hover:scale-110 transition-transform"><FaCamera /></button>
@@ -249,11 +218,7 @@ const ProfilePage = () => {
         <div className="px-4 relative">
           <div className="flex justify-between items-end -mt-16 mb-4">
             <div className="w-28 h-28 md:w-32 md:h-32 rounded-full border-4 border-black bg-black overflow-hidden relative z-10 shadow-xl">
-              <img 
-                src={user?.avatar || user?.picture || defaultAvatar} 
-                className="w-full h-full object-cover rounded-full" 
-                alt="avatar" 
-              />
+              <img src={user?.avatar || user?.picture || defaultAvatar} className="w-full h-full object-cover rounded-full" alt="avatar" />
               {isReallyMe && (
                 <div onClick={() => setIsEditModalOpen(true)} className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 hover:opacity-100 cursor-pointer transition-opacity z-20">
                   <FaCamera className="text-white" />
@@ -263,10 +228,7 @@ const ProfilePage = () => {
             
             <div className="mb-2">
               {isReallyMe ? (
-                <button 
-                  onClick={() => setIsEditModalOpen(true)} 
-                  className="border border-zinc-700 hover:bg-white hover:text-black px-5 py-2 rounded-full font-bold text-xs transition-all"
-                >
+                <button onClick={() => setIsEditModalOpen(true)} className="border border-zinc-700 hover:bg-white hover:text-black px-5 py-2 rounded-full font-bold text-xs transition-all">
                   Edit Identity
                 </button>
               ) : (
@@ -284,70 +246,42 @@ const ProfilePage = () => {
             <p className="text-zinc-500 text-sm">@{user?.nickname || "drifter"}</p>
             <p className="text-[15px] text-zinc-200 pt-2 leading-relaxed">{user?.bio || "No neural bio set."}</p>
             
+            {/* Followers & Following Stats */}
+            <div className="flex gap-6 py-4">
+               <button onClick={() => openFollowModal('following')} className="text-xs font-bold hover:text-cyan-500">
+                  <span className="text-white font-black">{user?.followingCount || 0}</span> Following
+               </button>
+               <button onClick={() => openFollowModal('followers')} className="text-xs font-bold hover:text-cyan-500">
+                  <span className="text-white font-black">{user?.followersCount || 0}</span> Followers
+               </button>
+            </div>
+
             <div className="flex gap-4 text-[11px] font-bold text-zinc-500 uppercase pt-3">
               <span className="flex items-center gap-1"><FaMapMarkerAlt /> {user?.location || "Neo-City"}</span>
               <span className="flex items-center gap-1">
                 <FaCalendarAlt /> Joined {user?.createdAt ? new Date(user.createdAt).toLocaleDateString('en-US', {month:'short', year:'numeric'}) : 'Jan 2026'}
               </span>
             </div>
-
-            <div className="flex gap-5 pt-4 border-t border-zinc-900 mt-4">
-              <p 
-                onClick={() => openFollowModal('following')}
-                className="text-sm cursor-pointer hover:underline decoration-cyan-500"
-              >
-                <span className="font-black text-white">{user?.following?.length || 0}</span> <span className="text-zinc-500 font-bold uppercase text-[10px]">Following</span>
-              </p>
-              <p 
-                onClick={() => openFollowModal('followers')}
-                className="text-sm cursor-pointer hover:underline decoration-cyan-500"
-              >
-                <span className="font-black text-white">{user?.followers?.length || 0}</span> <span className="text-zinc-500 font-bold uppercase text-[10px]">Followers</span>
-              </p>
-            </div>
           </div>
         </div>
       </div>
 
-      {/* 📑 Tab Navigation */}
       <div className="flex sticky top-[61px] bg-black/80 backdrop-blur-md z-40 border-b border-zinc-900">
         {tabs.map((tab) => (
-          <button 
-            key={tab} 
-            onClick={() => setActiveTab(tab)} 
-            className={`flex-1 py-4 text-[11px] font-black uppercase tracking-widest relative transition-colors ${activeTab === tab ? "text-white" : "text-zinc-600 hover:text-zinc-400"}`}
-          >
+          <button key={tab} onClick={() => setActiveTab(tab)} className={`flex-1 py-4 text-[11px] font-black uppercase tracking-widest relative transition-colors ${activeTab === tab ? "text-white" : "text-zinc-600 hover:text-zinc-400"}`}>
             {tab}
-            {activeTab === tab && (
-              <motion.div layoutId="underline" className="absolute bottom-0 left-1/2 -translate-x-1/2 w-12 h-1 bg-cyan-500 shadow-[0_0_15px_#06b6d4]" />
-            )}
+            {activeTab === tab && <motion.div layoutId="underline" className="absolute bottom-0 left-1/2 -translate-x-1/2 w-12 h-1 bg-cyan-500 shadow-[0_0_15px_#06b6d4]" />}
           </button>
         ))}
       </div>
 
-      {/* Dynamic Content */}
       <div className="divide-y divide-zinc-900 min-h-[400px]">
         {renderTabContent()}
       </div>
 
-      {/* 🛠 MODALS */}
       <AnimatePresence>
-        {isEditModalOpen && (
-          <EditProfileModal
-            isOpen={isEditModalOpen}
-            onClose={() => setIsEditModalOpen(false)}
-            user={user}
-            onUpdate={fetchProfileData}
-          />
-        )}
-        {followModal.isOpen && (
-          <FollowListModal 
-            isOpen={followModal.isOpen} 
-            onClose={() => setFollowModal({ ...followModal, isOpen: false })}
-            title={followModal.title}
-            list={followModal.list}
-          />
-        )}
+        {isEditModalOpen && <EditProfileModal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} user={user} onUpdate={fetchProfileData} />}
+        {followModal.isOpen && <FollowListModal isOpen={followModal.isOpen} onClose={() => setFollowModal({ ...followModal, isOpen: false })} title={followModal.title} list={followModal.list} />}
       </AnimatePresence>
     </div>
   );

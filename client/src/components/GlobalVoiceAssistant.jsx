@@ -6,7 +6,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import toast from 'react-hot-toast';
 
 // --- Gemini AI Configuration ---
-const GEN_AI = new GoogleGenerativeAI("YOUR_GEMINI_API_KEY_HERE");
+const GEN_AI = new GoogleGenerativeAI("AIzaSyCbct0eo9R1wIYVyaGvlas5OuRc55wuNOU");
 
 const GlobalVoiceAssistant = ({ user }) => {
   const navigate = useNavigate();

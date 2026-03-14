@@ -18,6 +18,7 @@
     "@google/generative-ai": "^0.24.1",
     "@mediapipe/tasks-vision": "^0.10.32",
     "@stream-io/video-react-sdk": "^1.32.4",
+    "@supabase/supabase-js": "^2.99.1",
     "@tensorflow-models/face-landmarks-detection": "^1.0.6",
     "@tensorflow-models/hand-pose-detection": "^2.0.1",
     "@tensorflow/tfjs": "^4.22.0",

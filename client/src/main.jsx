@@ -1,20 +1,15 @@
 import React, { Suspense } from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
-import { Auth0Provider } from "@auth0/auth0-react";
 import App from "./app.jsx";
-import { AuthProvider } from "./context/AuthContext"; 
 import { ContextProvider } from "./context/CallContext"; 
 import "./index.css"; 
 import 'regenerator-runtime/runtime';
-/* ==========================================================
-  🛠️ NODE.JS POLYFILLS FOR BROWSER (Vite/WebRTC Fix)
-  এটি ছাড়া simple-peer ব্রাউজারে 'call' বা 'undefined' এরর দেয়।
-========================================================== 
-*/
-import { Buffer } from 'buffer';
 
-// গ্লোবাল অবজেক্ট সেটআপ
+/* ==========================================================
+   🛠️ NODE.JS POLYFILLS (WebRTC Fix)
+========================================================== */
+import { Buffer } from 'buffer';
 window.Buffer = Buffer;
 window.global = window;
 window.process = { 
@@ -22,14 +17,7 @@ window.process = {
   browser: true 
 };
 
-/**
- * 🔐 Auth0 Configuration
- */
-const AUTH0_DOMAIN = "dev-prxn6v2o08xp5loz.us.auth0.com";
-const AUTH0_CLIENT_ID = "fPDZj5sDRTwv0EaH2woGlnmPwkpTCePF";
-const API_AUDIENCE = "https://onyx-drift-api.com"; 
-
-// নোটিফিকেশন পারমিশন রিকোয়েস্ট (কল আসার এলার্ট এর জন্য)
+// নোটিফিকেশন পারমিশন
 if (typeof window !== "undefined" && "Notification" in window) {
   if (Notification.permission !== "granted" && Notification.permission !== "denied") {
     Notification.requestPermission();
@@ -38,42 +26,28 @@ if (typeof window !== "undefined" && "Notification" in window) {
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
-    {/* ১. BrowserRouter: রাউটিং ম্যানেজমেন্ট */}
     <BrowserRouter
       future={{
         v7_startTransition: true,
         v7_relativeSplatPath: true,
       }}
     >
-      {/* ২. Auth0Provider: অথেন্টিকেশন */}
-      <Auth0Provider
-        domain={AUTH0_DOMAIN}
-        clientId={AUTH0_CLIENT_ID}
-        authorizationParams={{
-          redirect_uri: window.location.origin, 
-          audience: API_AUDIENCE, 
-          scope: "openid profile email offline_access"
-        }}
-        useRefreshTokens={true}
-        cacheLocation="localstorage"
-      >
-        {/* ৩. কাস্টম AuthProvider: ইউজার ডাটা হ্যান্ডলিং */}
-        <AuthProvider>
-          {/* ৪. Call ContextProvider: ভিডিও/অডিও কলের গ্লোবাল স্টেট */}
-          <ContextProvider> 
-            <Suspense fallback={
-              <div className="h-screen w-screen flex items-center justify-center bg-[#020617] text-cyan-500 font-mono tracking-widest uppercase animate-pulse">
-                <div className="flex flex-col items-center gap-4">
-                  <div className="w-12 h-12 border-4 border-cyan-500/20 border-t-cyan-500 rounded-full animate-spin"></div>
-                  <span>Syncing Neural Interface...</span>
-                </div>
-              </div>
-            }>
-              <App />
-            </Suspense>
-          </ContextProvider>
-        </AuthProvider>
-      </Auth0Provider>
+      {/* এখানে Auth0Provider এর প্রয়োজন নেই, কারণ আমরা সরাসরি Supabase ব্যবহার করছি।
+        আপনার আগের AuthProvider যদি Supabase এর সাথে কানেক্টেড থাকে তবে সেটি রাখুন, 
+        অন্যথায় সরাসরি ContextProvider ব্যবহার করুন।
+      */}
+      <ContextProvider> 
+        <Suspense fallback={
+          <div className="h-screen w-screen flex items-center justify-center bg-[#020617] text-cyan-500 font-mono tracking-widest uppercase animate-pulse">
+            <div className="flex flex-col items-center gap-4">
+              <div className="w-12 h-12 border-4 border-cyan-500/20 border-t-cyan-500 rounded-full animate-spin"></div>
+              <span>Syncing Neural Interface...</span>
+            </div>
+          </div>
+        }>
+          <App />
+        </Suspense>
+      </ContextProvider>
     </BrowserRouter>
   </React.StrictMode>
 );

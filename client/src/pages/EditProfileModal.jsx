@@ -31,7 +31,14 @@ export default function EditProfileModal({ isOpen, onClose, user, onUpdate }) {
 
     try {
       const token = await getAccessTokenSilently();
-      
+      const handleUpdate = async (newName, newBio) => {
+  const { error } = await supabase
+    .from('profiles')
+    .update({ username: newName, bio: newBio })
+    .eq('id', user.id);
+  
+  if (!error) onUpdate(); // প্রোফাইল আপডেট হয়ে গেলে পেজ রিফ্রেশ করবে
+};
       // FormData তৈরি (ইমেজ পাঠানোর জন্য এটি আবশ্যক)
       const data = new FormData();
       data.append('name', formData.name);

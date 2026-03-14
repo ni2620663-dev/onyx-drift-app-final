@@ -1,16 +1,14 @@
 import React, { useState } from "react";
-import { useAuth0 } from "@auth0/auth0-react";
-import { motion } from "framer-motion";
-
-// আপনার দেওয়া ক্রেডেনশিয়ালস
-const AUTH0_DOMAIN = "dev-prxn6v2o08xp5loz.us.auth0.com";
-const AUTH0_CLIENT_ID = "fPDZj5sDRTwv0EaH2woGlnmPwkpTCePF";
-const API_AUDIENCE = "https://onyx-drift-api.com";
+import { motion, AnimatePresence } from "framer-motion";
+import { useNavigate } from "react-router-dom";
+import { supabase } from "../supabaseClient";
+import SignUp from "../components/Auth/SignUp"; // আপনার সাইনআপ কম্পোনেন্ট ইমপোর্ট
 
 const Landing = () => {
-  const { loginWithRedirect } = useAuth0();
+  const navigate = useNavigate();
   const [authStatus, setAuthStatus] = useState("INITIALIZE NEURAL LINK");
   const [isProcessing, setIsProcessing] = useState(false);
+  const [showSignUp, setShowSignUp] = useState(false); // মডাল কন্ট্রোল করার জন্য স্টেট
   
   const glitchText = {
     initial: { skewX: 0 },
@@ -24,16 +22,11 @@ const Landing = () => {
     setIsProcessing(true);
     setAuthStatus("CALIBRATING GATEWAY...");
 
-    // ১.৫ সেকেন্ডের একটি ফেইক সিস্টেম লোডিং এনিমেশন (প্রিমিয়াম ফিল দেওয়ার জন্য)
+    // সাইনআপ মডাল ওপেন করার জন্য সামান্য ডিলে
     setTimeout(() => {
-      setAuthStatus("REDIRECTING TO SECURE TERMINAL...");
-      
-      loginWithRedirect({
-        authorizationParams: {
-          audience: API_AUDIENCE,
-          redirect_uri: window.location.origin + "/feed", // লগইন শেষে সরাসরি ফিডে যাবে
-        },
-      });
+      setAuthStatus("INITIALIZE NEURAL LINK");
+      setIsProcessing(false);
+      setShowSignUp(true); // মডাল ওপেন হবে
     }, 1500);
   };
 
@@ -63,7 +56,7 @@ const Landing = () => {
           </p>
         </motion.div>
 
-        {/* Login Button */}
+        {/* Login/Signup Button */}
         <motion.button 
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
@@ -88,10 +81,31 @@ const Landing = () => {
         <div className="mt-12 opacity-30 flex flex-col items-center">
           <div className="w-48 h-[1px] bg-gradient-to-r from-transparent via-cyan-500 to-transparent mb-4" />
           <p className="text-[9px] font-mono text-cyan-500 tracking-widest uppercase">
-            Client ID: {AUTH0_CLIENT_ID.substring(0, 8)}...
+            Database: Supabase // Status: Active
           </p>
         </div>
       </section>
+
+      {/* SignUp Modal Overlay */}
+      <AnimatePresence>
+        {showSignUp && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+          >
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-[#020617] border border-cyan-500/30 p-8 rounded-3xl w-full max-w-md shadow-2xl relative"
+            >
+              <SignUp onClose={() => setShowSignUp(false)} />
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <footer className="absolute bottom-8 w-full text-center">
         <p className="text-[9px] text-zinc-700 font-mono uppercase tracking-[0.5em]">
