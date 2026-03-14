@@ -20,7 +20,9 @@ import LegacySetup from '../components/LegacySetup';
 // ✅ কনফিগারেশন (আপনার ব্যাকএন্ডের সাথে মিল রাখা হয়েছে)
 const API_URL = "https://onyx-drift-app-final-u29m.onrender.com";
 const AUTH_AUDIENCE = "https://onyx-drift-api.com";
-
+const { isAuthenticated, user } = useAuth0();
+console.log("Is Authenticated:", isAuthenticated);
+console.log("User Data:", user);
 // --- ১. NEURAL TOAST ---
 const NeuralToast = ({ isVisible, message }) => (
   <AnimatePresence>

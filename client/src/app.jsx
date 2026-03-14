@@ -105,8 +105,8 @@ export default function App() {
   }), [navigate, logout]);
 
   const isFullWidthPage = useMemo(() => {
-    const paths = ["/", "/join", "/messenger", "/call"];
-    return paths.some(path => location.pathname === path || location.pathname.startsWith(path));
+    const paths = ["/", "/join"];
+    return paths.includes(location.pathname);
   }, [location.pathname]);
 
   if (isLoading) {
@@ -145,8 +145,10 @@ export default function App() {
         <main className={`flex-1 min-h-screen transition-all duration-500 ${(!isFullWidthPage && isAuthenticated) ? 'md:pl-64 pb-20 md:pb-0' : ''}`}>
           <Suspense fallback={<div className="h-full flex items-center justify-center text-cyan-500 animate-pulse">LOADING_NEURAL_DATA...</div>}>
             <Routes>
-              <Route path="/" element={<Landing />} />
-              <Route path="/join" element={<JoinPage />} />
+              {/* রুট লগইন থাকলে সরাসরি /feed এ পাঠাবে */}
+              <Route path="/" element={isAuthenticated ? <Navigate to="/feed" replace /> : <Landing />} />
+              <Route path="/join" element={isAuthenticated ? <Navigate to="/feed" replace /> : <JoinPage />} />
+              
               <Route path="/feed" element={<ProtectedRoute><PremiumHomeFeed /></ProtectedRoute>} />
               <Route path="/reels" element={<ProtectedRoute><ReelsFeed /></ProtectedRoute>} />
               <Route path="/messenger/*" element={<ProtectedRoute><Messenger /></ProtectedRoute>} />
@@ -154,6 +156,7 @@ export default function App() {
               <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
               <Route path="/ai-twin" element={<ProtectedRoute><AITwinSync /></ProtectedRoute>} />
               <Route path="/call" element={<ProtectedRoute><CallPage /></ProtectedRoute>} />
+              
               <Route path="*" element={<Navigate to={isAuthenticated ? "/feed" : "/"} replace />} />
             </Routes>
           </Suspense>
