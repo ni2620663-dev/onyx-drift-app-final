@@ -1,22 +1,21 @@
 import React, { Suspense, lazy, useMemo } from "react";
 import { Routes, Route, useLocation, Navigate, useNavigate } from "react-router-dom";
+import { useAuth0 } from "@auth0/auth0-react";
 import { Toaster } from 'react-hot-toast';
 import { Mic, MicOff } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion'; 
 
-// Voice & Auth
 import 'regenerator-runtime/runtime';
 import SpeechRecognition, { useSpeechRecognition } from 'react-speech-recognition';
-import useMasterVoiceController from "./components/GlobalVoiceAssistant";
-import { supabase } from "./supabaseClient"; // Supabase ইমপোর্ট
 
-// Components
+// Hooks & Components
+import useMasterVoiceController from "./components/GlobalVoiceAssistant";
 import Sidebar from "./components/Sidebar";
 import CustomCursor from "./components/CustomCursor";
 import ProtectedRoute from "./components/ProtectedRoute";
 import MobileNav from "./components/MobileNav";
 
-// Pages (Lazy loaded)
+// Lazy Pages
 const Messenger = lazy(() => import("./pages/Messenger"));
 const PremiumHomeFeed = lazy(() => import("./pages/PremiumHomeFeed"));
 const ProfilePage = lazy(() => import("./pages/Profile"));
@@ -28,10 +27,11 @@ const CallPage = lazy(() => import("./pages/CallPage"));
 const AITwinSync = lazy(() => import("./components/AITwinSync"));
 
 /* ==========================================================
-    🎤 Global Voice Intelligence (Master Assistant)
+   🎤 Global Voice Intelligence (Neural Interface)
 ========================================================== */
 const GlobalVoiceAssistant = React.memo(({ actions, user }) => {
   const { transcript, listening, browserSupportsSpeechRecognition, resetTranscript } = useSpeechRecognition();
+  
   useMasterVoiceController(actions, transcript, user);
 
   const toggleListening = () => {
@@ -49,79 +49,112 @@ const GlobalVoiceAssistant = React.memo(({ actions, user }) => {
     <div className="fixed bottom-24 right-6 z-[99999] flex flex-col items-end gap-3">
       <AnimatePresence>
         {listening && (
-          <motion.div initial={{ opacity: 0, scale: 0.9, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9, y: 10 }} className="bg-black/90 backdrop-blur-xl border border-cyan-500/30 p-4 rounded-2xl shadow-[0_0_30px_rgba(6,182,212,0.2)] max-w-[220px]">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.9, y: 10 }}
+            className="bg-black/90 backdrop-blur-xl border border-cyan-500/30 p-4 rounded-2xl shadow-[0_0_30px_rgba(6,182,212,0.2)] max-w-[220px]"
+          >
             <div className="flex items-center gap-2 mb-2">
+              <div className="flex gap-1">
+                {[0, 0.2, 0.4].map((delay) => (
+                  <div key={delay} className="w-1 h-3 bg-cyan-500 animate-bounce" style={{ animationDelay: `${delay}s` }} />
+                ))}
+              </div>
               <span className="text-[10px] text-cyan-400 font-black uppercase tracking-widest">Neural Link</span>
             </div>
-            <p className="text-white/80 text-[11px] font-mono leading-tight italic">{transcript ? `"${transcript}"` : "Awaiting Command..."}</p>
+            <p className="text-white/80 text-[11px] font-mono leading-tight italic">
+              {transcript ? `"${transcript}"` : "Awaiting Command..."}
+            </p>
           </motion.div>
         )}
       </AnimatePresence>
-      <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={toggleListening} className={`w-16 h-16 rounded-full border-2 flex items-center justify-center transition-all duration-500 ${listening ? 'bg-cyan-500 text-black border-white shadow-[0_0_30px_#06b6d4]' : 'bg-zinc-950/80 text-cyan-500 border-cyan-900/50 hover:border-cyan-500 shadow-2xl'}`}>
+      
+      <motion.button 
+        whileHover={{ scale: 1.1 }}
+        whileTap={{ scale: 0.9 }}
+        onClick={toggleListening} 
+        className={`w-16 h-16 rounded-full border-2 flex items-center justify-center transition-all duration-500 ${
+          listening ? 'bg-cyan-500 text-black border-white shadow-[0_0_30px_#06b6d4]' : 'bg-zinc-950/80 text-cyan-500 border-cyan-900/50 hover:border-cyan-500 shadow-2xl'
+        }`}
+      >
         {listening ? <Mic size={28} /> : <MicOff size={28} className="opacity-40" />}
       </motion.button>
     </div>
   );
 });
 
+/* ==========================================================
+   🚀 Main Application Core (OnyxDrift)
+========================================================== */
 export default function App() {
-  const navigate = useNavigate();
+  const { isAuthenticated, isLoading, user, logout } = useAuth0();
   const location = useLocation();
-  const [session, setSession] = React.useState(null);
-  const [loading, setLoading] = React.useState(true);
-
-  // Supabase Auth Listener
-  React.useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setLoading(false);
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-    });
-    return () => subscription.unsubscribe();
-  }, []);
+  const navigate = useNavigate();
 
   const voiceActions = useMemo(() => ({
     navigate: (path) => navigate(path),
-    logout: async () => {
+    search: (query) => navigate(`/feed?search=${query}`),
+    initiateCall: () => navigate('/call'),
+    handleLike: () => document.querySelector('[data-action="like"]')?.click(),
+    logout: () => {
       if(window.confirm("Disconnect Neural Link?")) {
-        await supabase.auth.signOut();
-        navigate("/");
+        logout({ logoutParams: { returnTo: window.location.origin } });
       }
     }
-  }), [navigate]);
+  }), [navigate, logout]);
 
   const isFullWidthPage = useMemo(() => {
     const paths = ["/", "/join", "/messenger", "/call"];
     return paths.some(path => location.pathname === path || location.pathname.startsWith(path));
   }, [location.pathname]);
 
-  if (loading) return <div className="h-screen flex items-center justify-center bg-[#020617] text-cyan-500">BOOTING_SYSTEM...</div>;
+  if (isLoading) {
+    return (
+      <div className="h-screen flex flex-col items-center justify-center bg-[#020617] text-cyan-500 font-mono tracking-[0.5em]">
+        <motion.div 
+          animate={{ rotate: 360 }}
+          transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+          className="w-12 h-12 border-2 border-cyan-500 border-t-transparent rounded-full mb-8" 
+        />
+        <span>BOOTING_SYSTEM...</span>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-[#020617] text-gray-200">
+    <div className="min-h-screen bg-[#020617] text-gray-200 selection:bg-cyan-500/30 overflow-x-hidden">
       <Toaster position="top-right" />
       <CustomCursor />
-      
-      {session && <GlobalVoiceAssistant actions={voiceActions} user={session.user} />}
+
+      {isAuthenticated && <GlobalVoiceAssistant actions={voiceActions} user={user} />}
       
       <div className="flex w-full min-h-screen">
-        {session && !isFullWidthPage && (
+        {!isFullWidthPage && isAuthenticated && (
           <aside className="hidden md:block fixed left-0 top-0 h-full w-64 z-40 bg-[#020617]/80 backdrop-blur-md border-r border-cyan-900/20">
-            <Sidebar user={session.user} />
+            <Sidebar user={user} />
           </aside>
         )}
         
-        <main className={`flex-1 min-h-screen transition-all duration-500 ${(session && !isFullWidthPage) ? 'md:pl-64' : ''}`}>
-          <Suspense fallback={<div className="h-full flex items-center justify-center text-cyan-500">LOADING_NEURAL_DATA...</div>}>
+        {!isFullWidthPage && isAuthenticated && (
+          <nav className="md:hidden fixed bottom-0 left-0 w-full z-50">
+            <MobileNav />
+          </nav>
+        )}
+        
+        <main className={`flex-1 min-h-screen transition-all duration-500 ${(!isFullWidthPage && isAuthenticated) ? 'md:pl-64 pb-20 md:pb-0' : ''}`}>
+          <Suspense fallback={<div className="h-full flex items-center justify-center text-cyan-500 animate-pulse">LOADING_NEURAL_DATA...</div>}>
             <Routes>
-              <Route path="/" element={!session ? <Landing /> : <Navigate to="/feed" />} />
+              <Route path="/" element={<Landing />} />
               <Route path="/join" element={<JoinPage />} />
-              <Route path="/feed" element={session ? <PremiumHomeFeed /> : <Navigate to="/" />} />
-              <Route path="/profile/:username" element={session ? <ProfilePage /> : <Navigate to="/" />} />
-              <Route path="*" element={<Navigate to="/" replace />} />
+              <Route path="/feed" element={<ProtectedRoute><PremiumHomeFeed /></ProtectedRoute>} />
+              <Route path="/reels" element={<ProtectedRoute><ReelsFeed /></ProtectedRoute>} />
+              <Route path="/messenger/*" element={<ProtectedRoute><Messenger /></ProtectedRoute>} />
+              <Route path="/profile/:username" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
+              <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+              <Route path="/ai-twin" element={<ProtectedRoute><AITwinSync /></ProtectedRoute>} />
+              <Route path="/call" element={<ProtectedRoute><CallPage /></ProtectedRoute>} />
+              <Route path="*" element={<Navigate to={isAuthenticated ? "/feed" : "/"} replace />} />
             </Routes>
           </Suspense>
         </main>
