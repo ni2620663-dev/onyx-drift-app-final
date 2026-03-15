@@ -2,22 +2,22 @@ import mongoose from "mongoose";
 
 const userSchema = new mongoose.Schema(
   {
-    neuralPatterns: {
-      meetingTimes: [String], // ইউজার কখন সাধারণত মিটিং করে
-      frequentContacts: [String], // যাদের সাথে বেশি কথা বলে
-      busyHours: [Number] // সারাদিনের ব্যস্ত সময়
-    },
-
     /* ==========================================================
-        ১. DIGITAL IDENTITY & AUTH (মূল পরিচিতি)
+        ১. DIGITAL IDENTITY & CUSTOM AUTH (মূল পরিচিতি)
     ========================================================== */
-    auth0Id: { 
+    username: { 
       type: String, 
       required: true, 
       unique: true, 
-      immutable: true,
+      trim: true,
+      lowercase: true,
       index: true 
-    }, 
+    },
+    password: { 
+      type: String, 
+      required: true, 
+      select: false // ডাটাবেস কোয়েরি করলে পাসওয়ার্ড ডিফল্টভাবে আসবে না (সিকিউরিটি)
+    },
     name: { 
       type: String, 
       required: true, 
@@ -37,6 +37,13 @@ const userSchema = new mongoose.Schema(
       unique: true,
       index: true 
     },
+    
+    neuralPatterns: {
+      meetingTimes: [String], 
+      frequentContacts: [String], 
+      busyHours: [Number] 
+    },
+
     avatar: { type: String, default: "" },
     aiTwinAvatar: { type: String, default: "" }, 
     aiPersona: { type: String, default: "Neural Drifter" }, 
@@ -198,7 +205,7 @@ const userSchema = new mongoose.Schema(
 /* ==========================================================
     🚀 OPTIMIZED INDEXING (সার্চ স্পিড বাড়ানোর জন্য)
 ========================================================== */
-userSchema.index({ name: 1, nickname: 1 });
+userSchema.index({ username: 1, name: 1, nickname: 1 });
 userSchema.index({ createdAt: -1, isVerified: -1 });
 userSchema.index({ inviteCount: -1 }); 
 userSchema.index({ neuralImpact: -1 });

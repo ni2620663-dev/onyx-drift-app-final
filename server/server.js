@@ -31,6 +31,7 @@ import marketRoutes from "./routes/market.js";
 import adminRoutes from "./routes/admin.js";                      
 import { getNeuralFeed } from "./controllers/feedController.js";
 import calendarRoutes from './routes/calendar.js';
+import authRoutes from './routes/authRoutes.js';
 // 🛡️ Auth0 JWT ভেরিফিকেশন মিডলওয়্যার
 const checkJwt = auth({
   audience: 'https://onyx-drift-api.com', 
@@ -115,6 +116,8 @@ app.use("/api/groups", checkJwt, updateNeuralPulse, groupRoutes);
 app.use("/api/market", checkJwt, updateNeuralPulse, marketRoutes);
 app.use("/api/admin", checkJwt, updateNeuralPulse, adminRoutes);
 app.use("/api/calendar", checkJwt, calendarRoutes);
+app.use('/api/auth', require('./routes/authRoutes'));
+app.use('/api/auth', authRoutes);
 /* ==========================================================
     📡 REAL-TIME ENGINE (Socket.io)
 ========================================================== */

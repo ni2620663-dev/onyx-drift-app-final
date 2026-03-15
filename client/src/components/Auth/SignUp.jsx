@@ -1,5 +1,4 @@
 import React, { useState, useRef } from 'react';
-import { supabase } from '../../supabaseClient';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const AuthModal = ({ onClose }) => {
@@ -34,29 +33,22 @@ const AuthModal = ({ onClose }) => {
     }
   };
 
+  // --- আপনার নিজস্ব ব্যাকএন্ড সার্ভারের জন্য হ্যান্ডলার ---
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.email || !formData.password) return alert("Please fill all fields");
     
     setLoading(true);
     try {
-      if (isLogin) {
-        const { error } = await supabase.auth.signInWithPassword({
-          email: formData.email.trim(),
-          password: formData.password,
-        });
-        if (error) throw error;
-        alert("Login Successful!");
-      } else {
-        const { error } = await supabase.auth.signUp({
-          email: formData.email.trim(),
-          password: formData.password,
-        });
-        if (error) throw error;
-        alert("Registration Successful! Please check your email inbox.");
-      }
+      // এখানে আপনার নিজস্ব API কল হবে (যেমন: fetch('/api/login'))
+      console.log("Form Data:", formData);
+      alert(isLogin ? "লগইন করার চেষ্টা করা হচ্ছে..." : "অ্যাকাউন্ট তৈরির চেষ্টা করা হচ্ছে...");
+      
+      // উদাহরণ:
+      // const res = await fetch('YOUR_API_URL/auth', { method: 'POST', body: JSON.stringify(formData) });
+      
     } catch (error) {
-      alert(error.message);
+      alert("Error: " + error.message);
     } finally {
       setLoading(false);
     }
@@ -64,7 +56,6 @@ const AuthModal = ({ onClose }) => {
 
   return (
     <div className="min-h-screen w-full flex items-center justify-center bg-black font-sans selection:bg-cyan-500/30 overflow-x-hidden">
-      {/* Container: Mobiles-এ Full Width, PC-তে Max-Width */}
       <div className="w-full h-full min-h-screen md:h-auto md:min-h-0 md:max-w-[600px] p-6 md:p-12 bg-black text-white flex flex-col justify-center">
         
         {/* Logo Section */}
@@ -139,7 +130,7 @@ const AuthModal = ({ onClose }) => {
           </div>
 
           <p className="mt-8 text-[10px] md:text-[11px] text-zinc-600 text-center md:text-left leading-tight">
-            By signing up, you agree to the <span className="text-cyan-700 cursor-pointer">Terms of Service</span> and <span className="text-cyan-700 cursor-pointer">Privacy Policy</span>, including <span className="text-cyan-700 cursor-pointer">Cookie Use</span>.
+            By signing up, you agree to the <span className="text-cyan-700 cursor-pointer">Terms of Service</span> and <span className="text-cyan-700 cursor-pointer">Privacy Policy</span>.
           </p>
         </div>
       </div>

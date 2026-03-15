@@ -1,117 +1,231 @@
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useNavigate } from "react-router-dom";
-import { supabase } from "../supabaseClient";
-import SignUp from "../components/Auth/SignUp"; // আপনার সাইনআপ কম্পোনেন্ট ইমপোর্ট
+import axios from "axios"; 
 
-const Landing = () => {
-  const navigate = useNavigate();
-  const [authStatus, setAuthStatus] = useState("INITIALIZE NEURAL LINK");
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [showSignUp, setShowSignUp] = useState(false); // মডাল কন্ট্রোল করার জন্য স্টেট
-  
-  const glitchText = {
-    initial: { skewX: 0 },
-    animate: {
-      skewX: [0, -2, 2, 0],
-      transition: { duration: 0.2, repeat: Infinity, repeatType: "mirror" },
-    },
-  };
+// --- Custom Auth Component ---
+const AuthModal = ({ mode, onClose, onSwitch }) => {
+  const [formData, setFormData] = useState({ 
+    username: '', 
+    password: '', 
+    name: '', 
+    email: '' 
+  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  const handleNeuralLogin = async () => {
-    setIsProcessing(true);
-    setAuthStatus("CALIBRATING GATEWAY...");
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError("");
 
-    // সাইনআপ মডাল ওপেন করার জন্য সামান্য ডিলে
-    setTimeout(() => {
-      setAuthStatus("INITIALIZE NEURAL LINK");
-      setIsProcessing(false);
-      setShowSignUp(true); // মডাল ওপেন হবে
-    }, 1500);
+    try {
+      const endpoint = mode === 'login' ? '/api/auth/login' : '/api/auth/register';
+      const response = await axios.post(`http://localhost:10000${endpoint}`, formData, {
+        withCredentials: true 
+      });
+
+      if (response.status === 200 || response.status === 201) {
+        window.location.href = "/feed"; 
+      }
+    } catch (err) {
+      setError(err.response?.data?.message || "Authentication Failed");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <div className="min-h-screen w-full bg-[#020617] flex flex-col items-center justify-center overflow-hidden relative">
-      
-      {/* Background Effect */}
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-cyan-900/10 via-transparent to-transparent pointer-events-none" />
-
-      <section className="relative z-30 flex flex-col items-center text-center px-4">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.8 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.6 }}
-        >
-          <motion.h1 
-            variants={glitchText} 
-            initial="initial" 
-            animate="animate" 
-            className="text-7xl md:text-9xl font-black text-white mb-4 italic uppercase tracking-tighter"
-          >
-            ONYX<span className="text-cyan-500">DRIFT</span>
-          </motion.h1>
-          
-          <p className="text-cyan-400/50 font-mono mb-12 tracking-[0.4em] uppercase text-[10px] md:text-xs">
-            Authorized Personnel Only // Neural ID Required
-          </p>
-        </motion.div>
-
-        {/* Login/Signup Button */}
-        <motion.button 
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          onClick={handleNeuralLogin}
-          disabled={isProcessing}
-          className={`group relative px-12 py-6 bg-transparent rounded-full border border-cyan-500/30 text-white font-mono font-bold text-lg transition-all duration-500 ${
-            isProcessing 
-            ? 'border-cyan-500 shadow-[0_0_40px_rgba(6,182,212,0.4)]' 
-            : 'hover:border-cyan-500 hover:shadow-[0_0_25px_rgba(6,182,212,0.3)]'
-          }`}
-        >
-          <span className="relative z-10 flex items-center gap-3">
-            {isProcessing && (
-              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-            )}
-            {authStatus}
-          </span>
-          <div className="absolute inset-0 bg-cyan-500/10 scale-x-0 group-hover:scale-x-100 transition-transform origin-left duration-500" />
-        </motion.button>
-
-        {/* System Info */}
-        <div className="mt-12 opacity-30 flex flex-col items-center">
-          <div className="w-48 h-[1px] bg-gradient-to-r from-transparent via-cyan-500 to-transparent mb-4" />
-          <p className="text-[9px] font-mono text-cyan-500 tracking-widest uppercase">
-            Database: Supabase // Status: Active
-          </p>
+    <div className="flex flex-col w-full text-white">
+      <div className="flex justify-between items-start mb-10">
+        <div className="flex flex-col">
+           <span className="text-5xl font-black italic tracking-tighter leading-none">
+            OX<span className="text-cyan-500">.</span>
+           </span>
+           <span className="text-[8px] font-bold text-zinc-600 tracking-[0.5em] uppercase mt-1">OnyxDrift</span>
         </div>
-      </section>
+        <button onClick={onClose} className="p-2 hover:bg-zinc-900 rounded-full transition-all text-xl outline-none">✕</button>
+      </div>
+      
+      <h2 className="text-4xl md:text-5xl font-extrabold mb-10 tracking-tight leading-tight">
+        {mode === 'login' ? 'Drift into Onyx.' : 'Join the Neural Network.'}
+      </h2>
 
-      {/* SignUp Modal Overlay */}
+      {error && (
+        <div className="bg-red-500/10 border border-red-500/20 p-3 rounded-lg mb-6 text-center">
+          <p className="text-red-500 font-mono text-[11px] uppercase tracking-wider">{error}</p>
+        </div>
+      )}
+
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        {mode === 'signup' && (
+          <>
+            <input 
+              type="text" 
+              placeholder="Full Name" 
+              required
+              className="w-full bg-black border border-zinc-800 p-4 rounded-xl focus:border-cyan-500 outline-none transition-all text-lg"
+              onChange={(e) => setFormData({...formData, name: e.target.value})}
+            />
+            <input 
+              type="email" 
+              placeholder="Email Address" 
+              required
+              className="w-full bg-black border border-zinc-800 p-4 rounded-xl focus:border-cyan-500 outline-none transition-all text-lg"
+              onChange={(e) => setFormData({...formData, email: e.target.value})}
+            />
+          </>
+        )}
+        <input 
+          type="text" 
+          placeholder="Username or ID" 
+          required
+          className="w-full bg-black border border-zinc-800 p-4 rounded-xl focus:border-cyan-500 outline-none transition-all text-lg"
+          onChange={(e) => setFormData({...formData, username: e.target.value})}
+        />
+        <input 
+          type="password" 
+          placeholder="Password" 
+          required
+          className="w-full bg-black border border-zinc-800 p-4 rounded-xl focus:border-cyan-500 outline-none transition-all text-lg"
+          onChange={(e) => setFormData({...formData, password: e.target.value})}
+        />
+        
+        <button 
+          type="submit" 
+          disabled={loading}
+          className="w-full bg-white text-black font-bold py-4 rounded-full mt-6 hover:bg-cyan-500 hover:text-white transition-all duration-300 disabled:opacity-50 text-lg"
+        >
+          {loading ? "SYNCING..." : (mode === 'login' ? 'Log in' : 'Create Account')}
+        </button>
+      </form>
+
+      <div className="mt-12 pt-8 border-t border-zinc-900">
+        <p className="text-zinc-500 text-base">
+          {mode === 'login' ? "Don't have an account?" : "Already have an account?"}
+        </p>
+        <button 
+          onClick={onSwitch} 
+          className="text-cyan-500 cursor-pointer hover:underline font-bold text-lg mt-2 block outline-none"
+        >
+          {mode === 'login' ? 'Sign up for OnyxDrift' : 'Log in to your account'}
+        </button>
+      </div>
+    </div>
+  );
+};
+
+const Landing = () => {
+  const [showAuth, setShowAuth] = useState(false);
+  const [authMode, setAuthMode] = useState("login");
+
+  // সোশ্যাল লগইন হ্যান্ডলার ফাংশন
+  const handleSocialLogin = (provider) => {
+    // এটি ইউজারকে সরাসরি আপনার ব্যাকএন্ডের সোশ্যাল লগইন রাউটে পাঠিয়ে দেবে
+  window.location.href = `http://localhost:10000/api/auth/${provider}`;
+  };
+
+  return (
+    <div className="min-h-screen w-full bg-black flex flex-col md:flex-row items-center justify-center overflow-hidden">
+      
+      {/* Left Side: Big Logo */}
+      <div className="flex-1 flex flex-col items-center justify-center p-10">
+          <motion.div 
+            initial={{ scale: 0.8, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ duration: 0.8 }}
+            className="text-[180px] md:text-[300px] font-black italic tracking-tighter leading-none text-white select-none"
+          >
+            OX<span className="text-cyan-500">.</span>
+          </motion.div>
+          <p className="text-zinc-700 font-mono tracking-[1.5em] text-xs md:text-sm uppercase -mt-4 md:-mt-8">
+            ONYXDRIFT // NEURAL_LINK
+          </p>
+      </div>
+
+      {/* Right Side: Welcome Text */}
+      <div className="flex-1 flex flex-col items-center md:items-start p-10 z-10">
+        <motion.div 
+          initial={{ x: 50, opacity: 0 }}
+          animate={{ x: 0, opacity: 1 }}
+          className="max-w-[500px]"
+        >
+          <h1 className="text-6xl md:text-8xl font-black text-white mb-12 tracking-tight leading-none">
+            Happening now
+          </h1>
+          <h2 className="text-3xl md:text-4xl font-extrabold text-white mb-10">
+            Join today.
+          </h2>
+
+          <div className="flex flex-col gap-4 w-full max-w-[320px]">
+            {/* Google Button */}
+            <button 
+              onClick={() => handleSocialLogin('google')}
+              className="w-full py-3 bg-white text-black font-bold rounded-full flex items-center justify-center gap-3 hover:bg-zinc-200 transition-all"
+            >
+               <img src="https://www.gstatic.com" className="w-5" alt="G" />
+               Sign up with Google
+            </button>
+
+            {/* Facebook Button */}
+            <button 
+              onClick={() => handleSocialLogin('facebook')}
+              className="w-full py-3 bg-[#1877F2] text-white font-bold rounded-full flex items-center justify-center gap-3 hover:opacity-90 transition-all"
+            >
+               <svg fill="currentColor" viewBox="0 0 24 24" className="w-5">
+                 <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
+               </svg>
+               Sign up with Facebook
+            </button>
+
+            <div className="flex items-center gap-2 my-2">
+              <div className="flex-1 h-[1px] bg-zinc-900"></div>
+              <span className="text-zinc-600 text-sm font-mono">OR</span>
+              <div className="flex-1 h-[1px] bg-zinc-900"></div>
+            </div>
+
+            <button 
+              onClick={() => { setAuthMode("signup"); setShowAuth(true); }}
+              className="w-full py-3 bg-cyan-600 text-white font-bold rounded-full hover:bg-cyan-500 transition-all shadow-[0_0_20px_rgba(6,182,212,0.3)]"
+            >
+              Create account
+            </button>
+
+            <div className="mt-12">
+               <p className="text-white font-bold text-lg mb-4">Already have an account?</p>
+               <button 
+                onClick={() => { setAuthMode("login"); setShowAuth(true); }}
+                className="w-full py-3 bg-black border border-zinc-800 text-cyan-500 font-bold rounded-full hover:bg-zinc-900 transition-all"
+               >
+                 Sign in
+               </button>
+            </div>
+          </div>
+        </motion.div>
+      </div>
+
       <AnimatePresence>
-        {showSignUp && (
+        {showAuth && (
           <motion.div 
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-[#020617]/95 backdrop-blur-md p-4"
           >
             <motion.div 
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-[#020617] border border-cyan-500/30 p-8 rounded-3xl w-full max-w-md shadow-2xl relative"
+              initial={{ scale: 0.9, y: 50 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 50 }}
+              className="bg-black border border-zinc-800 p-8 md:p-12 rounded-[2rem] w-full max-w-[550px] shadow-[0_0_80px_rgba(6,182,212,0.15)] relative overflow-y-auto max-h-[90vh]"
             >
-              <SignUp onClose={() => setShowSignUp(false)} />
+              <AuthModal 
+                mode={authMode} 
+                onClose={() => setShowAuth(false)} 
+                onSwitch={() => setAuthMode(authMode === 'login' ? 'signup' : 'login')}
+              />
             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
-
-      <footer className="absolute bottom-8 w-full text-center">
-        <p className="text-[9px] text-zinc-700 font-mono uppercase tracking-[0.5em]">
-          Connection Status: <span className="text-green-500 animate-pulse font-bold">Encrypted</span>
-        </p>
-      </footer>
     </div>
   );
 };
