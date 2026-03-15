@@ -33,19 +33,30 @@ const AuthModal = ({ onClose }) => {
     }
   };
 
-  // --- আপনার নিজস্ব ব্যাকএন্ড সার্ভারের জন্য হ্যান্ডলার ---
+  // --- Render ব্যাকএন্ডের জন্য আপডেট করা হ্যান্ডলার ---
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.email || !formData.password) return alert("Please fill all fields");
     
     setLoading(true);
     try {
-      // এখানে আপনার নিজস্ব API কল হবে (যেমন: fetch('/api/login'))
-      console.log("Form Data:", formData);
-      alert(isLogin ? "লগইন করার চেষ্টা করা হচ্ছে..." : "অ্যাকাউন্ট তৈরির চেষ্টা করা হচ্ছে...");
+      const baseUrl = "https://onyx-drift-app-final-u29m.onrender.com";
+      const endpoint = isLogin ? '/api/auth/login' : '/api/auth/register';
       
-      // উদাহরণ:
-      // const res = await fetch('YOUR_API_URL/auth', { method: 'POST', body: JSON.stringify(formData) });
+      const response = await fetch(`${baseUrl}${endpoint}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData)
+      });
+      
+      const data = await response.json();
+      
+      if (response.ok) {
+        alert(isLogin ? "Login Successful!" : "Account Created Successfully!");
+        window.location.href = "/feed";
+      } else {
+        alert("Error: " + (data.message || "Authentication Failed"));
+      }
       
     } catch (error) {
       alert("Error: " + error.message);

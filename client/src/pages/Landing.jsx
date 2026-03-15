@@ -19,8 +19,10 @@ const AuthModal = ({ mode, onClose, onSwitch }) => {
     setError("");
 
     try {
+      // রেন্ডার সার্ভার বেস ইউআরএল
+      const baseUrl = "https://onyx-drift-app-final-u29m.onrender.com";
       const endpoint = mode === 'login' ? '/api/auth/login' : '/api/auth/register';
-      const response = await axios.post(`http://localhost:10000${endpoint}`, formData, {
+      const response = await axios.post(`${baseUrl}${endpoint}`, formData, {
         withCredentials: true 
       });
 
@@ -39,7 +41,7 @@ const AuthModal = ({ mode, onClose, onSwitch }) => {
       <div className="flex justify-between items-start mb-10">
         <div className="flex flex-col">
            <span className="text-5xl font-black italic tracking-tighter leading-none">
-            OX<span className="text-cyan-500">.</span>
+           OX<span className="text-cyan-500">.</span>
            </span>
            <span className="text-[8px] font-bold text-zinc-600 tracking-[0.5em] uppercase mt-1">OnyxDrift</span>
         </div>
@@ -118,16 +120,14 @@ const Landing = () => {
   const [showAuth, setShowAuth] = useState(false);
   const [authMode, setAuthMode] = useState("login");
 
-  // সোশ্যাল লগইন হ্যান্ডলার ফাংশন
+  // সোশ্যাল লগইন হ্যান্ডলার ফাংশন (Render URL Updated)
   const handleSocialLogin = (provider) => {
-    // এটি ইউজারকে সরাসরি আপনার ব্যাকএন্ডের সোশ্যাল লগইন রাউটে পাঠিয়ে দেবে
-  window.location.href = `http://localhost:10000/api/auth/${provider}`;
+    window.location.href = `https://onyx-drift-app-final-u29m.onrender.com/api/auth/${provider}`;
   };
 
   return (
     <div className="min-h-screen w-full bg-black flex flex-col md:flex-row items-center justify-center overflow-hidden">
       
-      {/* Left Side: Big Logo */}
       <div className="flex-1 flex flex-col items-center justify-center p-10">
           <motion.div 
             initial={{ scale: 0.8, opacity: 0 }}
@@ -142,7 +142,6 @@ const Landing = () => {
           </p>
       </div>
 
-      {/* Right Side: Welcome Text */}
       <div className="flex-1 flex flex-col items-center md:items-start p-10 z-10">
         <motion.div 
           initial={{ x: 50, opacity: 0 }}
@@ -157,7 +156,6 @@ const Landing = () => {
           </h2>
 
           <div className="flex flex-col gap-4 w-full max-w-[320px]">
-            {/* Google Button */}
             <button 
               onClick={() => handleSocialLogin('google')}
               className="w-full py-3 bg-white text-black font-bold rounded-full flex items-center justify-center gap-3 hover:bg-zinc-200 transition-all"
@@ -166,7 +164,6 @@ const Landing = () => {
                Sign up with Google
             </button>
 
-            {/* Facebook Button */}
             <button 
               onClick={() => handleSocialLogin('facebook')}
               className="w-full py-3 bg-[#1877F2] text-white font-bold rounded-full flex items-center justify-center gap-3 hover:opacity-90 transition-all"
