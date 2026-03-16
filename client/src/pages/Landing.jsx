@@ -19,17 +19,30 @@ const AuthModal = ({ mode, onClose, onSwitch }) => {
     setError("");
 
     try {
+      // আপনার রেন্ডার ব্যাকএন্ড ইউআরএল
       const baseUrl = "https://onyx-drift-app-final-u29m.onrender.com";
       const endpoint = mode === 'login' ? '/api/auth/login' : '/api/auth/register';
-      const response = await axios.post(`${baseUrl}${endpoint}`, formData, {
-        withCredentials: true 
+      
+      // স্ল্যাশ ডাবল হওয়া এড়াতে URL ফরম্যাট করা
+      const fullUrl = `${baseUrl.replace(/\/$/, "")}${endpoint}`;
+
+      const response = await axios.post(fullUrl, formData, {
+        withCredentials: true,
+        headers: {
+            'Content-Type': 'application/json'
+        }
       });
 
+      // স্ট্যাটাস ২০০ (Login) বা ২০১ (Register) হলে রিডাইরেক্ট হবে
       if (response.status === 200 || response.status === 201) {
-        window.location.href = "/feed"; 
+        console.log("Authentication Successful:", response.data);
+        window.location.href = "/feed"; // সরাসরি ফিড পেজে নিয়ে যাবে
       }
     } catch (err) {
-      setError(err.response?.data?.message || "Authentication Failed");
+      // সার্ভার থেকে আসা নির্দিষ্ট এরর মেসেজ দেখানো
+      const serverMessage = err.response?.data?.message || "Authentication Failed. Please try again.";
+      setError(serverMessage);
+      console.error("Auth Error:", err.response?.data);
     } finally {
       setLoading(false);
     }
@@ -51,11 +64,18 @@ const AuthModal = ({ mode, onClose, onSwitch }) => {
         {mode === 'login' ? 'Drift into Onyx.' : 'Join the Neural Network.'}
       </h2>
 
-      {error && (
-        <div className="bg-red-500/10 border border-red-500/20 p-3 rounded-lg mb-6 text-center">
-          <p className="text-red-500 font-mono text-[11px] uppercase tracking-wider">{error}</p>
-        </div>
-      )}
+      {/* এরর মেসেজ ডিসপ্লে */}
+      <AnimatePresence>
+        {error && (
+          <motion.div 
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-red-500/10 border border-red-500/20 p-4 rounded-xl mb-6 text-center"
+          >
+            <p className="text-red-500 font-mono text-xs uppercase tracking-widest">{error}</p>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         {mode === 'signup' && (
@@ -94,7 +114,7 @@ const AuthModal = ({ mode, onClose, onSwitch }) => {
         <button 
           type="submit" 
           disabled={loading}
-          className="w-full bg-white text-black font-bold py-4 rounded-full mt-6 hover:bg-cyan-500 hover:text-white transition-all duration-300 disabled:opacity-50 text-lg"
+          className="w-full bg-white text-black font-bold py-4 rounded-full mt-6 hover:bg-cyan-500 hover:text-white transition-all duration-300 disabled:opacity-50 text-lg shadow-lg active:scale-95"
         >
           {loading ? "SYNCING..." : (mode === 'login' ? 'Log in' : 'Create Account')}
         </button>
@@ -172,7 +192,7 @@ const Landing = () => {
         </motion.div>
       </div>
 
-      {/* Modal logic stays the same */}
+      {/* Modal Section */}
       <AnimatePresence>
         {showAuth && (
           <motion.div 
