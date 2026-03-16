@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import axios from "axios"; 
+import axios from "axios";
 
 // --- Custom Auth Component ---
 const AuthModal = ({ mode, onClose, onSwitch }) => {
@@ -19,11 +19,9 @@ const AuthModal = ({ mode, onClose, onSwitch }) => {
     setError("");
 
     try {
-      // আপনার রেন্ডার ব্যাকএন্ড ইউআরএল
       const baseUrl = "https://onyx-drift-app-final-u29m.onrender.com";
       const endpoint = mode === 'login' ? '/api/auth/login' : '/api/auth/register';
       
-      // স্ল্যাশ ডাবল হওয়া এড়াতে URL ফরম্যাট করা
       const fullUrl = `${baseUrl.replace(/\/$/, "")}${endpoint}`;
 
       const response = await axios.post(fullUrl, formData, {
@@ -33,16 +31,20 @@ const AuthModal = ({ mode, onClose, onSwitch }) => {
         }
       });
 
-      // স্ট্যাটাস ২০০ (Login) বা ২০১ (Register) হলে রিডাইরেক্ট হবে
+      // লগইন বা রেজিস্ট্রেশন সফল হলে
       if (response.status === 200 || response.status === 201) {
-        console.log("Authentication Successful:", response.data);
-        window.location.href = "/feed"; // সরাসরি ফিড পেজে নিয়ে যাবে
+        // --- গুরুত্বপূর্ণ: App.jsx এর সাথে সামঞ্জস্য রেখে ডাটা সেভ করা ---
+        if (response.data.user) {
+          localStorage.setItem("onyx_user", JSON.stringify(response.data.user));
+        }
+        
+        console.log("Authentication Successful");
+        // সরাসরি ফিড পেজে পাঠিয়ে দেওয়া
+        window.location.href = "/feed"; 
       }
     } catch (err) {
-      // সার্ভার থেকে আসা নির্দিষ্ট এরর মেসেজ দেখানো
       const serverMessage = err.response?.data?.message || "Authentication Failed. Please try again.";
       setError(serverMessage);
-      console.error("Auth Error:", err.response?.data);
     } finally {
       setLoading(false);
     }
@@ -64,7 +66,6 @@ const AuthModal = ({ mode, onClose, onSwitch }) => {
         {mode === 'login' ? 'Drift into Onyx.' : 'Join the Neural Network.'}
       </h2>
 
-      {/* এরর মেসেজ ডিসপ্লে */}
       <AnimatePresence>
         {error && (
           <motion.div 
@@ -142,7 +143,6 @@ const Landing = () => {
   return (
     <div className="min-h-screen w-full bg-black flex flex-col md:flex-row items-center justify-center overflow-hidden">
       
-      {/* Left side: Branding */}
       <div className="flex-1 flex flex-col items-center justify-center p-10">
           <motion.div 
             initial={{ scale: 0.8, opacity: 0 }}
@@ -157,7 +157,6 @@ const Landing = () => {
           </p>
       </div>
 
-      {/* Right side: Actions */}
       <div className="flex-1 flex flex-col items-center md:items-start p-10 z-10">
         <motion.div 
           initial={{ x: 50, opacity: 0 }}
@@ -192,7 +191,6 @@ const Landing = () => {
         </motion.div>
       </div>
 
-      {/* Modal Section */}
       <AnimatePresence>
         {showAuth && (
           <motion.div 

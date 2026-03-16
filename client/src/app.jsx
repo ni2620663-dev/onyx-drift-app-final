@@ -1,4 +1,4 @@
-import React, { Suspense, lazy, useMemo } from "react";
+import React, { Suspense, lazy, useMemo, useState, useEffect } from "react";
 import { Routes, Route, useLocation, Navigate, useNavigate } from "react-router-dom";
 import { useAuth0 } from "@auth0/auth0-react";
 import { Toaster } from 'react-hot-toast';
@@ -88,28 +88,46 @@ const GlobalVoiceAssistant = React.memo(({ actions, user }) => {
    🚀 Main Application Core (OnyxDrift)
 ========================================================== */
 export default function App() {
-  const { isAuthenticated, isLoading, user, logout } = useAuth0();
+  const { isAuthenticated: isAuth0Authenticated, isLoading: isAuth0Loading, user: auth0User, logout: auth0Logout } = useAuth0();
   const location = useLocation();
   const navigate = useNavigate();
+
+  // --- কাস্টম অথ স্টেট (LocalStorage থেকে) ---
+  const [customUser, setCustomUser] = useState(() => {
+    const savedUser = localStorage.getItem("onyx_user");
+    return savedUser ? JSON.parse(savedUser) : null;
+  });
+
+  // ফাইনাল ইউজার এবং অথ চেক (উভয় মেথডের জন্য)
+  const isAuthenticated = isAuth0Authenticated || !!customUser;
+  const currentUser = auth0User || customUser;
+
+  const logout = () => {
+    if(window.confirm("Disconnect Neural Link?")) {
+      localStorage.removeItem("onyx_user"); // কাস্টম ইউজার ডিলিট
+      setCustomUser(null);
+      if (isAuth0Authenticated) {
+        auth0Logout({ logoutParams: { returnTo: window.location.origin } });
+      } else {
+        navigate("/");
+      }
+    }
+  };
 
   const voiceActions = useMemo(() => ({
     navigate: (path) => navigate(path),
     search: (query) => navigate(`/feed?search=${query}`),
     initiateCall: () => navigate('/call'),
     handleLike: () => document.querySelector('[data-action="like"]')?.click(),
-    logout: () => {
-      if(window.confirm("Disconnect Neural Link?")) {
-        logout({ logoutParams: { returnTo: window.location.origin } });
-      }
-    }
-  }), [navigate, logout]);
+    logout: logout
+  }), [navigate, isAuth0Authenticated, auth0Logout]);
 
   const isFullWidthPage = useMemo(() => {
     const paths = ["/", "/join"];
     return paths.includes(location.pathname);
   }, [location.pathname]);
 
-  if (isLoading) {
+  if (isAuth0Loading) {
     return (
       <div className="h-screen flex flex-col items-center justify-center bg-[#020617] text-cyan-500 font-mono tracking-[0.5em]">
         <motion.div 
@@ -127,12 +145,12 @@ export default function App() {
       <Toaster position="top-right" />
       <CustomCursor />
 
-      {isAuthenticated && <GlobalVoiceAssistant actions={voiceActions} user={user} />}
+      {isAuthenticated && <GlobalVoiceAssistant actions={voiceActions} user={currentUser} />}
       
       <div className="flex w-full min-h-screen">
         {!isFullWidthPage && isAuthenticated && (
           <aside className="hidden md:block fixed left-0 top-0 h-full w-64 z-40 bg-[#020617]/80 backdrop-blur-md border-r border-cyan-900/20">
-            <Sidebar user={user} />
+            <Sidebar user={currentUser} />
           </aside>
         )}
         
@@ -145,17 +163,18 @@ export default function App() {
         <main className={`flex-1 min-h-screen transition-all duration-500 ${(!isFullWidthPage && isAuthenticated) ? 'md:pl-64 pb-20 md:pb-0' : ''}`}>
           <Suspense fallback={<div className="h-full flex items-center justify-center text-cyan-500 animate-pulse">LOADING_NEURAL_DATA...</div>}>
             <Routes>
-              {/* রুট লগইন থাকলে সরাসরি /feed এ পাঠাবে */}
+              {/* রুট হ্যান্ডলিং */}
               <Route path="/" element={isAuthenticated ? <Navigate to="/feed" replace /> : <Landing />} />
               <Route path="/join" element={isAuthenticated ? <Navigate to="/feed" replace /> : <JoinPage />} />
               
-              <Route path="/feed" element={<ProtectedRoute><PremiumHomeFeed /></ProtectedRoute>} />
-              <Route path="/reels" element={<ProtectedRoute><ReelsFeed /></ProtectedRoute>} />
-              <Route path="/messenger/*" element={<ProtectedRoute><Messenger /></ProtectedRoute>} />
-              <Route path="/profile/:username" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
-              <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
-              <Route path="/ai-twin" element={<ProtectedRoute><AITwinSync /></ProtectedRoute>} />
-              <Route path="/call" element={<ProtectedRoute><CallPage /></ProtectedRoute>} />
+              {/* ফিড এবং অন্যান্য সুরক্ষিত রাউট */}
+              <Route path="/feed" element={isAuthenticated ? <PremiumHomeFeed /> : <Navigate to="/" replace />} />
+              <Route path="/reels" element={isAuthenticated ? <ReelsFeed /> : <Navigate to="/" replace />} />
+              <Route path="/messenger/*" element={isAuthenticated ? <Messenger /> : <Navigate to="/" replace />} />
+              <Route path="/profile/:username" element={isAuthenticated ? <ProfilePage /> : <Navigate to="/" replace />} />
+              <Route path="/settings" element={isAuthenticated ? <Settings /> : <Navigate to="/" replace />} />
+              <Route path="/ai-twin" element={isAuthenticated ? <AITwinSync /> : <Navigate to="/" replace />} />
+              <Route path="/call" element={isAuthenticated ? <CallPage /> : <Navigate to="/" replace />} />
               
               <Route path="*" element={<Navigate to={isAuthenticated ? "/feed" : "/"} replace />} />
             </Routes>
