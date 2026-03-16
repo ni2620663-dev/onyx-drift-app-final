@@ -17,12 +17,10 @@ import Notification from "./Notifications";
 import Settings from "./Settings";
 import LegacySetup from '../components/LegacySetup';
 
-// ✅ কনফিগারেশন (আপনার ব্যাকএন্ডের সাথে মিল রাখা হয়েছে)
+// ✅ কনফিগারেশন
 const API_URL = "https://onyx-drift-app-final-u29m.onrender.com";
 const AUTH_AUDIENCE = "https://onyx-drift-api.com";
-const { isAuthenticated, user } = useAuth0();
-console.log("Is Authenticated:", isAuthenticated);
-console.log("User Data:", user);
+
 // --- ১. NEURAL TOAST ---
 const NeuralToast = ({ isVisible, message }) => (
   <AnimatePresence>
@@ -47,9 +45,9 @@ const NeuralToast = ({ isVisible, message }) => (
   </AnimatePresence>
 );
 
-// --- ২. NEURAL INPUT (AI Generation Fix) ---
+// --- ২. NEURAL INPUT ---
 const NeuralInput = ({ onPostSuccess }) => {
-  const { user, getAccessTokenSilently } = useAuth0();
+  const { getAccessTokenSilently } = useAuth0();
   const [text, setText] = useState("");
   const [status, setStatus] = useState("IDLE"); 
 
@@ -61,7 +59,6 @@ const NeuralInput = ({ onPostSuccess }) => {
         authorizationParams: { audience: AUTH_AUDIENCE }
       });
       
-      // ✅ ব্যাকএন্ডের Post কন্ট্রোলারের সাথে মিল রেখে রিকোয়েস্ট
       const res = await axios.post(`${API_URL}/api/posts`, {
         text,
         isAiGenerated: true,
@@ -118,25 +115,18 @@ const NeuralInput = ({ onPostSuccess }) => {
   );
 };
 
-// --- ৩. ভিডিও কম্পোনেন্ট ---
 const CompactVideo = ({ src }) => {
-  const videoRef = useRef(null);
   const [isMuted, setIsMuted] = useState(true);
-
   return (
     <div className="relative mt-3 rounded-2xl overflow-hidden border border-white/10 bg-black w-full">
-      <video ref={videoRef} src={src} autoPlay muted={isMuted} loop playsInline className="w-full h-auto max-h-[450px] object-cover" />
-      <button 
-        onClick={() => setIsMuted(!isMuted)} 
-        className="absolute bottom-3 right-3 p-2 bg-black/60 rounded-full text-white z-10 backdrop-blur-md border border-white/10"
-      >
+      <video src={src} autoPlay muted={isMuted} loop playsInline className="w-full h-auto max-h-[450px] object-cover" />
+      <button onClick={() => setIsMuted(!isMuted)} className="absolute bottom-3 right-3 p-2 bg-black/60 rounded-full text-white z-10 backdrop-blur-md border border-white/10">
         {isMuted ? <FaVolumeMute size={14} /> : <FaVolumeUp size={14} className="text-cyan-400" />}
       </button>
     </div>
   );
 };
 
-// --- ৪. মেইন ফিড কম্পোনেন্ট ---
 const PremiumHomeFeed = ({ searchQuery = "" }) => {
   const { user, getAccessTokenSilently, isAuthenticated } = useAuth0();
   const navigate = useNavigate();
@@ -181,9 +171,7 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
         headers: { Authorization: `Bearer ${token}` }
       });
       setUserProfile(res.data);
-    } catch (err) { 
-        setUserProfile({});
-    }
+    } catch (err) { setUserProfile({}); }
   };
 
   useEffect(() => {
@@ -228,9 +216,7 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
       setPostText(""); setMediaFile(null); setIsPostModalOpen(false);
       setToast({ show: true, message: "Uplink Successful" });
       setTimeout(() => setToast({ show: false, message: "" }), 3000);
-    } catch (err) { 
-        alert("Transmission Failed."); 
-    } finally { setIsSubmitting(false); }
+    } catch (err) { alert("Transmission Failed."); } finally { setIsSubmitting(false); }
   };
 
   const handleCommentSubmit = async () => {
