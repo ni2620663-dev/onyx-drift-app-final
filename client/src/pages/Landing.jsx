@@ -19,7 +19,6 @@ const AuthModal = ({ mode, onClose, onSwitch }) => {
     setError("");
 
     try {
-      // রেন্ডার সার্ভার বেস ইউআরএল
       const baseUrl = "https://onyx-drift-app-final-u29m.onrender.com";
       const endpoint = mode === 'login' ? '/api/auth/login' : '/api/auth/register';
       const response = await axios.post(`${baseUrl}${endpoint}`, formData, {
@@ -120,14 +119,10 @@ const Landing = () => {
   const [showAuth, setShowAuth] = useState(false);
   const [authMode, setAuthMode] = useState("login");
 
-  // সোশ্যাল লগইন হ্যান্ডলার ফাংশন (Render URL Updated)
-  const handleSocialLogin = (provider) => {
-    window.location.href = `https://onyx-drift-app-final-u29m.onrender.com/api/auth/${provider}`;
-  };
-
   return (
     <div className="min-h-screen w-full bg-black flex flex-col md:flex-row items-center justify-center overflow-hidden">
       
+      {/* Left side: Branding */}
       <div className="flex-1 flex flex-col items-center justify-center p-10">
           <motion.div 
             initial={{ scale: 0.8, opacity: 0 }}
@@ -142,6 +137,7 @@ const Landing = () => {
           </p>
       </div>
 
+      {/* Right side: Actions */}
       <div className="flex-1 flex flex-col items-center md:items-start p-10 z-10">
         <motion.div 
           initial={{ x: 50, opacity: 0 }}
@@ -155,43 +151,19 @@ const Landing = () => {
             Join today.
           </h2>
 
-          <div className="flex flex-col gap-4 w-full max-w-[320px]">
-            <button 
-              onClick={() => handleSocialLogin('google')}
-              className="w-full py-3 bg-white text-black font-bold rounded-full flex items-center justify-center gap-3 hover:bg-zinc-200 transition-all"
-            >
-               <img src="https://www.gstatic.com" className="w-5" alt="G" />
-               Sign up with Google
-            </button>
-
-            <button 
-              onClick={() => handleSocialLogin('facebook')}
-              className="w-full py-3 bg-[#1877F2] text-white font-bold rounded-full flex items-center justify-center gap-3 hover:opacity-90 transition-all"
-            >
-               <svg fill="currentColor" viewBox="0 0 24 24" className="w-5">
-                 <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
-               </svg>
-               Sign up with Facebook
-            </button>
-
-            <div className="flex items-center gap-2 my-2">
-              <div className="flex-1 h-[1px] bg-zinc-900"></div>
-              <span className="text-zinc-600 text-sm font-mono">OR</span>
-              <div className="flex-1 h-[1px] bg-zinc-900"></div>
-            </div>
-
+          <div className="flex flex-col gap-6 w-full max-w-[320px]">
             <button 
               onClick={() => { setAuthMode("signup"); setShowAuth(true); }}
-              className="w-full py-3 bg-cyan-600 text-white font-bold rounded-full hover:bg-cyan-500 transition-all shadow-[0_0_20px_rgba(6,182,212,0.3)]"
+              className="w-full py-4 bg-cyan-600 text-white font-bold rounded-full hover:bg-cyan-500 transition-all shadow-[0_0_20px_rgba(6,182,212,0.3)] text-lg"
             >
               Create account
             </button>
 
-            <div className="mt-12">
+            <div className="pt-8">
                <p className="text-white font-bold text-lg mb-4">Already have an account?</p>
                <button 
                 onClick={() => { setAuthMode("login"); setShowAuth(true); }}
-                className="w-full py-3 bg-black border border-zinc-800 text-cyan-500 font-bold rounded-full hover:bg-zinc-900 transition-all"
+                className="w-full py-4 bg-black border border-zinc-800 text-cyan-500 font-bold rounded-full hover:bg-zinc-900 transition-all text-lg"
                >
                  Sign in
                </button>
@@ -200,6 +172,7 @@ const Landing = () => {
         </motion.div>
       </div>
 
+      {/* Modal logic stays the same */}
       <AnimatePresence>
         {showAuth && (
           <motion.div 
