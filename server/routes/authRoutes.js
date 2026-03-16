@@ -1,77 +1,85 @@
 import express from 'express';
 import passport from 'passport';
-import User from '../models/User.js'; // ইউজার মডেল ইমপোর্ট করা জরুরি
-import bcrypt from 'bcryptjs'; // পাসওয়ার্ড এনক্রিপশনের জন্য
+import User from '../models/User.js';
+import bcrypt from 'bcryptjs';
 
 const router = express.Router();
-router.get('/ping', (req, res) => res.send("Auth API is Online!"));
 
 // --- ১. কাস্টম রেজিস্ট্রেশন (Email/Password) ---
-// ফ্রন্টএন্ডের /api/auth/register এখান থেকে কাজ করবে
 router.post('/register', async (req, res) => {
     try {
         const { name, email, username, password } = req.body;
 
-        // ইউজার অলরেডি আছে কি না চেক করা
+        // সব ফিল্ড দেওয়া হয়েছে কি না চেক
+        if (!name || !email || !username || !password) {
+            return res.status(400).json({ message: "All fields are required" });
+        }
+
+        // ইমেল বা ইউজারনেম দিয়ে অলরেডি কেউ আছে কি না চেক
         let userExists = await User.findOne({ $or: [{ email }, { username }] });
         if (userExists) {
             return res.status(400).json({ message: "User already exists with this email or username" });
         }
+
+        // পাসওয়ার্ড হ্যাশ করা (নিরাপত্তার জন্য)
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(password, salt);
 
         // নতুন ইউজার তৈরি
         const user = await User.create({
             name,
             email,
             username,
-            password // আপনার User মডেলে অবশ্যই পাসওয়ার্ড হ্যাশ করার প্রি-সেভ হুক থাকতে হবে
+            password: hashedPassword
         });
 
-        res.status(201).json({ message: "User registered successfully", user });
+        res.status(201).json({ message: "User registered successfully", userId: user._id });
     } catch (error) {
-        res.status(500).json({ message: "Server Error during registration", error: error.message });
+        console.error("Registration Error:", error);
+        res.status(500).json({ message: "Registration failed", error: error.message });
     }
 });
 
-// --- ২. কাস্টম লগইন (Email/Password) ---
+// --- ২. কাস্টম লগইন ---
 router.post('/login', async (req, res) => {
     try {
         const { username, password } = req.body;
-        const user = await User.findOne({ username });
+
+        // গুরুত্বপূর্ণ: মডেলে select: false থাকায় এখানে .select('+password') যোগ করা হয়েছে
+        const user = await User.findOne({ username }).select('+password');
 
         if (!user) {
             return res.status(404).json({ message: "User not found" });
         }
 
-        // পাসওয়ার্ড চেক (যদি মডেলে matchPassword মেথড থাকে)
+        // পাসওয়ার্ড ম্যাচ করা
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) {
             return res.status(401).json({ message: "Invalid credentials" });
         }
 
-        // এখানে আপনি সেশন বা JWT সেট করতে পারেন
-        res.status(200).json({ message: "Login successful", user });
+        res.status(200).json({ 
+            message: "Login successful", 
+            user: { id: user._id, name: user.name, username: user.username } 
+        });
     } catch (error) {
-        res.status(500).json({ message: "Server Error during login" });
+        console.error("Login Error:", error);
+        res.status(500).json({ message: "Login server error", error: error.message });
     }
 });
 
-// --- ৩. গুগল লগইন শুরু ---
-router.get('/google', passport.authenticate('google', { 
-    scope: ['profile', 'email'] 
-}));
+// --- ৩. গুগল লগইন ---
+router.get('/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
 
 router.get('/google/callback', 
     passport.authenticate('google', { failureRedirect: 'https://onyx-drift.com/login' }), 
     (req, res) => {
-        // প্রোডাকশন ইউআরএল ব্যবহার করুন (localhost নয়)
-        res.redirect('https://onyx-drift.com/feed'); 
+        res.redirect('https://onyx-drift.com/feed');
     }
 );
 
-// --- ৪. ফেসবুক লগইন শুরু ---
-router.get('/facebook', passport.authenticate('facebook', { 
-    scope: ['email'] 
-}));
+// --- ৪. ফেসবুক লগইন ---
+router.get('/facebook', passport.authenticate('facebook', { scope: ['email'] }));
 
 router.get('/facebook/callback', 
     passport.authenticate('facebook', { failureRedirect: 'https://onyx-drift.com/login' }), 
@@ -80,7 +88,7 @@ router.get('/facebook/callback',
     }
 );
 
-// --- ৫. লগআউট (Logout) ---
+// --- ৫. লগআউট ---
 router.get('/logout', (req, res, next) => {
     req.logout((err) => {
         if (err) return next(err);
@@ -88,9 +96,9 @@ router.get('/logout', (req, res, next) => {
     });
 });
 
-// --- ৬. বর্তমান ইউজারের তথ্য চেক করা ---
+// --- ৬. বর্তমান ইউজারের তথ্য দেখা ---
 router.get('/current_user', (req, res) => {
-    res.send(req.user);
+    res.send(req.user || null);
 });
 
 export default router;
