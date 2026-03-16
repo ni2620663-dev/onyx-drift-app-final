@@ -38,6 +38,14 @@ const userSchema = new mongoose.Schema(
       index: true 
     },
     
+    // সোশ্যাল লগইনের জন্য এই ফিল্ডটি গুরুত্বপূর্ণ
+    auth0Id: { 
+      type: String, 
+      unique: true, 
+      sparse: true, // এটি যোগ করা হয়েছে যাতে একাধিক 'null' থাকলে এরর না দেয়
+      index: true 
+    },
+
     neuralPatterns: {
       meetingTimes: [String], 
       frequentContacts: [String], 
