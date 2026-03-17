@@ -17,6 +17,9 @@ import LegacySetup from '../components/LegacySetup';
 
 const API_URL = "https://onyx-drift-app-final-u29m.onrender.com";
 
+// আপনার Auth0 ড্যাশবোর্ডের API Identifier এখানে দিন (স্ক্রিনশট অনুযায়ী)
+const AUTH0_AUDIENCE = "69b8f593a3eba28a87f6145e"; 
+
 // --- ১. NEURAL TOAST ---
 const NeuralToast = ({ isVisible, message }) => (
   <AnimatePresence>
@@ -41,7 +44,7 @@ const NeuralToast = ({ isVisible, message }) => (
   </AnimatePresence>
 );
 
-// --- ২. NEURAL INPUT (Updated with Auth) ---
+// --- ২. NEURAL INPUT ---
 const NeuralInput = ({ onPostSuccess, user, getAccessTokenSilently }) => {
   const [text, setText] = useState("");
   const [status, setStatus] = useState("IDLE"); 
@@ -50,7 +53,11 @@ const NeuralInput = ({ onPostSuccess, user, getAccessTokenSilently }) => {
     if (!text.trim()) return;
     setStatus("SYNCING");
     try {
-      const token = await getAccessTokenSilently();
+      // ✅ Audience সহ টোকেন কল
+      const token = await getAccessTokenSilently({
+        authorizationParams: { audience: AUTH0_AUDIENCE }
+      });
+      
       const res = await axios.post(`${API_URL}/api/posts`, {
         text,
         authorName: user?.name,
@@ -132,19 +139,20 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
   const [isSideMenuOpen, setIsSideMenuOpen] = useState(false); 
   const [activeTab, setActiveTab] = useState("home"); 
   const [activeFilter, setActiveFilter] = useState("Global");
-  const [activeCommentPost, setActiveCommentPost] = useState(null);
-  const [commentText, setCommentText] = useState("");
   const [postText, setPostText] = useState("");
   const [mediaFile, setMediaFile] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isEncrypted, setIsEncrypted] = useState(false); 
   const [toast, setToast] = useState({ show: false, message: "" });
 
-  // ✅ Fetch Posts with Auth Token
+  // ✅ Fetch Posts with Correct Token
   const fetchPosts = async () => {
     try {
       setLoading(true);
-      const token = await getAccessTokenSilently();
+      const token = await getAccessTokenSilently({
+        authorizationParams: { audience: AUTH0_AUDIENCE }
+      });
+
       const response = await axios.get(`${API_URL}/api/posts/neural-feed`, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -168,19 +176,24 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
 
   const handleLike = async (postId) => {
     try {
-      const token = await getAccessTokenSilently();
+      const token = await getAccessTokenSilently({
+        authorizationParams: { audience: AUTH0_AUDIENCE }
+      });
       const res = await axios.post(`${API_URL}/api/posts/${postId}/like`, {}, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setPosts(prev => prev.map(p => p._id === postId ? res.data : p));
-    } catch (err) { console.error("Like Error"); }
+    } catch (err) { console.error("Like Error", err); }
   };
 
   const handlePostSubmit = async () => {
     if (!postText.trim() && !mediaFile) return;
     setIsSubmitting(true);
     try {
-      const token = await getAccessTokenSilently();
+      const token = await getAccessTokenSilently({
+        authorizationParams: { audience: AUTH0_AUDIENCE }
+      });
+      
       const formData = new FormData();
       formData.append("text", postText);
       formData.append("authorName", user?.name);
@@ -194,11 +207,17 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
           'Content-Type': 'multipart/form-data'
         }
       });
+      
       setPosts(prev => [response.data, ...prev]);
       setPostText(""); setMediaFile(null); setIsPostModalOpen(false);
       setToast({ show: true, message: "Uplink Successful" });
       setTimeout(() => setToast({ show: false, message: "" }), 3000);
-    } catch (err) { alert("Transmission Failed."); } finally { setIsSubmitting(false); }
+    } catch (err) { 
+      console.error("Transmission Error", err);
+      alert("Transmission Failed."); 
+    } finally { 
+      setIsSubmitting(false); 
+    }
   };
 
   const filteredPosts = useMemo(() => {
@@ -246,11 +265,11 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsSideMenuOpen(false)} className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[200]" />
             <motion.div initial={{ x: "-100%" }} animate={{ x: 0 }} exit={{ x: "-100%" }} className="fixed top-0 left-0 h-full w-[280px] bg-[#050505] border-r border-cyan-500/10 z-[201] p-6 shadow-2xl">
                 <div className="mb-10 group cursor-pointer" onClick={() => { navigate(`/profile/${user?.sub}`); setIsSideMenuOpen(false); }}>
-                   <div className="relative w-16 h-16 mb-4">
-                     <img src={user?.picture} className="w-full h-full rounded-2xl border-2 border-cyan-500/20 object-cover" alt="user" />
-                   </div>
-                   <h4 className="font-black text-gray-100 text-lg uppercase">{user?.name}</h4>
-                   <p className="text-[9px] text-cyan-500 font-mono tracking-widest mt-1">Neural Link: ACTIVE</p>
+                    <div className="relative w-16 h-16 mb-4">
+                      <img src={user?.picture} className="w-full h-full rounded-2xl border-2 border-cyan-500/20 object-cover" alt="user" />
+                    </div>
+                    <h4 className="font-black text-gray-100 text-lg uppercase">{user?.name}</h4>
+                    <p className="text-[9px] text-cyan-500 font-mono tracking-widest mt-1">Neural Link: ACTIVE</p>
                 </div>
 
                 <nav className="flex flex-col gap-2">
@@ -325,7 +344,7 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
                               <button onClick={() => handleLike(post._id)} className={`flex items-center gap-1.5 text-[10px] font-bold ${post.likes?.includes(user?.sub) ? 'text-rose-500' : 'text-zinc-500 hover:text-rose-500'}`}>
                                 {post.likes?.includes(user?.sub) ? <FaHeart /> : <FaRegHeart />} {post.likes?.length || 0}
                               </button>
-                              <button onClick={() => setActiveCommentPost(post)} className="flex items-center gap-1.5 text-[10px] font-bold text-zinc-500 hover:text-cyan-400">
+                              <button className="flex items-center gap-1.5 text-[10px] font-bold text-zinc-500 hover:text-cyan-400">
                                 <FaRegComment /> {post.comments?.length || 0}
                               </button>
                             </div>
@@ -368,13 +387,19 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
                   onChange={(e) => setPostText(e.target.value)} 
                   className="w-full bg-transparent outline-none text-white resize-none min-h-[150px] font-mono text-sm" 
                 />
-                <button 
-                  onClick={handlePostSubmit} 
-                  disabled={isSubmitting}
-                  className="mt-4 w-full py-3 bg-cyan-500 text-black font-black rounded-xl hover:bg-cyan-400 transition-colors"
-                >
-                  {isSubmitting ? "TRANSMITTING..." : "EXECUTE UPLINK"}
-                </button>
+                <div className="flex gap-2 mt-4">
+                    <input type="file" id="media-upload" className="hidden" onChange={(e) => setMediaFile(e.target.files[0])} />
+                    <label htmlFor="media-upload" className="p-3 border border-white/10 rounded-xl cursor-pointer hover:bg-white/5 transition-all text-zinc-400">
+                        <FaImage size={18} />
+                    </label>
+                    <button 
+                      onClick={handlePostSubmit} 
+                      disabled={isSubmitting}
+                      className="flex-1 py-3 bg-cyan-500 text-black font-black rounded-xl hover:bg-cyan-400 transition-colors"
+                    >
+                      {isSubmitting ? "TRANSMITTING..." : "EXECUTE UPLINK"}
+                    </button>
+                </div>
               </motion.div>
            </div>
         )}
