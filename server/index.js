@@ -28,6 +28,7 @@ import adminRoutes from "./routes/admin.js";
 import { getNeuralFeed } from "./controllers/feedController.js";
 import authRoutes from './routes/authRoutes.js';
 
+// Database Connection
 connectDB();
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -37,10 +38,15 @@ const server = http.createServer(app);
 // Redis Initialization
 const redis = new Redis(process.env.REDIS_URL || "redis://localhost:6379");
 
-// Auth0 Configuration
+/**
+ * 🛠️ AUTH0 CONFIGURATION FIX
+ * আপনার স্ক্রিনশট অনুযায়ী issuerBaseURL এবং audience আপডেট করা হয়েছে।
+ */
 const checkJwt = auth({
-  audience: 'https://onyx-drift-api.com',
-  issuerBaseURL: 'https://dev-prxn6v2o08xp5loz.us.auth0.com/',
+  // আপনার API Identifier (Auth0 Dashboard > APIs সেকশনে যা দিয়েছেন)
+  audience: 'https://onyx-drift-app-final-u29m.onrender.com', 
+  // আপনার Auth0 ডোমেইন (অবশ্যই শেষে / থাকতে হবে)
+  issuerBaseURL: 'https://dev-funky4ljdynwqwbg.us.auth0.com/', 
   tokenSigningAlg: 'RS256'
 });
 
@@ -51,9 +57,9 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET
 });
 
-// CORS: সকল রিকোয়েস্ট পারমিট করার জন্য (প্রোডাকশনে নির্দিষ্ট করে দেবেন)
+// CORS Configuration
 app.use(cors({
-  origin: "*",
+  origin: "*", // প্রোডাকশনে আপনার ফ্রন্টএন্ড URL (onyx-drift.com) দিয়ে রিপ্লেস করা ভালো
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"]
@@ -64,29 +70,36 @@ app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
 app.use(passport.initialize());
 
-// Static Folder
+// Static Folder for uploads
 const uploadDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
 app.use('/uploads', express.static(uploadDir));
 
-// Middleware: Neural Pulse (অথেন্টিকেশনের পরেই এটা কাজ করবে)
+/**
+ * 🧠 MIDDLEWARE: NEURAL PULSE
+ * এটি ইউজারের অ্যাক্টিভিটি ট্র্যাক করে ডেথ সুইচ বা পালস আপডেট করে।
+ */
 const updateNeuralPulse = async (req, res, next) => {
   try {
     const auth0Id = req.auth?.payload?.sub;
     if (auth0Id) {
-      await User.updateOne({ auth0Id }, { $set: { "deathSwitch.lastPulseTimestamp": new Date() } });
+      await User.updateOne(
+        { auth0Id }, 
+        { $set: { "deathSwitch.lastPulseTimestamp": new Date() } }
+      );
     }
-  } catch (err) { console.error("Pulse update failed", err); }
+  } catch (err) { 
+    console.error("Pulse update failed:", err.message); 
+  }
   next();
 };
 
-// 📡 ROUTES
+// 📡 PUBLIC ROUTES
 app.get("/", (req, res) => res.status(200).send("🚀 OnyxDrift Neural Core Online!"));
-
-// Auth Routes (পাবলিক - চেক করবে না)
 app.use('/api/auth', authRoutes);
 
-// Protected Routes (checkJwt এর মাধ্যমে টোকেন ভেরিফাই হবে)
+// 🔒 PROTECTED ROUTES (Requires valid Auth0 Token)
+// এই রুটগুলোতে এখন checkJwt কাজ করবে
 app.use("/api/posts/neural-feed", checkJwt, updateNeuralPulse, getNeuralFeed);
 app.use("/api/users", checkJwt, updateNeuralPulse, userRoutes);
 app.use("/api/profile", checkJwt, updateNeuralPulse, profileRoutes);
@@ -98,13 +111,27 @@ app.use("/api/groups", checkJwt, updateNeuralPulse, groupRoutes);
 app.use("/api/market", checkJwt, updateNeuralPulse, marketRoutes);
 app.use("/api/admin", checkJwt, updateNeuralPulse, adminRoutes);
 
-// Socket.io
-const io = new Server(server, { cors: { origin: "*" } });
+// Socket.io Initialization
+const io = new Server(server, { 
+  cors: { origin: "*" } 
+});
 
+// Error Handling Middleware
 app.use((err, req, res, next) => {
+  if (err.name === 'UnauthorizedError') {
+    return res.status(401).json({ error: "Neural Link Severed", message: "Invalid or missing token" });
+  }
   console.error(err.stack);
   res.status(err.status || 500).json({ error: "Grid Breakdown", message: err.message });
 });
 
 const PORT = process.env.PORT || 10000;
-server.listen(PORT, '0.0.0.0', () => console.log(`🚀 ONYX CORE ACTIVE ON PORT: ${PORT}`));
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`
+  -----------------------------------------
+  🚀 ONYX CORE ACTIVE ON PORT: ${PORT}
+  🔗 STATUS: NEURAL FEED READY
+  🛡️ AUTH: RS256 ENABLED
+  -----------------------------------------
+  `);
+});

@@ -17,8 +17,12 @@ import LegacySetup from '../components/LegacySetup';
 
 const API_URL = "https://onyx-drift-app-final-u29m.onrender.com";
 
-// আপনার Auth0 ড্যাশবোর্ডের API Identifier এখানে দিন (স্ক্রিনশট অনুযায়ী)
-const AUTH0_AUDIENCE = "69b8f593a3eba28a87f6145e"; 
+/**
+ * ⚠️ গুরুত্বপূর্ণ নির্দেশিকা: 
+ * আপনার Auth0 ড্যাশবোর্ডের "APIs" সেকশনে যান। 
+ * সেখানে আপনার API-এর পাশে "Identifier" কলামে যে URL-টি (যেমন: https://onyx-drift-api) আছে সেটি এখানে দিন। 
+ */
+const AUTH0_AUDIENCE = "https://onyx-drift-app-final-u29m.onrender.com"; 
 
 // --- ১. NEURAL TOAST ---
 const NeuralToast = ({ isVisible, message }) => (
@@ -53,9 +57,11 @@ const NeuralInput = ({ onPostSuccess, user, getAccessTokenSilently }) => {
     if (!text.trim()) return;
     setStatus("SYNCING");
     try {
-      // ✅ Audience সহ টোকেন কল
       const token = await getAccessTokenSilently({
-        authorizationParams: { audience: AUTH0_AUDIENCE }
+        authorizationParams: {
+          audience: AUTH0_AUDIENCE,
+          scope: "openid profile email"
+        }
       });
       
       const res = await axios.post(`${API_URL}/api/posts`, {
@@ -76,7 +82,7 @@ const NeuralInput = ({ onPostSuccess, user, getAccessTokenSilently }) => {
         }, 1500);
       }
     } catch (err) {
-      console.error("Neural Sync Failed", err);
+      console.error("Neural Sync Failed:", err);
       setStatus("IDLE");
     }
   };
@@ -145,20 +151,21 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
   const [isEncrypted, setIsEncrypted] = useState(false); 
   const [toast, setToast] = useState({ show: false, message: "" });
 
-  // ✅ Fetch Posts with Correct Token
   const fetchPosts = async () => {
     try {
       setLoading(true);
       const token = await getAccessTokenSilently({
-        authorizationParams: { audience: AUTH0_AUDIENCE }
+        authorizationParams: {
+          audience: AUTH0_AUDIENCE
+        }
       });
-
+      
       const response = await axios.get(`${API_URL}/api/posts/neural-feed`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setPosts(response.data);
     } catch (err) { 
-      console.error("Feed Fetch Error", err); 
+      console.error("Feed Fetch Error:", err); 
     } finally { 
       setLoading(false); 
     }
@@ -183,7 +190,7 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
         headers: { Authorization: `Bearer ${token}` }
       });
       setPosts(prev => prev.map(p => p._id === postId ? res.data : p));
-    } catch (err) { console.error("Like Error", err); }
+    } catch (err) { console.error("Like Error"); }
   };
 
   const handlePostSubmit = async () => {
@@ -213,7 +220,7 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
       setToast({ show: true, message: "Uplink Successful" });
       setTimeout(() => setToast({ show: false, message: "" }), 3000);
     } catch (err) { 
-      console.error("Transmission Error", err);
+      console.error("Transmission Error:", err);
       alert("Transmission Failed."); 
     } finally { 
       setIsSubmitting(false); 
@@ -387,19 +394,13 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
                   onChange={(e) => setPostText(e.target.value)} 
                   className="w-full bg-transparent outline-none text-white resize-none min-h-[150px] font-mono text-sm" 
                 />
-                <div className="flex gap-2 mt-4">
-                    <input type="file" id="media-upload" className="hidden" onChange={(e) => setMediaFile(e.target.files[0])} />
-                    <label htmlFor="media-upload" className="p-3 border border-white/10 rounded-xl cursor-pointer hover:bg-white/5 transition-all text-zinc-400">
-                        <FaImage size={18} />
-                    </label>
-                    <button 
-                      onClick={handlePostSubmit} 
-                      disabled={isSubmitting}
-                      className="flex-1 py-3 bg-cyan-500 text-black font-black rounded-xl hover:bg-cyan-400 transition-colors"
-                    >
-                      {isSubmitting ? "TRANSMITTING..." : "EXECUTE UPLINK"}
-                    </button>
-                </div>
+                <button 
+                  onClick={handlePostSubmit} 
+                  disabled={isSubmitting}
+                  className="mt-4 w-full py-3 bg-cyan-500 text-black font-black rounded-xl hover:bg-cyan-400 transition-colors"
+                >
+                  {isSubmitting ? "TRANSMITTING..." : "EXECUTE UPLINK"}
+                </button>
               </motion.div>
            </div>
         )}
