@@ -1,15 +1,13 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  FaTimes, FaImage, FaHeart, FaComment, FaShareAlt, FaCheckCircle, 
-  FaBolt, FaRegHeart, FaRegComment, FaVolumeUp, FaVolumeMute, FaEye, 
-  FaPaperPlane, FaSearch, FaRegBell, FaUserCircle, FaEnvelope, FaHome,
-  FaStore, FaCog, FaLock, FaSatellite, FaFingerprint, FaUnlock, FaBrain,
-  FaGhost, FaSyncAlt, FaHourglassHalf
+  FaImage, FaHeart, FaComment, FaBolt, FaRegHeart, FaRegComment, 
+  FaVolumeUp, FaVolumeMute, FaPaperPlane, FaSearch, FaBrain, 
+  FaFingerprint, FaHome, FaStore, FaCog 
 } from 'react-icons/fa'; 
-import { useAuth0 } from "@auth0/auth0-react";
 import axios from "axios";
 import { useNavigate } from 'react-router-dom';
+import { useAuth0 } from '@auth0/auth0-react';
 
 // কম্পোনেন্ট ইম্পোর্ট
 import Marketplace from "./Marketplace"; 
@@ -17,9 +15,7 @@ import Notification from "./Notifications";
 import Settings from "./Settings";
 import LegacySetup from '../components/LegacySetup';
 
-// ✅ কনফিগারেশন
 const API_URL = "https://onyx-drift-app-final-u29m.onrender.com";
-const AUTH_AUDIENCE = "https://onyx-drift-api.com";
 
 // --- ১. NEURAL TOAST ---
 const NeuralToast = ({ isVisible, message }) => (
@@ -45,9 +41,8 @@ const NeuralToast = ({ isVisible, message }) => (
   </AnimatePresence>
 );
 
-// --- ২. NEURAL INPUT ---
-const NeuralInput = ({ onPostSuccess }) => {
-  const { getAccessTokenSilently } = useAuth0();
+// --- ২. NEURAL INPUT (Updated with Auth) ---
+const NeuralInput = ({ onPostSuccess, user, getAccessTokenSilently }) => {
   const [text, setText] = useState("");
   const [status, setStatus] = useState("IDLE"); 
 
@@ -55,12 +50,10 @@ const NeuralInput = ({ onPostSuccess }) => {
     if (!text.trim()) return;
     setStatus("SYNCING");
     try {
-      const token = await getAccessTokenSilently({
-        authorizationParams: { audience: AUTH_AUDIENCE }
-      });
-      
+      const token = await getAccessTokenSilently();
       const res = await axios.post(`${API_URL}/api/posts`, {
         text,
+        authorName: user?.name,
         isAiGenerated: true,
         aiPersona: "Neural Shadow"
       }, {
@@ -88,10 +81,10 @@ const NeuralInput = ({ onPostSuccess }) => {
       className="bg-[#080808] border border-cyan-500/20 p-5 rounded-[24px] mb-6 shadow-[0_0_20px_rgba(0,0,0,0.5)] relative overflow-hidden"
     >
       <div className="flex items-center gap-2 mb-3">
-         <div className="w-1.5 h-1.5 bg-cyan-500 rounded-full animate-ping" />
-         <h3 className="text-cyan-500 font-mono text-[9px] uppercase tracking-[0.3em] flex items-center gap-2">
+          <div className="w-1.5 h-1.5 bg-cyan-500 rounded-full animate-ping" />
+          <h3 className="text-cyan-500 font-mono text-[9px] uppercase tracking-[0.3em] flex items-center gap-2">
             <FaBrain className={status === "SYNCING" ? "animate-spin" : ""} /> Neural_Core_v2
-         </h3>
+          </h3>
       </div>
       <textarea 
         className="w-full bg-transparent border-none outline-none text-gray-200 font-mono text-sm placeholder-zinc-700 resize-none min-h-[80px]"
@@ -115,6 +108,7 @@ const NeuralInput = ({ onPostSuccess }) => {
   );
 };
 
+// --- ৩. COMPACT VIDEO ---
 const CompactVideo = ({ src }) => {
   const [isMuted, setIsMuted] = useState(true);
   return (
@@ -127,11 +121,11 @@ const CompactVideo = ({ src }) => {
   );
 };
 
+// --- ৪. MAIN FEED COMPONENT ---
 const PremiumHomeFeed = ({ searchQuery = "" }) => {
-  const { user, getAccessTokenSilently, isAuthenticated } = useAuth0();
   const navigate = useNavigate();
-  const postMediaRef = useRef(null);
-  
+  const { user, isAuthenticated, isLoading, getAccessTokenSilently } = useAuth0(); 
+
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isPostModalOpen, setIsPostModalOpen] = useState(false);
@@ -144,51 +138,39 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
   const [mediaFile, setMediaFile] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isEncrypted, setIsEncrypted] = useState(false); 
-  const [userProfile, setUserProfile] = useState(null);
   const [toast, setToast] = useState({ show: false, message: "" });
 
+  // ✅ Fetch Posts with Auth Token
   const fetchPosts = async () => {
     try {
       setLoading(true);
-      const token = await getAccessTokenSilently({
-        authorizationParams: { audience: AUTH_AUDIENCE }
-      });
+      const token = await getAccessTokenSilently();
       const response = await axios.get(`${API_URL}/api/posts/neural-feed`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setPosts(response.data);
     } catch (err) { 
-      console.error("Feed Fetch Error", err);
-    } finally { setLoading(false); }
-  };
-
-  const fetchUserProfile = async () => {
-    try {
-      const token = await getAccessTokenSilently({
-        authorizationParams: { audience: AUTH_AUDIENCE }
-      });
-      const res = await axios.get(`${API_URL}/api/profile`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      setUserProfile(res.data);
-    } catch (err) { setUserProfile({}); }
+      console.error("Feed Fetch Error", err); 
+    } finally { 
+      setLoading(false); 
+    }
   };
 
   useEffect(() => {
-    if (isAuthenticated) {
-        fetchUserProfile();
+    if (!isLoading) {
+      if (!isAuthenticated) {
+        navigate("/");
+      } else {
         fetchPosts();
+      }
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, isLoading]);
 
   const handleLike = async (postId) => {
-    if (!user?.sub) return;
     try {
-      const token = await getAccessTokenSilently({
-        authorizationParams: { audience: AUTH_AUDIENCE }
-      });
-      const res = await axios.post(`${API_URL}/api/posts/${postId}/like`, {}, { 
-        headers: { Authorization: `Bearer ${token}` } 
+      const token = await getAccessTokenSilently();
+      const res = await axios.post(`${API_URL}/api/posts/${postId}/like`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
       });
       setPosts(prev => prev.map(p => p._id === postId ? res.data : p));
     } catch (err) { console.error("Like Error"); }
@@ -198,19 +180,19 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
     if (!postText.trim() && !mediaFile) return;
     setIsSubmitting(true);
     try {
-      const token = await getAccessTokenSilently({
-        authorizationParams: { audience: AUTH_AUDIENCE }
-      });
+      const token = await getAccessTokenSilently();
       const formData = new FormData();
       formData.append("text", postText);
+      formData.append("authorName", user?.name);
+      formData.append("authorAvatar", user?.picture);
       formData.append("isEncrypted", isEncrypted);
       if (mediaFile) formData.append("media", mediaFile);
       
-      const response = await axios.post(`${API_URL}/api/posts`, formData, { 
+      const response = await axios.post(`${API_URL}/api/posts`, formData, {
         headers: { 
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'multipart/form-data'
-        } 
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'multipart/form-data'
+        }
       });
       setPosts(prev => [response.data, ...prev]);
       setPostText(""); setMediaFile(null); setIsPostModalOpen(false);
@@ -219,31 +201,17 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
     } catch (err) { alert("Transmission Failed."); } finally { setIsSubmitting(false); }
   };
 
-  const handleCommentSubmit = async () => {
-    if(!commentText.trim() || !activeCommentPost) return;
-    try {
-      const token = await getAccessTokenSilently({
-        authorizationParams: { audience: AUTH_AUDIENCE }
-      });
-      const res = await axios.post(`${API_URL}/api/posts/${activeCommentPost._id}/comment`, { 
-        text: commentText 
-      }, { headers: { Authorization: `Bearer ${token}` } });
-      
-      setPosts(prev => prev.map(p => p._id === activeCommentPost._id ? res.data : p));
-      setActiveCommentPost(res.data);
-      setCommentText("");
-    } catch (err) { console.error("Comment Error"); }
-  };
-
   const filteredPosts = useMemo(() => {
     let result = posts;
     if (activeFilter === "Encrypted") result = posts.filter(p => p.isEncrypted);
     if (activeFilter === "Resonance") result = posts.filter(p => p.isAiGenerated);
     if (searchQuery) {
-        result = result.filter(p => p.text.toLowerCase().includes(searchQuery.toLowerCase()));
+        result = result.filter(p => p.text?.toLowerCase().includes(searchQuery.toLowerCase()));
     }
     return result;
   }, [posts, activeFilter, searchQuery]);
+
+  if (isLoading) return <div className="h-screen bg-black flex items-center justify-center text-cyan-500 font-mono">NEURAL_SYNCING...</div>;
 
   return (
     <div className="w-full min-h-screen bg-black text-white pb-32 font-sans overflow-x-hidden">
@@ -253,7 +221,7 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
       <header className="sticky top-0 z-[100] bg-black/80 backdrop-blur-md border-b border-white/5 px-4 h-14 flex justify-between items-center">
         <div className="flex items-center gap-3">
           <img 
-            src={user?.picture} 
+            src={user?.picture || `https://ui-avatars.com/api/?name=${user?.name || 'U'}`} 
             className="w-8 h-8 rounded-full border border-cyan-500/50 cursor-pointer object-cover" 
             onClick={() => setIsSideMenuOpen(true)} 
             alt="profile" 
@@ -266,7 +234,7 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
           <FaSearch className="text-zinc-400 cursor-pointer" onClick={() => navigate('/search')} />
           <div className="flex items-center gap-1 bg-white/5 px-2 py-1 rounded-lg border border-white/10">
             <FaBolt className="text-cyan-500 text-[10px]" />
-            <span className="text-[10px] font-mono text-cyan-200">{userProfile?.neuralRank || 0}</span>
+            <span className="text-[10px] font-mono text-cyan-200">99</span>
           </div>
         </div>
       </header>
@@ -277,28 +245,27 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
           <>
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsSideMenuOpen(false)} className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[200]" />
             <motion.div initial={{ x: "-100%" }} animate={{ x: 0 }} exit={{ x: "-100%" }} className="fixed top-0 left-0 h-full w-[280px] bg-[#050505] border-r border-cyan-500/10 z-[201] p-6 shadow-2xl">
-               <div className="mb-10 group cursor-pointer" onClick={() => { navigate(`/profile/${user?.sub}`); setIsSideMenuOpen(false); }}>
-                  <div className="relative w-16 h-16 mb-4">
-                    <img src={user?.picture} className="w-full h-full rounded-2xl border-2 border-cyan-500/20 object-cover" alt="user" />
-                    <div className="absolute -bottom-1 -right-1 bg-cyan-500 p-1 rounded-lg text-[8px] text-black font-black uppercase">Level {userProfile?.neuralRank || 1}</div>
-                  </div>
-                  <h4 className="font-black text-gray-100 text-lg uppercase">{user?.nickname}</h4>
-                  <p className="text-[9px] text-cyan-500 font-mono tracking-widest mt-1">Neural Link: ACTIVE</p>
-               </div>
-
-               <nav className="flex flex-col gap-2">
-                 {[
-                   { icon: <FaHome />, label: 'Neural Feed', tab: 'home' }, 
-                   { icon: <FaStore />, label: 'Marketplace', tab: 'market' }, 
-                   { icon: <FaBrain />, label: 'AI Twin Sync', path: `/ai-twin` }, 
-                   { icon: <FaFingerprint />, label: 'Digital Legacy', tab: 'legacy' },
-                   { icon: <FaCog />, label: 'Settings', tab: 'settings' }
-                 ].map((item, i) => (
-                   <div key={i} onClick={() => { if(item.tab) setActiveTab(item.tab); if(item.path) navigate(item.path); setIsSideMenuOpen(false); }} className={`flex items-center gap-4 p-3 rounded-xl transition-all font-bold text-[10px] uppercase tracking-widest cursor-pointer ${activeTab === item.tab ? 'text-cyan-400 bg-cyan-500/10' : 'text-zinc-500 hover:text-white'}`}>
-                     <span className="text-lg">{item.icon}</span> {item.label}
+                <div className="mb-10 group cursor-pointer" onClick={() => { navigate(`/profile/${user?.sub}`); setIsSideMenuOpen(false); }}>
+                   <div className="relative w-16 h-16 mb-4">
+                     <img src={user?.picture} className="w-full h-full rounded-2xl border-2 border-cyan-500/20 object-cover" alt="user" />
                    </div>
-                 ))}
-               </nav>
+                   <h4 className="font-black text-gray-100 text-lg uppercase">{user?.name}</h4>
+                   <p className="text-[9px] text-cyan-500 font-mono tracking-widest mt-1">Neural Link: ACTIVE</p>
+                </div>
+
+                <nav className="flex flex-col gap-2">
+                  {[
+                    { icon: <FaHome />, label: 'Neural Feed', tab: 'home' }, 
+                    { icon: <FaStore />, label: 'Marketplace', tab: 'market' }, 
+                    { icon: <FaBrain />, label: 'AI Twin Sync', path: `/ai-twin` }, 
+                    { icon: <FaFingerprint />, label: 'Digital Legacy', tab: 'legacy' },
+                    { icon: <FaCog />, label: 'Settings', tab: 'settings' }
+                  ].map((item, i) => (
+                    <div key={i} onClick={() => { if(item.tab) setActiveTab(item.tab); if(item.path) navigate(item.path); setIsSideMenuOpen(false); }} className={`flex items-center gap-4 p-3 rounded-xl transition-all font-bold text-[10px] uppercase tracking-widest cursor-pointer ${activeTab === item.tab ? 'text-cyan-400 bg-cyan-500/10' : 'text-zinc-500 hover:text-white'}`}>
+                      <span className="text-lg">{item.icon}</span> {item.label}
+                    </div>
+                  ))}
+                </nav>
             </motion.div>
           </>
         )}
@@ -317,7 +284,7 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
             </div>
 
             <div className="px-5 pt-6">
-                <NeuralInput onPostSuccess={fetchPosts} />
+                <NeuralInput user={user} onPostSuccess={fetchPosts} getAccessTokenSilently={getAccessTokenSilently} />
             </div>
 
             {loading ? (
@@ -334,7 +301,7 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
                           src={post.authorAvatar || `https://ui-avatars.com/api/?name=${post.authorName}`} 
                           className="w-11 h-11 rounded-2xl border border-white/10 object-cover cursor-pointer" 
                           alt="avatar" 
-                          onClick={() => navigate(`/profile/${post.authorAuth0Id || post.userId}`)} // ✅ ID FIX
+                          onClick={() => navigate(`/profile/${post.userId}`)} 
                         />
                         <div className="flex-1">
                           <div className="flex items-center justify-between mb-1">
@@ -362,7 +329,7 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
                                 <FaRegComment /> {post.comments?.length || 0}
                               </button>
                             </div>
-                            <button onClick={() => navigate(`/ai-analyze/${post._id}`)} className="text-zinc-600 hover:text-purple-400"><FaBrain size={12} /></button>
+                            <button className="text-zinc-600 hover:text-purple-400"><FaBrain size={12} /></button>
                           </div>
                         </div>
                       </div>
@@ -379,78 +346,6 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
         {activeTab === "legacy" && <div className="p-6"><LegacySetup /></div>}
       </main>
 
-      {/* --- CREATE POST MODAL --- */}
-      <AnimatePresence>
-        {isPostModalOpen && (
-          <div className="fixed inset-0 z-[5000] flex items-center justify-center p-4">
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsPostModalOpen(false)} className="absolute inset-0 bg-black/90 backdrop-blur-xl" />
-            <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.9 }} className="relative w-full max-w-lg bg-[#0A0A0A] border border-cyan-500/20 rounded-[32px] p-6 shadow-2xl">
-              <textarea 
-                placeholder="Broadcast your thoughts..." 
-                value={postText} 
-                onChange={(e) => setPostText(e.target.value)} 
-                className="w-full bg-transparent outline-none text-white resize-none min-h-[150px] font-mono text-sm" 
-              />
-              <div className="flex items-center justify-between mt-4">
-                <div className="flex gap-2">
-                  <input type="file" hidden ref={postMediaRef} onChange={(e) => setMediaFile(e.target.files[0])} />
-                  <button onClick={() => postMediaRef.current.click()} className="p-3 bg-white/5 rounded-xl text-zinc-400 hover:text-cyan-500 transition-colors">
-                    <FaImage size={18} />
-                  </button>
-                  <button onClick={() => setIsEncrypted(!isEncrypted)} className={`p-3 rounded-xl border transition-colors ${isEncrypted ? 'border-cyan-500 text-cyan-500 bg-cyan-500/10' : 'border-white/5 text-zinc-500'}`}>
-                    <FaFingerprint size={18} />
-                  </button>
-                </div>
-                <button 
-                  disabled={isSubmitting || (!postText && !mediaFile)} 
-                  onClick={handlePostSubmit} 
-                  className="px-8 py-3 rounded-xl font-black text-[10px] bg-cyan-500 text-black uppercase shadow-[0_0_20px_rgba(6,182,212,0.3)]"
-                >
-                  {isSubmitting ? "Syncing..." : "Transmit"}
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* --- COMMENT MODAL --- */}
-      <AnimatePresence>
-        {activeCommentPost && (
-          <div className="fixed inset-0 z-[3000] flex items-end justify-center">
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setActiveCommentPost(null)} className="absolute inset-0 bg-black/80 backdrop-blur-md" />
-            <motion.div initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }} className="relative w-full max-w-[550px] bg-[#0A0A0A] rounded-t-[32px] border-t border-white/10 h-[80vh] flex flex-col">
-              <div className="p-4 border-b border-white/5 flex justify-center">
-                 <div className="w-12 h-1 bg-white/10 rounded-full" />
-              </div>
-              <div className="flex-1 overflow-y-auto p-6 space-y-6">
-                {activeCommentPost.comments?.map((c, i) => (
-                  <div key={i} className="flex gap-3">
-                    <img src={c.userAvatar || `https://ui-avatars.com/api/?name=${c.userName}`} className="w-8 h-8 rounded-xl" alt="" />
-                    <div className="bg-white/5 p-3 rounded-2xl flex-1">
-                        <p className="text-cyan-500 font-bold text-[9px] uppercase">{c.userName}</p>
-                        <p className="text-[12px] text-gray-300 mt-1">{c.text}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div className="p-6 bg-black/50 border-t border-white/5 flex gap-2">
-                <input 
-                  value={commentText} 
-                  onChange={(e) => setCommentText(e.target.value)} 
-                  onKeyPress={(e) => e.key === 'Enter' && handleCommentSubmit()}
-                  placeholder="Inject resonance..." 
-                  className="flex-1 bg-white/5 rounded-xl px-4 py-3 outline-none text-[12px]" 
-                />
-                <button onClick={handleCommentSubmit} className="bg-cyan-500 text-black p-3.5 rounded-xl">
-                    <FaPaperPlane size={14}/>
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
       {/* FAB - NEURAL UPLINK */}
       <motion.button 
         whileHover={{ scale: 1.05 }} 
@@ -460,6 +355,30 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
       >
         <FaBolt size={20} />
       </motion.button>
+
+      {/* POST MODAL */}
+      <AnimatePresence>
+        {isPostModalOpen && (
+           <div className="fixed inset-0 z-[5000] flex items-center justify-center p-4">
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsPostModalOpen(false)} className="absolute inset-0 bg-black/90 backdrop-blur-xl" />
+              <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.9 }} className="relative w-full max-w-lg bg-[#0A0A0A] border border-cyan-500/20 rounded-[32px] p-6 shadow-2xl">
+                <textarea 
+                  placeholder="Broadcast to OnyxDrift..." 
+                  value={postText} 
+                  onChange={(e) => setPostText(e.target.value)} 
+                  className="w-full bg-transparent outline-none text-white resize-none min-h-[150px] font-mono text-sm" 
+                />
+                <button 
+                  onClick={handlePostSubmit} 
+                  disabled={isSubmitting}
+                  className="mt-4 w-full py-3 bg-cyan-500 text-black font-black rounded-xl hover:bg-cyan-400 transition-colors"
+                >
+                  {isSubmitting ? "TRANSMITTING..." : "EXECUTE UPLINK"}
+                </button>
+              </motion.div>
+           </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
