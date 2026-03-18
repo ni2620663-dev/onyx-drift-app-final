@@ -18,9 +18,8 @@ import LegacySetup from '../components/LegacySetup';
 const API_URL = "https://onyx-drift-app-final-u29m.onrender.com";
 
 /**
- * ⚠️ গুরুত্বপূর্ণ নির্দেশিকা: 
- * আপনার Auth0 ড্যাশবোর্ডের "APIs" সেকশনে যান। 
- * সেখানে আপনার API-এর পাশে "Identifier" কলামে যে URL-টি (যেমন: https://onyx-drift-api) আছে সেটি এখানে দিন। 
+ * 🛠️ AUTH0 CONFIGURATION
+ * আপনার Render URL টিই সাধারণত API Identifier/Audience হিসেবে ব্যবহৃত হয়।
  */
 const AUTH0_AUDIENCE = "https://onyx-drift-api"; 
 
@@ -160,10 +159,11 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
         }
       });
       
-      const res = await fetch("https://onyx-drift-app-final-u29m.onrender.com/api/test-auth", {
+      const response = await axios.get(`${API_URL}/api/posts/neural-feed`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      setPosts(response.data);
+      
+      setPosts(Array.isArray(response.data) ? response.data : []);
     } catch (err) { 
       console.error("Feed Fetch Error:", err); 
     } finally { 
@@ -179,7 +179,7 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
         fetchPosts();
       }
     }
-  }, [isAuthenticated, isLoading]);
+  }, [isAuthenticated, isLoading, activeTab]); // Tab চেঞ্জ হলে রিফ্রেশ হবে
 
   const handleLike = async (postId) => {
     try {
@@ -190,7 +190,7 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
         headers: { Authorization: `Bearer ${token}` }
       });
       setPosts(prev => prev.map(p => p._id === postId ? res.data : p));
-    } catch (err) { console.error("Like Error"); }
+    } catch (err) { console.error("Like Error", err); }
   };
 
   const handlePostSubmit = async () => {
@@ -203,7 +203,7 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
       
       const formData = new FormData();
       formData.append("text", postText);
-      formData.append("authorName", user?.name);
+      formData.append("authorName", user?.name || "Anonymous");
       formData.append("authorAvatar", user?.picture);
       formData.append("isEncrypted", isEncrypted);
       if (mediaFile) formData.append("media", mediaFile);
@@ -216,12 +216,13 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
       });
       
       setPosts(prev => [response.data, ...prev]);
-      setPostText(""); setMediaFile(null); setIsPostModalOpen(false);
+      setPostText(""); 
+      setMediaFile(null); 
+      setIsPostModalOpen(false);
       setToast({ show: true, message: "Uplink Successful" });
       setTimeout(() => setToast({ show: false, message: "" }), 3000);
     } catch (err) { 
       console.error("Transmission Error:", err);
-      alert("Transmission Failed."); 
     } finally { 
       setIsSubmitting(false); 
     }
@@ -320,7 +321,7 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
                 </div>
             ) : (
                 <div className="divide-y divide-white/5">
-                  {filteredPosts.map((post) => (
+                  {filteredPosts.length > 0 ? filteredPosts.map((post) => (
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} key={post._id} className={`p-5 transition-all ${post.isAiGenerated ? 'bg-purple-500/[0.03] border-l-2 border-purple-500' : 'hover:bg-white/[0.01]'}`}>
                       <div className="flex gap-3">
                         <img 
@@ -360,7 +361,9 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
                         </div>
                       </div>
                     </motion.div>
-                  ))}
+                  )) : (
+                    <div className="text-center py-20 text-zinc-600 text-[10px] font-mono">NO_DATA_IN_GRID</div>
+                  )}
                 </div>
             )}
           </>
@@ -385,7 +388,7 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
       {/* POST MODAL */}
       <AnimatePresence>
         {isPostModalOpen && (
-           <div className="fixed inset-0 z-[5000] flex items-center justify-center p-4">
+            <div className="fixed inset-0 z-[5000] flex items-center justify-center p-4">
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsPostModalOpen(false)} className="absolute inset-0 bg-black/90 backdrop-blur-xl" />
               <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.9 }} className="relative w-full max-w-lg bg-[#0A0A0A] border border-cyan-500/20 rounded-[32px] p-6 shadow-2xl">
                 <textarea 
@@ -394,6 +397,14 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
                   onChange={(e) => setPostText(e.target.value)} 
                   className="w-full bg-transparent outline-none text-white resize-none min-h-[150px] font-mono text-sm" 
                 />
+                
+                <div className="flex items-center gap-4 mt-4">
+                    <input type="file" onChange={(e) => setMediaFile(e.target.files[0])} className="text-[10px] text-zinc-500" />
+                    <label className="flex items-center gap-2 text-[10px] text-cyan-500">
+                        <input type="checkbox" checked={isEncrypted} onChange={() => setIsEncrypted(!isEncrypted)} /> Encrypt
+                    </label>
+                </div>
+
                 <button 
                   onClick={handlePostSubmit} 
                   disabled={isSubmitting}
@@ -402,7 +413,7 @@ const PremiumHomeFeed = ({ searchQuery = "" }) => {
                   {isSubmitting ? "TRANSMITTING..." : "EXECUTE UPLINK"}
                 </button>
               </motion.div>
-           </div>
+            </div>
         )}
       </AnimatePresence>
     </div>
