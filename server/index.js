@@ -28,38 +28,33 @@ import adminRoutes from "./routes/admin.js";
 import { getNeuralFeed } from "./controllers/feedController.js";
 import authRoutes from './routes/authRoutes.js';
 
-// Database Connection
+// DB
 connectDB();
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const server = http.createServer(app);
 
-// Redis Initialization
+// Redis
 const redis = new Redis(process.env.REDIS_URL || "redis://localhost:6379");
 
-/**
- * 🛠️ AUTH0 CONFIGURATION FIX
- * আপনার স্ক্রিনশট অনুযায়ী issuerBaseURL এবং audience আপডেট করা হয়েছে।
- */
+// 🔥 ✅ FIXED AUTH0 CONFIG
 const checkJwt = auth({
-  // আপনার API Identifier (Auth0 Dashboard > APIs সেকশনে যা দিয়েছেন)
-  audience: 'https://onyx-drift-app-final-u29m.onrender.com', 
-  // আপনার Auth0 ডোমেইন (অবশ্যই শেষে / থাকতে হবে)
-  issuerBaseURL: 'https://dev-funky4ljdynwqwbg.us.auth0.com/', 
+  audience: 'https://onyx-drift-api',
+  issuerBaseURL: 'https://dev-ds5qpkme1dcprm7y.us.auth0.com/',
   tokenSigningAlg: 'RS256'
 });
 
-// Cloudinary Config
+// Cloudinary
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
   api_key: process.env.CLOUDINARY_API_KEY,
   api_secret: process.env.CLOUDINARY_API_SECRET
 });
 
-// CORS Configuration
+// CORS
 app.use(cors({
-  origin: "*", // প্রোডাকশনে আপনার ফ্রন্টএন্ড URL (onyx-drift.com) দিয়ে রিপ্লেস করা ভালো
+  origin: "*",
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"]
@@ -67,39 +62,46 @@ app.use(cors({
 
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
-
 app.use(passport.initialize());
 
-// Static Folder for uploads
+// Upload folder
 const uploadDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
 app.use('/uploads', express.static(uploadDir));
 
-/**
- * 🧠 MIDDLEWARE: NEURAL PULSE
- * এটি ইউজারের অ্যাক্টিভিটি ট্র্যাক করে ডেথ সুইচ বা পালস আপডেট করে।
- */
+// 🧠 Pulse middleware
 const updateNeuralPulse = async (req, res, next) => {
   try {
     const auth0Id = req.auth?.payload?.sub;
     if (auth0Id) {
       await User.updateOne(
-        { auth0Id }, 
+        { auth0Id },
         { $set: { "deathSwitch.lastPulseTimestamp": new Date() } }
       );
     }
-  } catch (err) { 
-    console.error("Pulse update failed:", err.message); 
+  } catch (err) {
+    console.error("Pulse update failed:", err.message);
   }
   next();
 };
 
-// 📡 PUBLIC ROUTES
-app.get("/", (req, res) => res.status(200).send("🚀 OnyxDrift Neural Core Online!"));
+// 🌐 PUBLIC
+app.get("/", (req, res) => {
+  res.send("🚀 OnyxDrift Neural Core Online!");
+});
+
 app.use('/api/auth', authRoutes);
 
-// 🔒 PROTECTED ROUTES (Requires valid Auth0 Token)
-// এই রুটগুলোতে এখন checkJwt কাজ করবে
+// 🔥 TEST ROUTE (VERY IMPORTANT)
+app.get("/api/test-auth", checkJwt, (req, res) => {
+  console.log("USER:", req.auth);
+  res.json({
+    message: "✅ Auth Working!",
+    user: req.auth
+  });
+});
+
+// 🔒 PROTECTED
 app.use("/api/posts/neural-feed", checkJwt, updateNeuralPulse, getNeuralFeed);
 app.use("/api/users", checkJwt, updateNeuralPulse, userRoutes);
 app.use("/api/profile", checkJwt, updateNeuralPulse, profileRoutes);
@@ -111,20 +113,28 @@ app.use("/api/groups", checkJwt, updateNeuralPulse, groupRoutes);
 app.use("/api/market", checkJwt, updateNeuralPulse, marketRoutes);
 app.use("/api/admin", checkJwt, updateNeuralPulse, adminRoutes);
 
-// Socket.io Initialization
-const io = new Server(server, { 
-  cors: { origin: "*" } 
+// Socket
+const io = new Server(server, {
+  cors: { origin: "*" }
 });
 
-// Error Handling Middleware
+// ❌ → 401 handler
 app.use((err, req, res, next) => {
   if (err.name === 'UnauthorizedError') {
-    return res.status(401).json({ error: "Neural Link Severed", message: "Invalid or missing token" });
+    console.log("❌ AUTH ERROR:", err.message);
+    return res.status(401).json({
+      error: "Neural Link Severed",
+      message: err.message
+    });
   }
   console.error(err.stack);
-  res.status(err.status || 500).json({ error: "Grid Breakdown", message: err.message });
+  res.status(err.status || 500).json({
+    error: "Grid Breakdown",
+    message: err.message
+  });
 });
 
+// Start
 const PORT = process.env.PORT || 10000;
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`

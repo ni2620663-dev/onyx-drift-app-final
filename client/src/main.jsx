@@ -14,9 +14,9 @@ window.global = window;
 window.process = { env: { NODE_ENV: 'production' }, browser: true };
 
 /* Auth0 কনফিগারেশন - [FIXED] */
-const domain = "dev-funky4ljdynwqwbg.us.auth0.com";
+const domain = "dev-ds5qpkme1dcprm7y.us.auth0.com";
 // Client ID-তে 'f' ছোট হাতের এবং 'K' বড় হাতের হবে
-const clientId = "VFkHmSEBsjGbtTvpfj8kMOJGrkU88e5A"; 
+const clientId = "GY0nq3w9kUo1g9Hs6kJ5iwGWOsiHtNAG"; 
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
@@ -26,7 +26,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
       authorizationParams={{
         redirect_uri: window.location.origin,
         // আপনার ড্যাশবোর্ড অনুযায়ী ড্যাশ (-) থাকবে না
-         audience: "https://api.onyx-drift.com/",
+         audience: "https://onyx-drift-api",
         scope: "openid profile email"
       }}
     >
