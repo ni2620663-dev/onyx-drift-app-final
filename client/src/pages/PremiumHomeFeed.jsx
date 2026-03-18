@@ -22,7 +22,7 @@ const API_URL = "https://onyx-drift-app-final-u29m.onrender.com";
  * আপনার Auth0 ড্যাশবোর্ডের "APIs" সেকশনে যান। 
  * সেখানে আপনার API-এর পাশে "Identifier" কলামে যে URL-টি (যেমন: https://onyx-drift-api) আছে সেটি এখানে দিন। 
  */
-const AUTH0_AUDIENCE = "https://onyx-drift-app-final-u29m.onrender.com"; 
+const AUTH0_AUDIENCE = "https://api.onyx-drift.com/"; 
 
 // --- ১. NEURAL TOAST ---
 const NeuralToast = ({ isVisible, message }) => (
