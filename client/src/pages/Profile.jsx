@@ -1,288 +1,186 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { useAuth0 } from "@auth0/auth0-react";
-import { motion, AnimatePresence } from 'framer-motion';
-import axios from 'axios';
-import { FaArrowLeft, FaMapMarkerAlt, FaCalendarAlt, FaCamera } from 'react-icons/fa';
-import { HiBadgeCheck } from 'react-icons/hi';
-import { HiXMark } from "react-icons/hi2";
-// ভুল পাথটি সরিয়ে এটি লিখুন:
-import { supabase } from '../supabaseClient';
-import EditProfileModal from "./EditProfileModal";
-import SignalCard from "./SignalCard";
+import React, { useState, useEffect } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import { ArrowLeft, Calendar, Link as LinkIcon, MapPin, MoreHorizontal, Verified, X } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import axios from "axios";
 
-const BACKEND_URL = "https://onyx-drift-app-final-u29m.onrender.com";
-const API_AUDIENCE = "https://onyx-drift-api.com";
-
-/* ==========================================================
-    👤 FOLLOW LIST MODAL COMPONENT
-========================================================== */
-const FollowListModal = ({ isOpen, onClose, title, list }) => {
-  const navigate = useNavigate();
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-      <motion.div 
-        initial={{ scale: 0.9, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        exit={{ scale: 0.9, opacity: 0 }}
-        className="bg-black border border-zinc-800 w-full max-w-md h-[500px] rounded-2xl flex flex-col overflow-hidden shadow-2xl"
-      >
-        <div className="flex items-center justify-between p-4 border-b border-zinc-900">
-          <h3 className="font-black uppercase tracking-widest text-sm text-cyan-500">{title}</h3>
-          <button onClick={onClose} className="text-white hover:bg-zinc-900 p-2 rounded-full transition-colors">
-            <HiXMark size={22} />
-          </button>
-        </div>
-        <div className="flex-1 overflow-y-auto p-2">
-          {list && list.length > 0 ? (
-            list.map((person) => (
-              <div 
-                key={person.auth0Id}
-                onClick={() => { navigate(`/profile/${person.auth0Id}`); onClose(); }}
-                className="flex items-center gap-3 p-3 hover:bg-zinc-900/50 rounded-xl cursor-pointer transition-all group"
-              >
-                <img src={person.avatar || person.picture} className="w-10 h-10 rounded-full object-cover border border-zinc-800" alt="av" />
-                <div className="flex-1">
-                  <h4 className="text-sm font-bold group-hover:text-cyan-400 transition-colors">{person.name}</h4>
-                  <p className="text-[10px] text-zinc-500 font-mono">@{person.nickname}</p>
-                </div>
-                <button className="bg-white text-black px-4 py-1 rounded-full text-[10px] font-black uppercase">View</button>
-              </div>
-            ))
-          ) : (
-            <div className="h-full flex items-center justify-center text-zinc-600 text-[10px] uppercase tracking-widest">No Links Found</div>
-          )}
-        </div>
-      </motion.div>
-    </div>
-  );
-};
-
-/* ==========================================================
-    🌐 MAIN PROFILE PAGE
-========================================================== */
 const ProfilePage = () => {
-  const { userId: profileId } = useParams(); 
-  const { user: currentUser, getAccessTokenSilently } = useAuth0();
+  const { username } = useParams();
+  const navigate = useNavigate();
   
+  // API Base URL (আপনার সার্ভার ইউআরএল এখানে বসান)
+  // Profile.jsx এর ভেতর
+const API_BASE = "https://onyx-drift-api.onrender.com"; // আপনার আসল এপিআই ইউআরএল
+
+
+  // States
   const [user, setUser] = useState(null);
-  const [userPosts, setUserPosts] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState("Signals");
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [posts, setPosts] = useState([]);
+  const [activeTab, setActiveTab] = useState("Posts");
   const [isFollowing, setIsFollowing] = useState(false);
-  
-  const [followModal, setFollowModal] = useState({ isOpen: false, title: "", list: [] });
+  const [loading, setLoading] = useState(true);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
-  const tabs = ["Signals", "Replies", "Media", "Energy"];
-
-  const fetchProfileData = useCallback(async () => {
-    try {
-      setLoading(true);
-      
-      const { data: profileData, error: profileError } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', profileId)
-        .single();
-
-      if (profileError) throw profileError;
-      setUser(profileData);
-
-      const token = await getAccessTokenSilently({
-        authorizationParams: { audience: API_AUDIENCE },
-      });
-      const postsRes = await axios.get(`${BACKEND_URL}/api/profile/posts/user/${profileId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setUserPosts(postsRes.data.posts || []);
-
-    } catch (err) {
-      console.error("Neural Identity Sync Error:", err);
-    } finally {
-      setLoading(false);
-    }
-  }, [profileId, getAccessTokenSilently]);
-
+  // ১. ইউজার ডেটা এবং পোস্ট সার্ভার থেকে আনা
   useEffect(() => {
-    if (profileId) fetchProfileData();
-  }, [fetchProfileData]);
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        // ইউজার তথ্য আনা
+        const userRes = await axios.get(`${API_BASE}/users/${username}`);
+        setUser(userRes.data);
+        setIsFollowing(userRes.data.isFollowing);
+        
+        // ইউজারের পোস্টগুলো আনা
+        const postsRes = await axios.get(`${API_BASE}/users/${username}/posts`);
+        setPosts(postsRes.data);
+      } catch (error) {
+        console.error("Error fetching data:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, [username]);
 
-  const openFollowModal = async (type) => {
+  // ২. ফলো/আনফলো ফাংশন
+  const handleFollowToggle = async () => {
     try {
-      const token = await getAccessTokenSilently({
-        authorizationParams: { audience: API_AUDIENCE },
-      });
-      const res = await axios.get(`${BACKEND_URL}/api/profile/${profileId}/${type}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setFollowModal({ 
-        isOpen: true, 
-        title: type === 'followers' ? 'Followers' : 'Following', 
-        list: res.data 
-      });
-    } catch (err) {
-      console.error("Fetch error:", err);
+      await axios.post(`${API_BASE}/users/${user._id}/follow`);
+      setIsFollowing(!isFollowing);
+      setUser(prev => ({
+        ...prev,
+        followersCount: isFollowing ? prev.followersCount - 1 : prev.followersCount + 1
+      }));
+    } catch (error) {
+      console.error("Follow action failed");
     }
   };
 
-  const EmptyState = ({ msg }) => (
-    <div className="py-20 text-center text-zinc-600 text-[10px] uppercase tracking-widest italic font-mono">
-      {msg}
-    </div>
-  );
-
-  const isReallyMe = currentUser?.sub === profileId;
-  const defaultBanner = "https://images.unsplash.com/photo-1614850523296-d8c1af93d400?q=80&w=2070";
-  const defaultAvatar = `https://api.dicebear.com/7.x/bottts/svg?seed=${user?.name || 'Drifter'}`;
-
-  const renderTabContent = () => {
-    if (loading) return null;
-
-    switch (activeTab) {
-      case "Signals":
-        const signals = userPosts.filter(post => !post.parentId);
-        return signals.length > 0 ? (
-          signals.map((post) => (
-            <SignalCard key={post._id} post={post} user={user} currentUserAuth0Id={currentUser?.sub} />
-          ))
-        ) : <EmptyState msg="No Signals Broadcasted" />;
-
-      case "Replies":
-        const replies = userPosts.filter(post => post.parentId);
-        return replies.length > 0 ? (
-          replies.map((post) => (
-            <SignalCard key={post._id} post={post} user={user} currentUserAuth0Id={currentUser?.sub} />
-          ))
-        ) : <EmptyState msg="No Neural Replies Found" />;
-
-      case "Media":
-        const mediaPosts = userPosts.filter(p => p.mediaUrl || p.media);
-        return mediaPosts.length > 0 ? (
-          <div className="grid grid-cols-3 gap-1 p-1">
-            {mediaPosts.map(post => (
-              <div key={post._id} className="aspect-square bg-zinc-900 border border-zinc-800 overflow-hidden relative group cursor-pointer">
-                {post.mediaType === 'video' ? (
-                  <video src={post.mediaUrl || post.media} className="w-full h-full object-cover" muted />
-                ) : (
-                  <img src={post.mediaUrl || post.media} className="w-full h-full object-cover hover:opacity-80 transition-opacity" alt="media" />
-                )}
-              </div>
-            ))}
-          </div>
-        ) : <EmptyState msg="No Visual Data Injected" />;
-
-      case "Energy":
-        return (
-          <div className="p-8">
-            <div className="bg-zinc-900/30 p-6 rounded-2xl border border-zinc-800/50 backdrop-blur-sm shadow-[0_0_30px_rgba(6,182,212,0.05)]">
-              <h3 className="text-cyan-500 text-[10px] font-black uppercase tracking-[0.2em] mb-4">Neural Link Integrity</h3>
-              <div className="w-full h-1.5 bg-black rounded-full overflow-hidden border border-zinc-800">
-                <motion.div initial={{ width: 0 }} animate={{ width: '82%' }} transition={{ duration: 1.5 }} className="h-full bg-gradient-to-r from-cyan-600 to-cyan-400 shadow-[0_0_15px_#06b6d4]" />
-              </div>
-              <p className="text-[9px] text-zinc-500 mt-3 uppercase">Status: Optimal (82% Sync)</p>
-            </div>
-          </div>
-        );
-
-      default:
-        return <EmptyState msg="Module Encryption Active" />;
-    }
-  };
+  if (loading) return <div className="h-screen flex items-center justify-center bg-black text-cyan-500 font-mono tracking-tighter">INITIALIZING_NEURAL_PROFILE...</div>;
+  if (!user) return <div className="p-10 text-center text-white">User not found in Neural Grid</div>;
 
   return (
-    <div className="min-h-screen bg-black text-white max-w-2xl mx-auto border-x border-zinc-900 pb-20 font-mono">
-      <div className="sticky top-0 z-50 bg-black/80 backdrop-blur-md p-3 flex items-center gap-8 border-b border-zinc-900">
-        <button onClick={() => window.history.back()} className="hover:bg-zinc-900 p-2 rounded-full transition-all">
-          <FaArrowLeft size={16} />
+    <div className="min-h-screen bg-black text-white max-w-2xl mx-auto border-x border-zinc-800 pb-20">
+      
+      {/* হেডার */}
+      <header className="sticky top-0 z-40 bg-black/80 backdrop-blur-md flex items-center px-4 py-1 gap-8 border-b border-zinc-900/50">
+        <button onClick={() => navigate(-1)} className="p-2 hover:bg-zinc-900 rounded-full transition">
+          <ArrowLeft size={20} />
         </button>
         <div>
-          <h2 className="text-md font-black flex items-center gap-1">
-            {user?.name} {user?.isVerified && <HiBadgeCheck className="text-cyan-400" />}
-          </h2>
-          <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">{userPosts.length} Signals</p>
+          <div className="flex items-center gap-1">
+            <h1 className="text-xl font-bold">{user.displayName}</h1>
+            {user.isVerified && <Verified size={18} className="text-cyan-400 fill-cyan-400" />}
+          </div>
+          <span className="text-xs text-zinc-500">{posts.length} Posts</span>
+        </div>
+      </header>
+
+      {/* প্রোফাইল ব্যানার ও অবতার */}
+      <div className="relative h-48 bg-zinc-900 overflow-hidden">
+        {user.coverImg && <img src={user.coverImg} alt="cover" className="w-full h-full object-cover" />}
+      </div>
+
+      <div className="px-4 relative mb-4">
+        <div className="flex justify-between items-start">
+          <div className="relative -mt-16">
+            <div className="w-32 h-32 rounded-full border-4 border-black overflow-hidden bg-black">
+              <img src={user.avatar} alt="avatar" className="w-full h-full object-cover" />
+            </div>
+          </div>
+          
+          <div className="flex gap-2 mt-3">
+             <button className="p-2 border border-zinc-700 rounded-full hover:bg-zinc-900 transition"><MoreHorizontal size={20} /></button>
+             {/* যদি নিজের প্রোফাইল হয় তবে Edit দেখাবে, অন্য কারো হলে Follow */}
+             {user.isMe ? (
+                <button onClick={() => setIsEditModalOpen(true)} className="px-5 py-1.5 border border-zinc-700 rounded-full font-bold hover:bg-zinc-900">Edit profile</button>
+             ) : (
+                <button 
+                  onClick={handleFollowToggle}
+                  className={`px-5 py-1.5 rounded-full font-bold transition-all ${isFollowing ? "border border-zinc-700 hover:text-red-500 hover:bg-red-500/10" : "bg-white text-black"}`}
+                >
+                  {isFollowing ? "Following" : "Follow"}
+                </button>
+             )}
+          </div>
+        </div>
+
+        <div className="mt-3">
+          <h2 className="text-xl font-extrabold">{user.displayName}</h2>
+          <p className="text-zinc-500">@{user.username}</p>
+        </div>
+
+        <p className="mt-3 text-[15px] leading-relaxed">{user.bio}</p>
+
+        <div className="flex flex-wrap gap-x-4 gap-y-1 mt-3 text-zinc-500 text-sm">
+          {user.location && <div className="flex items-center gap-1"><MapPin size={16} />{user.location}</div>}
+          <div className="flex items-center gap-1"><Calendar size={16} />Joined {user.joinedAt}</div>
+        </div>
+
+        <div className="flex gap-5 mt-4 text-sm font-normal">
+          <p className="hover:underline cursor-pointer font-bold">{user.followingCount} <span className="text-zinc-500 font-normal">Following</span></p>
+          <p className="hover:underline cursor-pointer font-bold">{user.followersCount} <span className="text-zinc-500 font-normal">Followers</span></p>
         </div>
       </div>
 
-      <div className="relative group">
-        <div className="h-40 md:h-48 bg-zinc-900 overflow-hidden relative border-b border-zinc-900">
-          <img src={user?.coverImg || defaultBanner} className="w-full h-full object-cover opacity-80" alt="cover" />
-          {isReallyMe && (
-            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40">
-               <button onClick={() => setIsEditModalOpen(true)} className="bg-black/60 p-3 rounded-full border border-white/20 hover:scale-110 transition-transform"><FaCamera /></button>
-            </div>
-          )}
-        </div>
-
-        <div className="px-4 relative">
-          <div className="flex justify-between items-end -mt-16 mb-4">
-            <div className="w-28 h-28 md:w-32 md:h-32 rounded-full border-4 border-black bg-black overflow-hidden relative z-10 shadow-xl">
-              <img src={user?.avatar || user?.picture || defaultAvatar} className="w-full h-full object-cover rounded-full" alt="avatar" />
-              {isReallyMe && (
-                <div onClick={() => setIsEditModalOpen(true)} className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 hover:opacity-100 cursor-pointer transition-opacity z-20">
-                  <FaCamera className="text-white" />
-                </div>
-              )}
-            </div>
-            
-            <div className="mb-2">
-              {isReallyMe ? (
-                <button onClick={() => setIsEditModalOpen(true)} className="border border-zinc-700 hover:bg-white hover:text-black px-5 py-2 rounded-full font-bold text-xs transition-all">
-                  Edit Identity
-                </button>
-              ) : (
-                <button className="bg-white text-black px-6 py-2 rounded-full font-black text-xs hover:bg-cyan-400 transition-all">
-                  {isFollowing ? "Linked" : "Link Neural"}
-                </button>
-              )}
-            </div>
-          </div>
-
-          <div className="space-y-1 mb-6">
-            <h1 className="text-xl font-black italic uppercase tracking-tighter flex items-center gap-1">
-              {user?.name} {user?.isVerified && <HiBadgeCheck className="text-cyan-400" />}
-            </h1>
-            <p className="text-zinc-500 text-sm">@{user?.nickname || "drifter"}</p>
-            <p className="text-[15px] text-zinc-200 pt-2 leading-relaxed">{user?.bio || "No neural bio set."}</p>
-            
-            {/* Followers & Following Stats */}
-            <div className="flex gap-6 py-4">
-               <button onClick={() => openFollowModal('following')} className="text-xs font-bold hover:text-cyan-500">
-                  <span className="text-white font-black">{user?.followingCount || 0}</span> Following
-               </button>
-               <button onClick={() => openFollowModal('followers')} className="text-xs font-bold hover:text-cyan-500">
-                  <span className="text-white font-black">{user?.followersCount || 0}</span> Followers
-               </button>
-            </div>
-
-            <div className="flex gap-4 text-[11px] font-bold text-zinc-500 uppercase pt-3">
-              <span className="flex items-center gap-1"><FaMapMarkerAlt /> {user?.location || "Neo-City"}</span>
-              <span className="flex items-center gap-1">
-                <FaCalendarAlt /> Joined {user?.createdAt ? new Date(user.createdAt).toLocaleDateString('en-US', {month:'short', year:'numeric'}) : 'Jan 2026'}
-              </span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="flex sticky top-[61px] bg-black/80 backdrop-blur-md z-40 border-b border-zinc-900">
-        {tabs.map((tab) => (
-          <button key={tab} onClick={() => setActiveTab(tab)} className={`flex-1 py-4 text-[11px] font-black uppercase tracking-widest relative transition-colors ${activeTab === tab ? "text-white" : "text-zinc-600 hover:text-zinc-400"}`}>
+      {/* ট্যাব বার */}
+      <div className="flex border-b border-zinc-800 sticky top-[53px] bg-black/80 backdrop-blur-md z-30">
+        {['Posts', 'Replies', 'Media', 'Likes'].map((tab) => (
+          <button key={tab} onClick={() => setActiveTab(tab)} className={`flex-1 py-4 text-sm font-bold relative ${activeTab === tab ? 'text-white' : 'text-zinc-500'}`}>
             {tab}
-            {activeTab === tab && <motion.div layoutId="underline" className="absolute bottom-0 left-1/2 -translate-x-1/2 w-12 h-1 bg-cyan-500 shadow-[0_0_15px_#06b6d4]" />}
+            {activeTab === tab && <motion.div layoutId="activeTab" className="absolute bottom-0 left-1/2 -translate-x-1/2 w-14 h-1 bg-cyan-500 rounded-full" />}
           </button>
         ))}
       </div>
 
-      <div className="divide-y divide-zinc-900 min-h-[400px]">
-        {renderTabContent()}
+      {/* পোস্ট ফিড */}
+      <div className="divide-y divide-zinc-800">
+        {posts.length > 0 ? posts.map((post) => (
+          <div key={post._id} className="p-4 flex gap-3 hover:bg-white/[0.02] transition cursor-pointer">
+            <img src={user.avatar} className="w-10 h-10 rounded-full object-cover" alt="" />
+            <div className="flex-1">
+              <div className="flex items-center gap-1">
+                <span className="font-bold">{user.displayName}</span>
+                <span className="text-zinc-500 text-sm">@{user.username} · {post.createdAt}</span>
+              </div>
+              <p className="text-sm mt-1">{post.content}</p>
+              {post.image && <img src={post.image} className="mt-3 rounded-2xl border border-zinc-800 w-full object-cover max-h-80" alt="" />}
+            </div>
+          </div>
+        )) : (
+          <div className="p-20 text-center text-zinc-600">No posts found in this frequency.</div>
+        )}
       </div>
 
+      {/* ৩. এডিট প্রোফাইল মডাল */}
       <AnimatePresence>
-        {isEditModalOpen && <EditProfileModal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} user={user} onUpdate={fetchProfileData} />}
-        {followModal.isOpen && <FollowListModal isOpen={followModal.isOpen} onClose={() => setFollowModal({ ...followModal, isOpen: false })} title={followModal.title} list={followModal.list} />}
+        {isEditModalOpen && (
+          <motion.div 
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] bg-zinc-500/20 backdrop-blur-sm flex items-center justify-center p-4"
+          >
+            <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} className="bg-black w-full max-w-lg rounded-2xl border border-zinc-800 overflow-hidden">
+              <div className="flex items-center justify-between p-4 border-b border-zinc-800">
+                <div className="flex items-center gap-6">
+                  <button onClick={() => setIsEditModalOpen(false)}><X size={20} /></button>
+                  <h2 className="text-xl font-bold">Edit profile</h2>
+                </div>
+                <button className="px-4 py-1.5 bg-white text-black rounded-full font-bold">Save</button>
+              </div>
+              <div className="p-4 space-y-4">
+                <div className="relative h-32 bg-zinc-900 rounded-lg">
+                   <div className="absolute inset-0 bg-black/40 flex items-center justify-center cursor-pointer">কভার পরিবর্তন</div>
+                </div>
+                <div className="space-y-4">
+                   <input className="w-full bg-transparent border border-zinc-800 p-3 rounded focus:border-cyan-500 outline-none" placeholder="Name" defaultValue={user.displayName} />
+                   <textarea className="w-full bg-transparent border border-zinc-800 p-3 rounded focus:border-cyan-500 outline-none h-24" placeholder="Bio" defaultValue={user.bio} />
+                   <input className="w-full bg-transparent border border-zinc-800 p-3 rounded focus:border-cyan-500 outline-none" placeholder="Location" defaultValue={user.location} />
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
       </AnimatePresence>
     </div>
   );
