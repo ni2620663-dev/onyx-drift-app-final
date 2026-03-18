@@ -10,7 +10,7 @@ const ProfilePage = () => {
   
   // API Base URL (আপনার সার্ভার ইউআরএল এখানে বসান)
   // Profile.jsx এর ভেতর
-const API_BASE = "https://onyx-drift-api.onrender.com"; // আপনার আসল এপিআই ইউআরএল
+const API_BASE = "https://onyx-drift-app-final-u29m.onrender.com"; // আপনার আসল এপিআই ইউআরএল
 
 
   // States
